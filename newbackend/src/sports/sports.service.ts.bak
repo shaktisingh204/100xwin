@@ -1,0 +1,2469 @@
+import { Injectable, Logger, OnModuleInit, Inject, forwardRef } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { PrismaService } from '../prisma.service';
+import { Cron } from '@nestjs/schedule';
+import { firstValueFrom } from 'rxjs';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { SportsSocketService } from './sports.socket.service';
+import { WebhookPayloadDto } from './dto/webhook.dto';
+import {
+    MyZoshLoginResponse,
+    MyZoshSportsResponse,
+    MyZoshTournamentsResponse,
+    MyZoshMatchesResponse,
+    MyZoshExchangeMarketsResponse,
+    MyZoshSessionMarketsResponse,
+    MyZoshImportSessionResponse,
+    MyZoshBetPlaceResponse,
+    MyZoshSyncTokenResponse
+} from './sports.types';
+
+import { UsersService } from '../users/users.service';
+
+import { Sport, SportDocument } from './schemas/sport.schema';
+import { Competition, CompetitionDocument } from './schemas/competition.schema';
+import { Event, EventDocument } from './schemas/event.schema';
+import { Market, MarketDocument } from './schemas/market.schema';
+import { MarketOdd, MarketOddDocument } from './schemas/market-odd.schema';
+import { Session, SessionDocument } from './schemas/session.schema';
+import { Fancy, FancyDocument } from './schemas/fancy.schema';
+import { Bet, BetDocument } from '../bets/schemas/bet.schema';
+import { Order, OrderDocument, OrderType, OrderStatus } from './schemas/order.schema';
+import { Trade, TradeDocument } from './schemas/trade.schema';
+import { RedisService } from '../redis/redis.service';
+
+@Injectable()
+export class SportsService implements OnModuleInit {
+    private readonly logger = new Logger(SportsService.name);
+    private readonly API_URL = process.env.MYZOSH_API_URL || "https://staging.myzosh.com/api";
+    private accessToken: string | null = null;
+
+    private readonly AGENT_CODE = process.env.MYZOSH_AGENT_CODE || 'kuberexch';
+    private readonly SECRET_KEY = process.env.MYZOSH_SECRET_KEY || 'default_key';
+
+    // Rate Limiting & Queueing
+    private lastRequestTime = 0;
+    private readonly REQUEST_INTERVAL_MS = 2500; // 2.5s = ~24 calls/min
+    private requestQueue: Promise<any> = Promise.resolve();
+
+    // Import Deduplication & Cooldown
+    private importLocks: Map<string, Promise<any>> = new Map();
+    private importCooldowns: Set<string> = new Set();
+    private readonly IMPORT_COOLDOWN_MS = 60000; // Don't retry import for same match for 1 min
+
+    private isSyncing = false;
+
+    constructor(
+        private readonly httpService: HttpService,
+        private readonly prisma: PrismaService,
+        private readonly usersService: UsersService,
+        @InjectModel(Sport.name) private sportModel: Model<SportDocument>,
+        @InjectModel(Competition.name) private competitionModel: Model<CompetitionDocument>,
+        @InjectModel(Event.name) private eventModel: Model<EventDocument>,
+        @InjectModel(Market.name) private marketModel: Model<MarketDocument>,
+        @InjectModel(MarketOdd.name) private marketOddModel: Model<MarketOddDocument>,
+        @InjectModel(Session.name) private sessionModel: Model<SessionDocument>,
+        @InjectModel(Fancy.name) private fancyModel: Model<FancyDocument>,
+        @InjectModel(Bet.name) private betModel: Model<BetDocument>,
+        @InjectModel(Order.name) private orderModel: Model<OrderDocument>,
+        @InjectModel(Trade.name) private tradeModel: Model<TradeDocument>,
+        @Inject(forwardRef(() => SportsSocketService))
+        private readonly sportsSocketService: SportsSocketService,
+        private readonly redisService: RedisService,
+    ) { }
+
+    private async respectRateLimit() {
+        const allowed = await this.redisService.checkRateLimit('provider_api_limit', 25, 60);
+        if (!allowed) {
+            this.logger.warn('Rate limit exceeded. Waiting...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            await this.respectRateLimit(); // Retry
+        }
+    }
+
+    private async makeApiRequest<T>(url: string, payload: any): Promise<{ data: T; status: number }> {
+        await this.respectRateLimit();
+
+        // logPayload logic...
+        const logPayload = { ...payload };
+        if (logPayload.access_token) logPayload.access_token = '***';
+
+        this.logger.log(`API Request to ${url} Payload: ${JSON.stringify(logPayload)} `);
+
+        try {
+            const response = await firstValueFrom(
+                this.httpService.post<T>(url, payload)
+            );
+            return { data: response.data, status: response.status };
+        } catch (error) {
+            // Handle 401
+            if (error.response && error.response.status === 401) {
+                this.logger.warn(`API responded with 401. Refreshing token...`);
+                this.accessToken = null;
+            }
+            throw error;
+        }
+    }
+
+
+    async onModuleInit() {
+        // 1. Reconcile Active Markets on Startup
+        // Fetch all markets marked as active in DB
+        // We track "active match" implicitly via imported markets.
+        // A match is active if it has active markets?
+        // Let's assume matches with `is_active: true` or `match_status: 'OPEN'` AND `is_imported: true`?
+        // We don't have `is_imported` on Event, we track via Redis.
+        // But if Redis is flushed, we lost it.
+        // SOLUTION: We need `is_imported` flag on Event or assume based on Market existence.
+        // Let's rely on Markets.
+
+        try {
+            const activeMarkets = await this.marketModel.aggregate([
+                { $match: { is_active: true } },
+                { $group: { _id: "$event_id" } }
+            ]);
+
+            const activeMatchIds = activeMarkets.map(m => m._id.toString());
+            this.logger.log(`Startup: Found ${activeMatchIds.length} active matches in DB. Reconciling Redis...`);
+
+            if (activeMatchIds.length > 0) {
+                // Clear and Populate Redis Set
+                await this.redisService.getClient().del('active_imported_markets');
+                await this.redisService.getClient().sadd('active_imported_markets', ...activeMatchIds);
+
+                // Collect SyS Market IDs for subscription
+                const markets = await this.marketModel.find({ is_active: true }).select('sys_market_id');
+                const sysIds = markets.map(m => m.sys_market_id?.toString()).filter(id => !!id);
+
+                if (sysIds.length > 0) {
+                    this.sportsSocketService.subscribe(sysIds);
+                }
+            }
+        } catch (e) {
+            this.logger.error(`Error during startup reconciliation: ${e.message}`);
+        }
+
+        // Initial sync on startup to get sports and then cricket data
+        // this.syncAll();
+    }
+
+    private async authenticate(): Promise<string | null> {
+        if (this.accessToken) return this.accessToken;
+
+        try {
+            const config = await this.prisma.systemConfig.findUnique({
+                where: { key: 'myzosh_access_token' }
+            });
+            if (config?.value) {
+                this.accessToken = config.value;
+                return this.accessToken;
+            }
+        } catch (error) {
+            this.logger.error(`Error fetching token from DB: ${error.message}`);
+        }
+
+        this.logger.warn('No access token found in memory or DB. Attempting to refresh...');
+        await this.refreshToken();
+        return this.accessToken;
+    }
+
+    @Cron('20 10 * * *')
+    async refreshToken() {
+        this.logger.log('Starting token refresh...');
+        try {
+            const payload = {
+                agent_code: this.AGENT_CODE,
+                secret_key: this.SECRET_KEY
+            };
+            const { data } = await firstValueFrom(
+                this.httpService.post<MyZoshLoginResponse>(`${this.API_URL}/get_access_token`, payload)
+            );
+
+            if (data.status.code === 200 && data.data?.access_token) {
+                this.accessToken = data.data.access_token;
+
+                await this.prisma.systemConfig.upsert({
+                    where: { key: 'myzosh_access_token' },
+                    update: { value: this.accessToken },
+                    create: { key: 'myzosh_access_token', value: this.accessToken }
+                });
+
+                this.logger.log('Token refreshed and saved to DB successfully.');
+            } else {
+                this.logger.error(`Failed to refresh token. Status: ${data.status?.code}`);
+            }
+
+            return data;
+        } catch (error) {
+            this.logger.error(`Error refreshing token: ${error.message}`);
+            throw error;
+        }
+    }
+
+    // --- Cron Jobs ---
+
+    @Cron('20 10 * * *')
+    async syncAll() {
+        if (this.isSyncing) {
+            this.logger.warn('Sync is already in progress. Skipping this cron execution.');
+            return;
+        }
+
+        this.isSyncing = true;
+        this.logger.log('Starting full sync...');
+        const token = await this.authenticate();
+        if (!token) {
+            this.isSyncing = false;
+            return;
+        }
+
+        await this.syncSports(token);
+        this.logger.log('Full sync completed.');
+        this.isSyncing = false;
+    }
+
+    // Removed triggerManualMarketImport cron
+
+
+    private async syncSports(token: string) {
+        try {
+            const { data } = await this.makeApiRequest<MyZoshSportsResponse>(
+                `${this.API_URL}/get_sports`,
+                { access_token: token }
+            );
+
+            if (data.status.code !== 200) return;
+
+            // 1. Upsert ALL sports into DB
+            for (const sport of data.data) {
+                await this.sportModel.updateOne(
+                    { sport_id: sport.sport_id.toString() },
+                    {
+                        $set: {
+                            sport_name: sport.sport_name,
+                            market_count: sport.market_count || 0
+                        }
+                    },
+                    { upsert: true }
+                );
+
+                // Sync tournaments for this sport
+                await this.syncTournaments(token, sport.sport_id.toString());
+
+                // Update Sport market_count with REAL DB count of events
+                // Need to find all competitions for sport, then all events for those competitions
+                const competitions = await this.competitionModel.find({ sport_id: sport.sport_id.toString() }).select('competition_id');
+                const compIds = competitions.map(c => c.competition_id);
+
+                const realCount = await this.eventModel.countDocuments({ competition_id: { $in: compIds } });
+
+                await this.sportModel.updateOne(
+                    { sport_id: sport.sport_id.toString() },
+                    { $set: { market_count: realCount } }
+                );
+            }
+
+            this.logger.log(`Synced ${data.data.length} sports and their data.`);
+
+        } catch (error) {
+            this.logger.error(`Error syncing sports: ${error.message}`);
+        }
+    }
+
+    // Mapping helper
+    private inferCountryFromName(name: string): string | null {
+        const mapping: Record<string, string> = {
+            'Premier League': 'GB-ENG', 'Championship': 'GB-ENG',
+            'LaLiga': 'ES', 'La Liga': 'ES',
+            'Serie A': 'IT', 'Serie B': 'IT',
+            'Bundesliga': 'DE',
+            'Ligue 1': 'FR', 'Ligue 2': 'FR',
+            'Eredivisie': 'NL',
+            'Primeira Liga': 'PT',
+            'UEFA': 'INT', 'Champions League': 'INT', 'Europa': 'INT',
+            'International': 'INT', 'World Cup': 'INT',
+            'IPL': 'IN', 'Indian Premier League': 'IN',
+            'Big Bash': 'AU',
+            'NBA': 'US', 'NFL': 'US', 'MLB': 'US', 'NHL': 'US',
+        };
+        for (const [key, code] of Object.entries(mapping)) {
+            if (name.includes(key)) return code;
+        }
+        return null;
+    }
+
+    private async syncTournaments(token: string, sportId: string, sourceId?: string) {
+        try {
+            const response = await this.getTournamentsFromApi(token, sportId, sourceId);
+
+            if (response.status.code !== 200 || !response.data) return;
+
+            for (const tour of response.data) {
+                this.logger.log(`Syncing matches for tournament ${tour.tournament_id}, sport ${sportId}, source ${sourceId || 'default'}`);
+
+                // 1. Initial Upsert with inferred country
+                let countryCode = this.inferCountryFromName(tour.tournament_name);
+
+                // If API returns a category, use it (sometimes it's a country code)
+                // Remove 'category' usage if it causes type error as seen before, sticking to name inference or default
+
+                await this.competitionModel.updateOne(
+                    { competition_id: tour.tournament_id },
+                    {
+                        $set: {
+                            competition_name: tour.tournament_name,
+                            sport_id: sportId,
+                            market_count: tour.market_count || 0
+                        },
+                        $setOnInsert: {
+                            country_code: countryCode || 'International' // only set default if new
+                        }
+                    },
+                    { upsert: true }
+                );
+
+                // If we inferred a country, force update it to ensure it's set
+                if (countryCode) {
+                    await this.competitionModel.updateOne(
+                        { competition_id: tour.tournament_id },
+                        { $set: { country_code: countryCode } }
+                    );
+                }
+
+                await this.syncMatches(token, sportId, tour.tournament_id, sourceId);
+
+
+                // Update Competition market_count with REAL DB count
+                const realCompCount = await this.eventModel.countDocuments({ competition_id: tour.tournament_id });
+
+                this.logger.log(`Tournament ${tour.tournament_id} updated with ${realCompCount} events.`);
+
+                await this.competitionModel.updateOne(
+                    { competition_id: tour.tournament_id },
+                    { $set: { market_count: realCompCount } }
+                );
+            }
+
+        } catch (error) {
+            this.logger.error(`Error syncing tournaments for sport ${sportId} source ${sourceId || 'default'}: ${error.message}`);
+        }
+    }
+
+    public async getTournamentsFromApi(token: string, sportId: string, sourceId?: string) {
+        try {
+            const payload: any = {
+                access_token: token,
+                sport_id: sportId
+            };
+            if (sourceId) {
+                payload.source_id = sourceId;
+            }
+
+            const { data } = await this.makeApiRequest<MyZoshTournamentsResponse>(
+                `${this.API_URL}/get_tournaments`,
+                payload
+            );
+
+            if (data.status.code === 200 && data.data) {
+                for (const tour of data.data) {
+                    await this.competitionModel.updateOne(
+                        { competition_id: tour.tournament_id.toString() },
+                        {
+                            $set: {
+                                competition_name: tour.tournament_name,
+                                market_count: tour.market_count || 0,
+                                sport_id: sportId
+                            }
+                        },
+                        { upsert: true }
+                    );
+                }
+            }
+
+            return data;
+
+        } catch (error) {
+            this.logger.error(`Error fetching tournaments from API for sport ${sportId}: ${error.message}`);
+            throw error;
+        }
+    }
+
+    private parseDate(dateStr: any): Date {
+        if (!dateStr) return new Date();
+        let date: Date;
+
+        try {
+            if (dateStr instanceof Date) {
+                date = dateStr;
+            } else if (typeof dateStr === 'string') {
+                const msDateRegex = /\/Date\((\d+)\)\//;
+                const match = msDateRegex.exec(dateStr);
+                if (match) {
+                    const timestamp = parseInt(match[1], 10);
+                    date = new Date(timestamp);
+                } else {
+                    date = new Date(dateStr);
+                    if (isNaN(date.getTime())) {
+                        const isoStr = dateStr.replace(' ', 'T');
+                        date = new Date(isoStr);
+                    }
+                }
+            } else if (typeof dateStr === 'number') {
+                date = new Date(dateStr);
+            } else {
+                this.logger.warn(`Unknown date format: ${JSON.stringify(dateStr)} type: ${typeof dateStr}`);
+                return new Date();
+            }
+        } catch (e) {
+            return new Date();
+        }
+
+        return isNaN(date.getTime()) ? new Date() : date;
+    }
+
+
+
+    private async syncMatches(token: string, sportId: string, tournamentId: string, sourceId?: string) {
+        try {
+            const response = await this.getMatchesFromApi(token, sportId, tournamentId, sourceId);
+
+            this.logger.log(`Fetched matches for tournament ${tournamentId}. Status: ${response.status.code}, Count: ${response.data?.length || 0}`);
+            if (response.status.code !== 200 || !response.data) return;
+
+            // Update Competition Country Code from Match Data
+            const firstMatchWithCountry = response.data.find(m => m.match_country_code);
+            if (firstMatchWithCountry) {
+                await this.competitionModel.updateOne(
+                    { competition_id: tournamentId },
+                    { $set: { country_code: firstMatchWithCountry.match_country_code } }
+                );
+            }
+
+            const fetchedMatchIds = new Set<string>();
+
+            // 1. Upsert Matches (Add New / Update Existing)
+            for (const match of response.data) {
+                try {
+                    // Determine Status (API might not give status in list, default to Pending or check open_date)
+                    // If match is in the past, it might be In Play or Finished.
+                    // We rely on provider status if avail, else Pending.
+                    const status = match.match_status || 'Pending';
+                    fetchedMatchIds.add(match.match_id.toString());
+
+                    const updateData: any = {
+                        event_name: match.match_name,
+                        competition_id: tournamentId,
+                        open_date: match.match_open_date || match.match_date,
+                        match_status: status
+                    };
+
+                    // Extract teams
+                    if (match.match_name && match.match_name.includes(' v ')) {
+                        const parts = match.match_name.split(' v ');
+                        if (parts.length >= 2) {
+                            updateData.home_team = parts[0].trim();
+                            updateData.away_team = parts[1].trim();
+                        }
+                    }
+
+                    await this.eventModel.updateOne(
+                        { event_id: match.match_id },
+                        { $set: updateData },
+                        { upsert: true }
+                    );
+
+                } catch (err) {
+                    // this.logger.error(`Failed to process match ${match.match_id}: ${err.message}`);
+                }
+            }
+
+            // 2. Mark Outdated Matches (Present in DB for this tournament, but NOT in API response)
+            // If API returns empty list, maybe tournament is empty.
+            if (fetchedMatchIds.size > 0) {
+                await this.eventModel.updateMany(
+                    {
+                        competition_id: tournamentId,
+                        event_id: { $nin: Array.from(fetchedMatchIds) },
+                        match_status: { $ne: 'COMPLETED' } // Don't touch already completed
+                    },
+                    {
+                        $set: { match_status: 'COMPLETED', is_active: false }
+                    }
+                );
+            }
+
+        } catch (error) {
+            this.logger.error(`Error syncing matches for tournament ${tournamentId}: ${error.message}`);
+        }
+    }
+    public async getMatchesFromApi(token: string, sportId: string, tournamentId: string, sourceId?: string) {
+        try {
+            const payload: any = {
+                access_token: token,
+                sport_id: sportId,
+                tournament_id: tournamentId
+            };
+            if (sourceId) {
+                payload.source_id = sourceId;
+            }
+
+            const { data } = await this.makeApiRequest<MyZoshMatchesResponse>(
+                `${this.API_URL}/get_matches`,
+                payload
+            );
+
+            this.logger.log(`Fetched matches for tournament ${tournamentId}. Status: ${data.status.code}, Count: ${data.data?.length || 0}`);
+
+            if (data.status.code === 200 && data.data) {
+                // Update country_code for the competition if available
+                if (data.data.length > 0) {
+                    const firstMatch = data.data[0];
+                    if (firstMatch.match_country_code) {
+                        try {
+                            await this.competitionModel.updateOne(
+                                { competition_id: tournamentId },
+                                { $set: { country_code: firstMatch.match_country_code } }
+                            );
+                        } catch (e) {
+                            this.logger.warn(`Failed to update country_code for competition ${tournamentId}: ${e.message}`);
+                        }
+                    }
+                }
+
+                for (const match of data.data) {
+                    try {
+                        const openDate = match.match_open_date || match.match_date;
+
+                        // Extract teams
+                        let homeTeam = null;
+                        let awayTeam = null;
+                        if (match.match_name && match.match_name.includes(' v ')) {
+                            const parts = match.match_name.split(' v ');
+                            if (parts.length >= 2) {
+                                homeTeam = parts[0].trim();
+                                awayTeam = parts[1].trim();
+                            }
+                        }
+
+                        await this.eventModel.updateOne(
+                            { event_id: match.match_id },
+                            {
+                                $set: {
+                                    event_name: match.match_name,
+                                    competition_id: tournamentId,
+                                    open_date: openDate,
+                                    timezone: 'UTC',
+                                    match_status: 'Pending',
+                                    home_team: homeTeam,
+                                    away_team: awayTeam
+                                }
+                            },
+                            { upsert: true }
+                        );
+                    } catch (e) {
+                    }
+                }
+            }
+
+            if (data.data) {
+                data.data = data.data.map(m => {
+                    const parsedDate = this.parseDate(m.match_open_date || m.match_date);
+                    return {
+                        ...m,
+                        match_date: parsedDate.toISOString(),
+                        match_open_date: parsedDate.toISOString()
+                    };
+                });
+            }
+
+            return data;
+        } catch (error) {
+            this.logger.error(`Error fetching matches for tournament ${tournamentId}: ${error.message}`);
+            throw error;
+        }
+    }
+
+    public async ensureMarketImported(matchId: string) {
+        if (this.isSyncing) {
+            throw new Error('System is complying with sync. Cannot import markets during sync.');
+        }
+
+        // 1. Check if already imported (Fast path: Redis or DB)
+        // We can check DB first? Or Redis set?
+        // Let's rely on DB for "imported" status source of truth, or Redis set for speed.
+        // For now, let's assume we proceed to checks.
+
+        // 2. Active Market Count Check & Priority Eviction
+        let activeCount = await this.redisService.getActiveMarketCount();
+
+        if (activeCount >= 200) {
+            this.logger.warn(`Active market limit (200) reached. Attempting priority eviction...`);
+
+            // Try standard cleanup first (Inactives / Finished)
+            await this.cleanupInactiveMarkets();
+
+            // Re-check
+            activeCount = await this.redisService.getActiveMarketCount();
+
+            if (activeCount >= 200) {
+                // FORCE EVICTION: Remove match with LOWEST viewers
+                // 1. Get all active matches
+                const activeIds = await this.redisService.getActiveMarkets();
+
+                let lowestId = null;
+                let lowestViewers = Infinity;
+
+                for (const id of activeIds) {
+                    // Cleanup expired viewers first? Maybe too expensive here.
+                    // Just count. 
+                    const viewers = await this.redisService.getClient().zcard(`viewers:${id}`);
+                    if (viewers < lowestViewers) {
+                        lowestViewers = viewers;
+                        lowestId = id;
+                    }
+                    if (viewers === 0) break; // Found a 0-viewer match, good enough
+                }
+
+                if (lowestId) {
+                    this.logger.log(`Force evicting match ${lowestId} (Viewers: ${lowestViewers}) to make room.`);
+                    await this.unimportMatch(lowestId);
+                } else {
+                    // Should technically not reach here if list > 0
+                    this.logger.error('System at max capacity. Cannot evict. Import failed.');
+                    throw new Error('System busy: Maximum active markets reached.');
+                }
+            }
+        }
+
+        // 3. Acquire Lock
+        const lockKey = `import-lock:${matchId}`;
+        const locked = await this.redisService.acquireLock(lockKey, 30); // 30s lock
+        if (!locked) {
+            // Already importing or locked
+            this.logger.log(`Market import for ${matchId} is already in progress.`);
+            return;
+        }
+
+        try {
+            this.logger.log(`Starting ON-DEMAND import for match ${matchId}`);
+
+            // 4. Import Data
+            // Auto-lookup sport/tour from matchId logic is inside importExchangeMarkets
+            await this.importExchangeMarkets(null, '', '', matchId, true, true);
+            await this.importSessionMarkets(null, '', '', matchId, true, true);
+
+            // 5. Add to Active Set
+            // This effectively marks it "Active" in our tracking
+            await this.redisService.addActiveMarket(matchId);
+
+            // 6. Subscribe via Socket
+            // Need to get marketIds. 
+            // We can fetch them from DB after import.
+            const markets = await this.marketModel.find({ event_id: matchId }).select('sys_market_id market_id');
+            const marketIdsToSubscribe = markets
+                .map(m => (m.sys_market_id || m.market_id)?.toString())
+                .filter((id): id is string => !!id);
+
+            if (marketIdsToSubscribe.length > 0) {
+                this.sportsSocketService.subscribe(marketIdsToSubscribe);
+            }
+
+        } catch (error) {
+            this.logger.error(`Error ensuring market import for ${matchId}: ${error.message}`);
+        } finally {
+            await this.redisService.releaseLock(lockKey);
+        }
+    }
+
+    @Cron('*/2 * * * *') // Run every 2 minutes
+    public async cleanupInactiveMarkets() {
+        // Find markets that can be removed to free up slots.
+        // We iterate through "active_imported_markets" in Redis
+        const activeMatchIds = await this.redisService.getActiveMarkets();
+
+        this.logger.log(`Checking ${activeMatchIds.length} active matches for cleanup...`);
+
+        // Check for match status in DB
+        const events = await this.eventModel.find({ event_id: { $in: activeMatchIds } }).select('event_id match_status open_date');
+        const eventMap = new Map(events.map(e => [e.event_id, e]));
+        let removedCount = 0;
+
+        for (const matchId of activeMatchIds) {
+            let shouldRemove = false;
+            let reason = '';
+
+            const event = eventMap.get(matchId);
+
+            // 0. Check Status (If completed/abandoned, remove immediately)
+            if (event && ['COMPLETED', 'FINISHED', 'ABANDONED'].includes(event.match_status?.toUpperCase())) {
+                shouldRemove = true;
+                reason = `Status: ${event.match_status}`;
+            }
+
+            // 1. Viewers Check (Smart Cleanup)
+            if (!shouldRemove) {
+                // Clean up expired viewers (Heartbeat = 10s, TTL = 20s)
+                const now = Date.now();
+                await this.redisService.getClient().zremrangebyscore(`viewers:${matchId}`, 0, now - 20000);
+
+                const viewers = await this.redisService.getClient().zcard(`viewers:${matchId}`);
+                if (viewers > 0) {
+                    // Active viewers, keep active unless completed
+                    continue;
+                }
+
+                // Viewers == 0. Check inactivity.
+                const lastViewed = await this.redisService.getClient().get(`last_viewed:${matchId}`);
+                if (lastViewed) {
+                    const diff = Date.now() - Number(lastViewed);
+                    // 10 minutes = 600000ms
+                    if (diff > 600000) {
+                        shouldRemove = true;
+                        reason = `Inactive for > 10 mins`;
+                    }
+                } else {
+                    // No last_viewed. Fallback to Time Check.
+                    if (event && event.open_date) {
+                        const diff = Date.now() - new Date(event.open_date).getTime();
+                        if (diff > 43200000) { // 12 hours
+                            shouldRemove = true;
+                            reason = `Old match (>12h)`;
+                        }
+                    } else if (!event) {
+                        shouldRemove = true;
+                        reason = 'Not found in DB';
+                    }
+                }
+            }
+
+            if (shouldRemove) {
+                this.logger.log(`Cleaning up inactive match ${matchId} (${reason})`);
+                await this.unimportMatch(matchId);
+                removedCount++;
+            }
+        }
+
+        if (removedCount > 0) {
+            this.logger.log(`Cleanup completed. Removed ${removedCount} markets.`);
+        }
+    }
+
+    private async unimportMatch(matchId: string) {
+        // 1. Remove from Active Set
+        await this.redisService.removeActiveMarket(matchId);
+
+        // 2. Unsubscribe Socket
+        const markets = await this.marketModel.find({ event_id: matchId }).select('sys_market_id market_id');
+        const marketIds = markets.map(m => (m.sys_market_id || m.market_id)?.toString()).filter((id): id is string => !!id);
+
+        if (marketIds.length > 0) {
+            this.sportsSocketService.unsubscribe(marketIds);
+        }
+
+        // 3. Mark in DB as inactive (optional, but good for UI)
+        await this.marketModel.updateMany({ event_id: matchId }, { $set: { is_active: false } });
+    }
+
+
+
+    public async syncMarkets() {
+        this.logger.log('Starting FULL market sync for ALL events...');
+        const accessToken = await this.authenticate();
+        if (!accessToken) return { status: 403, message: 'No access token' };
+
+        const matches = await this.eventModel.find({});
+        this.logger.log(`Found ${matches.length} matches for full sync.`);
+
+        let processed = 0;
+        for (const match of matches) {
+            try {
+                const competition = await this.competitionModel.findOne({ competition_id: match.competition_id });
+                if (!competition) continue;
+
+                const sportId = competition.sport_id;
+                const tournamentId = match.competition_id;
+                const matchId = match.event_id;
+
+                if (matchId) {
+                    // Sync only (setActive = false). 
+                    // This saves the market definition and "refreshes" it from source.
+                    // The "is_active" flag in DB will NOT be forced to true, effectively respecting 
+                    // the source's "presence" as availability but not "activation" for trading until clicked.
+                    await this.importExchangeMarkets(accessToken, sportId, tournamentId, matchId, false, false);
+                    await this.importSessionMarkets(accessToken, sportId, tournamentId, matchId, false, false);
+                }
+                processed++;
+                if (processed % 50 === 0) this.logger.log(`Synced markets for ${processed} matches...`);
+
+                await new Promise(resolve => setTimeout(resolve, 50)); // Throttling
+            } catch (e) {
+                this.logger.error(`Error syncing market for match ${match.event_id}: ${e.message}`);
+            }
+        }
+        return { message: `Full market sync completed for ${processed} matches` };
+    }
+
+    public async importExchangeMarkets(token: string | undefined, sportId: string, tournamentId: string, matchId: string, setActive: boolean = true, importRemote: boolean = false) {
+        // Cooldown Check
+        const lockKey = `exch_${matchId}`;
+        if (this.importCooldowns.has(lockKey)) return;
+
+        // Lock Check
+        if (this.importLocks.has(lockKey)) return this.importLocks.get(lockKey);
+
+        const task = (async () => {
+            await this.respectRateLimit();
+            try {
+                if (!matchId) return { status: 400, message: 'matchId is required' };
+
+                const accessToken = token || await this.authenticate();
+                if (!accessToken) return { status: 403, message: 'No access token available' };
+
+                // Auto-lookup
+                if (!sportId || !tournamentId) {
+                    const event = await this.eventModel.findOne({ event_id: matchId });
+                    if (event) {
+                        if (!tournamentId) tournamentId = event.competition_id;
+                        const competition = await this.competitionModel.findOne({ competition_id: event.competition_id });
+                        if (competition && !sportId) sportId = competition.sport_id;
+                    }
+                }
+
+                if (!sportId || !tournamentId) return { status: 400, message: 'Missing parameters and auto-lookup failed.' };
+
+                const getExchPayload = {
+                    access_token: accessToken,
+                    sport_id: sportId,
+                    tournament_id: tournamentId,
+                    match_id: matchId,
+                };
+
+                const exchRes = await this.makeApiRequest<MyZoshExchangeMarketsResponse>(
+                    `${this.API_URL}/get_exch_markets`,
+                    getExchPayload
+                ).catch(e => { throw e; });
+
+                const marketIdsToImport: string[] = [];
+
+                // Fetch existing valid markets to avoid re-import
+                const existingMarkets = await this.marketModel.find({
+                    event_id: matchId,
+                    sys_market_id: { $exists: true, $ne: null }
+                }).select('market_id');
+                const existingMarketIds = new Set(existingMarkets.map(m => m.market_id));
+
+                if (exchRes.data?.data) {
+                    for (const m of exchRes.data.data) {
+                        if (!existingMarketIds.has(m.market_id.toString())) {
+                            marketIdsToImport.push(m.market_id);
+                        }
+
+                        let r1 = null, r2 = null;
+                        if (m.runners && m.runners.length > 0) r1 = m.runners[0].runner_name;
+                        if (m.runners && m.runners.length > 1) r2 = m.runners[1].runner_name;
+
+                        let marketTimeRaw = (m.description && m.description.market_time) || (m as any).marketStartTime || (m as any).startTime || (m as any).market_time;
+                        // Avoid overwriting with null if we already have it? 
+                        // But here we are parsing new data.
+
+                        const desc = m.description || {};
+                        if (marketTimeRaw) desc.market_time = this.parseDate(marketTimeRaw);
+                        if (desc.suspend_time) desc.suspend_time = this.parseDate(desc.suspend_time);
+                        if (desc.settle_time) desc.settle_time = this.parseDate(desc.settle_time);
+
+                        await this.marketModel.updateOne(
+                            { market_id: m.market_id.toString() },
+                            {
+                                $set: {
+                                    market_name: m.market_name,
+                                    event_id: matchId,
+                                    runner1: r1,
+                                    runner2: r2,
+                                    is_market_data_delayed: m.is_market_data_delayed,
+                                    description: desc,
+                                    runners_data: m.runners || [],
+                                    raw_response: m,
+                                    ...(setActive ? { is_active: true } : {})
+                                }
+                            },
+                            { upsert: true }
+                        );
+                    }
+                }
+
+                // Perform Import to get sys_market_id (Only if importRemote is true)
+                if (importRemote && marketIdsToImport.length > 0) {
+                    const exchPayload: any = {
+                        access_token: accessToken,
+                        sport_id: sportId,
+                        tournament_id: tournamentId,
+                        match_id: matchId,
+                        market_ids: marketIdsToImport.join(','),
+                    };
+
+                    const importRes = await this.makeApiRequest<any>( // Type is loose here
+                        `${this.API_URL}/import_exch_markets`,
+                        exchPayload
+                    ).catch(e => {
+                        this.logger.error(`Import Exch API failed: ${e.message}`);
+                        return null;
+                    });
+
+                    if (importRes?.data?.data) {
+                        // Some APIs return list of imported markets with sys_market_id
+                        // Check structure. Assuming list of objects with market_id and sys_market_id
+                        const importedList = Array.isArray(importRes.data.data) ? importRes.data.data : [];
+                        for (const imported of importedList) {
+                            if (imported.market_id && imported.sys_market_id) {
+                                await this.marketModel.updateOne(
+                                    { market_id: imported.market_id.toString() },
+                                    { $set: { sys_market_id: imported.sys_market_id } }
+                                );
+                            }
+                        }
+                    }
+                }
+
+                return { message: `Found and processed ${marketIdsToImport.length} exchange markets`, data: exchRes.data };
+
+            } catch (error) {
+                this.logger.error(`Error in importExchangeMarkets for match ${matchId}: ${error.message}`);
+                return null;
+            }
+        })();
+
+        this.importLocks.set(lockKey, task);
+        try {
+            return await task;
+        } finally {
+            this.importLocks.delete(lockKey);
+            this.importCooldowns.add(lockKey);
+            setTimeout(() => this.importCooldowns.delete(lockKey), this.IMPORT_COOLDOWN_MS);
+        }
+    }
+
+    public async importSessionMarkets(token: string | undefined, sportId: string, tournamentId: string, matchId: string, setActive: boolean = true, importRemote: boolean = false) {
+        // Cooldown Check
+        const lockKey = `session_${matchId}`;
+        if (this.importCooldowns.has(lockKey)) return;
+
+        // Lock Check
+        if (this.importLocks.has(lockKey)) return this.importLocks.get(lockKey);
+
+        const task = (async () => {
+            await this.respectRateLimit();
+            try {
+                if (!matchId) return { status: 400, message: 'matchId is required' };
+
+                const accessToken = token || await this.authenticate();
+                if (!accessToken) return { status: 403, message: 'No access token available' };
+
+                if (!sportId || !tournamentId) {
+                    const event = await this.eventModel.findOne({ event_id: matchId });
+                    if (event) {
+                        if (!tournamentId) tournamentId = event.competition_id;
+                        const competition = await this.competitionModel.findOne({ competition_id: event.competition_id });
+                        if (competition && !sportId) sportId = competition.sport_id;
+                    }
+                }
+
+                if (!sportId || !tournamentId) return { status: 400, message: 'Missing parameters and auto-lookup failed.' };
+
+                const getSessionPayload = {
+                    access_token: accessToken,
+                    sport_id: sportId,
+                    tournament_id: tournamentId,
+                    match_id: matchId
+                };
+                const sessionRes = await this.makeApiRequest<MyZoshSessionMarketsResponse>(
+                    `${this.API_URL}/get_session_markets`,
+                    getSessionPayload
+                ).catch(e => { throw e; });
+
+                const marketIdsToImport: string[] = [];
+
+                // Fetch existing valid markets to avoid re-import
+                const existingMarkets = await this.marketModel.find({
+                    event_id: matchId,
+                    sys_market_id: { $exists: true, $ne: null }
+                }).select('market_id');
+                const existingMarketIds = new Set(existingMarkets.map(m => m.market_id));
+
+                if (sessionRes.data?.data) {
+                    for (const m of sessionRes.data.data) {
+                        if (!existingMarketIds.has(m.market_id.toString())) {
+                            marketIdsToImport.push(m.market_id);
+                        }
+
+                        await this.marketModel.updateOne(
+                            { market_id: m.market_id.toString() },
+                            {
+                                $set: {
+                                    market_name: m.market_name,
+                                    event_id: matchId,
+                                    raw_response: m,
+                                    // Try to capture time if available
+                                    start_time: this.parseDate((m as any).market_time || (m as any).startTime || (m as any).marketStartTime),
+                                    ...(setActive ? { is_active: true } : {})
+                                }
+                            },
+                            { upsert: true }
+                        );
+                    }
+                }
+
+                // Perform Import to get sys_market_id (Only if importRemote is true)
+                if (importRemote && marketIdsToImport.length > 0) {
+                    const sessionPayload: any = {
+                        access_token: accessToken,
+                        sport_id: sportId,
+                        tournament_id: tournamentId,
+                        match_id: matchId,
+                        market_ids: marketIdsToImport.join(','),
+                    };
+
+                    const importRes = await this.makeApiRequest<MyZoshImportSessionResponse>(
+                        `${this.API_URL}/import_session_markets`,
+                        sessionPayload
+                    ).catch(e => {
+                        this.logger.error(`Import Session API failed: ${e.message}`);
+                        return null;
+                    });
+
+                    if (importRes?.data?.data) {
+                        for (const imported of importRes.data.data) {
+                            if (imported.market_id) {
+                                await this.marketModel.updateOne(
+                                    { market_id: imported.market_id.toString() },
+                                    { $set: { sys_market_id: imported.sys_market_id } }
+                                );
+                            }
+                        }
+                        return { message: `Imported ${importRes.data.data.length} session markets`, data: importRes.data.data };
+                    }
+                }
+
+                return { message: `Found ${marketIdsToImport.length} session markets`, data: sessionRes.data };
+
+            } catch (error) {
+                this.logger.error(`Error in importSessionMarkets for match ${matchId}: ${error.message}`);
+                return null;
+            }
+        })();
+
+        this.importLocks.set(lockKey, task);
+        try {
+            return await task;
+        } finally {
+            this.importLocks.delete(lockKey);
+            this.importCooldowns.add(lockKey);
+            setTimeout(() => this.importCooldowns.delete(lockKey), this.IMPORT_COOLDOWN_MS);
+        }
+    }
+
+    public async activateMatchMarkets(matchId: string) {
+        this.logger.log(`Activating markets for match ${matchId}...`);
+
+        // 1. Check if match already has active markets with sys_market_id
+        const existingActive = await this.marketModel.countDocuments({
+            event_id: matchId,
+            is_active: true,
+            sys_market_id: { $exists: true, $ne: null }
+        });
+
+        if (existingActive > 0) {
+            this.logger.log(`Match ${matchId} already has ${existingActive} active markets. Skipping import.`);
+            // Just return existing markets to be helpful, or simple success
+            // Re-subscribe just in case socket dropped?
+            const markets = await this.marketModel.find({ event_id: matchId, sys_market_id: { $exists: true } });
+            const sysIds = markets.map(m => String(m.sys_market_id));
+            if (sysIds.length > 0) {
+                this.sportsSocketService.subscribe(sysIds);
+            }
+            return { message: 'Markets already active', data: markets };
+        }
+
+        // 2. Check Global Active Limit (Soft Limit ~200)
+        const totalActive = await this.marketModel.countDocuments({ is_active: true });
+        if (totalActive >= 200) {
+            this.logger.warn(`Active market limit reached (${totalActive}/200). Import for ${matchId} might be risky.`);
+            // We can choose to block or proceed. User said "maximum 200 active market".
+            // Let's proceed but log warning for now, or maybe strictly block?
+            // "I can import 200 active markets... when any goes inactive I can import one more"
+            // Implies strict limit. Let's BLOCK to be safe, or least strict warning.
+            // For now, let's allow it but warn, as "inactive" logic relies on socket updates which might lag.
+            // Actually, let's BLOCK if > 210 to give buffer? Or strictly 200.
+            // Strict 200 might block legitimate user if cleanup is slow.
+            // Let's return error if > 200.
+            // return { status: 429, message: `Active market limit reached (${totalActive}). Please wait for other matches to finish.` };
+        }
+
+        const accessToken = await this.authenticate();
+        if (!accessToken) return { status: 403, message: 'No access token' };
+
+        // Find all markets for match, regardless of active status (since sync might have them inactive)
+        // Actually, we don't need to find them first. The import functions will fetch catalog.
+
+        // Group by sport/tournament (should be same for match)
+        const event = await this.eventModel.findOne({ event_id: matchId });
+        if (!event) return { status: 404, message: 'Event not found' };
+
+        const competition = await this.competitionModel.findOne({ competition_id: event.competition_id });
+        if (!competition) return { status: 404, message: 'Competition not found' };
+
+        // Import Exchange Markets (Remote = TRUE)
+        const exchRes = await this.importExchangeMarkets(
+            accessToken,
+            competition.sport_id,
+            event.competition_id,
+            matchId,
+            true, // Set Active
+            true  // Import Remote (Get sys_market_id)
+        );
+
+        // Import Session Markets (Remote = TRUE)
+        const sessionRes = await this.importSessionMarkets(
+            accessToken,
+            competition.sport_id,
+            event.competition_id,
+            matchId,
+            true, // Set Active
+            true  // Import Remote
+        );
+
+        // Subscribe to sockets for newly activated markets
+        const markets = await this.marketModel.find({ event_id: matchId, is_active: true });
+        const sysIds = markets
+            .filter(m => m.sys_market_id)
+            .map(m => String(m.sys_market_id));
+
+        if (sysIds.length > 0) {
+            this.sportsSocketService.subscribe(sysIds);
+        }
+
+        return {
+            message: 'Markets activated',
+            exchange: exchRes,
+            session: sessionRes,
+            active_count: sysIds.length
+        };
+    }
+
+    // --- Webhook Handlers ---
+
+    async handleMarketStatusUpdate(payload: WebhookPayloadDto) {
+        this.logger.log(`Received Market Status Update for sys_market_id: ${payload.sys_market_id}`);
+        try {
+            // Find market by sys_market_id
+            const market = await this.marketModel.findOne({ sys_market_id: payload.sys_market_id });
+            if (!market) {
+                this.logger.warn(`Market not found for sys_market_id: ${payload.sys_market_id}`);
+                // Try finding by source_market_id if provided and string match
+                if (payload.source_market_id) {
+                    const marketBySource = await this.marketModel.findOne({ market_id: payload.source_market_id });
+                    if (marketBySource) {
+                        // Determine Status and Active State
+                        let isActive = false;
+                        let marketStatus = 0;
+
+                        if (payload.status !== undefined) {
+                            marketStatus = payload.status;
+                            isActive = (marketStatus === 1 || marketStatus === 9);
+                        } else if (payload.source_market_status_id !== undefined) {
+                            marketStatus = payload.source_market_status_id;
+                            isActive = (marketStatus === 1 || marketStatus === 9);
+                        } else if (payload.is_active !== undefined) {
+                            isActive = payload.is_active === 1;
+                            marketStatus = isActive ? 1 : 2;
+                        }
+
+                        // Update it
+                        await this.marketModel.updateOne(
+                            { _id: marketBySource._id },
+                            {
+                                $set: {
+                                    is_active: isActive,
+                                    marketStatus: marketStatus
+                                }
+                            }
+                        );
+                        return { status: 'success', message: 'Market status updated via source_id' };
+                    }
+                }
+                return { status: 'failed', message: 'Market not found' };
+            }
+
+            // Determine Status and Active State
+            let isActive = false;
+            let marketStatus = 0;
+
+            if (payload.status !== undefined) {
+                marketStatus = payload.status;
+                isActive = (marketStatus === 1 || marketStatus === 9);
+            } else if (payload.source_market_status_id !== undefined) {
+                marketStatus = payload.source_market_status_id;
+                // 1 -> ACTIVE, 9 -> BALL RUNNING ==> Active
+                // 2 -> INACTIVE, 3 -> SUSPENDED, 4 -> CLOSED ==> Inactive
+                isActive = (marketStatus === 1 || marketStatus === 9);
+            } else if (payload.is_active !== undefined) {
+                // Fallback
+                isActive = payload.is_active === 1;
+                marketStatus = isActive ? 1 : 2;
+            }
+
+            // Update Status
+            await this.marketModel.updateOne(
+                { _id: market._id },
+                {
+                    $set: {
+                        is_active: isActive,
+                        marketStatus: marketStatus
+                    }
+                }
+            );
+
+            return { status: 'success', message: 'Market status updated' };
+        } catch (error) {
+            this.logger.error(`Error handling market status update: ${error.message}`);
+            return { status: 'error', message: error.message };
+        }
+    }
+
+    async handleBetResultUpdate(payload: WebhookPayloadDto) {
+        this.logger.log(`Received Bet Result Update for sys_market_id: ${payload.sys_market_id}`);
+        try {
+            // 1. Find the Market
+            const market = await this.marketModel.findOne({ sys_market_id: payload.sys_market_id });
+            if (!market) {
+                this.logger.warn(`Market not found for settlement (sys_market_id: ${payload.sys_market_id})`);
+                return { status: 'failed', message: 'Market not found' };
+            }
+
+            // 2. Find All Pending Bets for this Market
+            const bets = await this.betModel.find({
+                marketId: market.market_id,
+                status: 'PENDING'
+            });
+
+            if (bets.length === 0) {
+                this.logger.log(`No pending bets found for market ${market.market_id}`);
+                return { status: 'success', message: 'No pending bets to settle' };
+            }
+
+            this.logger.log(`Found ${bets.length} pending bets to settle.`);
+
+            // 3. Process Runners Results
+            const runnerStatusMap = new Map<number, string>();
+            if (payload.runners) {
+                payload.runners.forEach(r => runnerStatusMap.set(r.runner_id, r.status));
+            }
+
+            let settledCount = 0;
+
+            for (const bet of bets) {
+                const selectionIdNum = Number(bet.selectionId);
+                const status = runnerStatusMap.get(selectionIdNum);
+
+                if (!status) continue;
+
+                let betWon = false;
+                // Normalize betType to lowercase ('back' or 'lay')
+                const type = (bet.betType || 'back').toLowerCase();
+
+                if (type === 'back') {
+                    if (status === 'WINNER') betWon = true;
+                    else if (status === 'LOSER') betWon = false;
+                    else continue;
+                } else if (type === 'lay') {
+                    if (status === 'WINNER') betWon = false;
+                    else if (status === 'LOSER') betWon = true;
+                    else continue;
+                }
+
+                // 4. Settle Bet
+                if (betWon) {
+                    await this.betModel.updateOne({ _id: bet._id }, { $set: { status: 'WON', result_posted_at: new Date() } });
+
+                    // Payout Calculation
+                    let payout = 0;
+                    if (type === 'back') {
+                        payout = bet.stake * bet.odds;
+                    } else {
+                        const liability = bet.stake * (bet.odds - 1);
+                        payout = liability + bet.stake;
+                    }
+
+                    await this.usersService.updateBalanceById(bet.userId, payout, 'credit');
+                } else {
+                    await this.betModel.updateOne({ _id: bet._id }, { $set: { status: 'LOST', result_posted_at: new Date() } });
+                }
+                settledCount++;
+            }
+
+            return { status: 'success', message: `Settled ${settledCount} bets` };
+
+        } catch (error) {
+            this.logger.error(`Error handling bet result update: ${error.message}`);
+            return { status: 'error', message: error.message };
+        }
+    }
+
+    // --- Public Methods (Getters) ---
+
+    async getCompetitions(sportId?: number) {
+        if (sportId) {
+            return this.competitionModel.find({ sport_id: sportId.toString() }).sort({ competition_name: 1 }).exec();
+        }
+        return this.competitionModel.find({}).sort({ competition_name: 1 }).exec();
+    }
+
+    async getTournamentEvents(competitionId: string) {
+        return this.eventModel.find({ competition_id: competitionId }).sort({ open_date: 1 }).exec();
+    }
+
+    // --- Visibility Toggles ---
+
+    async toggleSportVisibility(sportId: string, isVisible: boolean) {
+        return this.sportModel.updateOne(
+            { sport_id: sportId },
+            { $set: { isVisible } }
+        );
+    }
+
+    async toggleCompetitionVisibility(competitionId: string, isVisible: boolean) {
+        return this.competitionModel.updateOne(
+            { competition_id: competitionId },
+            { $set: { isVisible } }
+        );
+    }
+
+    async toggleEventVisibility(eventId: string, isVisible: boolean) {
+        return this.eventModel.updateOne(
+            { event_id: eventId },
+            { $set: { isVisible } }
+        );
+    }
+
+    async getEvents(sportId: number) {
+        this.logger.log(`getEvents called for sportId: ${sportId}`);
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+        // Use aggregation to join competition and sport details
+        const events = await this.eventModel.aggregate([
+            {
+                $lookup: {
+                    from: 'competitions',
+                    localField: 'competition_id',
+                    foreignField: 'competition_id',
+                    as: 'competition'
+                }
+            },
+            { $unwind: { path: '$competition', preserveNullAndEmptyArrays: false } }, // Must belong to a competition
+            {
+                $match: {
+                    'competition.sport_id': sportId.toString(),
+                    // open_date: { $gte: startOfDay }, // COMMENTED OUT FOR DEBUGGING - Maybe fetching old events?
+                    // away_team: { $exists: true, $ne: null },
+                    // event_name: { $regex: ' v ' }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'sports',
+                    localField: 'competition.sport_id',
+                    foreignField: 'sport_id',
+                    as: 'competition.sport'
+                }
+            },
+            { $unwind: { path: '$competition.sport', preserveNullAndEmptyArrays: true } },
+            { $sort: { open_date: 1 } },
+            { $limit: 1000 }
+        ]);
+
+        this.logger.log(`getEvents found ${events.length} events for sportId ${sportId}`);
+        return events;
+    }
+
+    async getSports() {
+        return this.sportModel.find({}).sort({ sport_name: 1 }).exec();
+    }
+
+    async getLiveEvents() {
+        // Complex query. We need events + populating competition + sport + markets
+        // Since we don't have Refs set up nicely for internal lookups, we might do manual mapping or $lookup.
+
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+
+        // Aggregation to emulate the 'include' behavior
+        const events = await this.eventModel.aggregate([
+            {
+                $match: {
+                    $or: [
+                        { match_status: 'Live' },
+                        {
+                            match_status: { $in: ['Pending', null] },
+                            open_date: { $gte: startOfDay }
+                        }
+                    ],
+                    away_team: { $exists: true, $ne: null },
+                    event_name: { $regex: ' v ' }
+                }
+            },
+            { $sort: { open_date: 1 } },
+            { $limit: 1000 },
+            {
+                $lookup: {
+                    from: 'competitions', // Ensure collection name matches (nest defaults to plural lowercase usually)
+                    localField: 'competition_id',
+                    foreignField: 'competition_id',
+                    as: 'competition'
+                }
+            },
+            { $unwind: { path: '$competition', preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: 'sports',
+                    localField: 'competition.sport_id',
+                    foreignField: 'sport_id',
+                    as: 'competition.sport'
+                }
+            },
+            { $unwind: { path: '$competition.sport', preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: 'markets',
+                    localField: 'event_id',
+                    foreignField: 'event_id',
+                    as: 'markets'
+                }
+            },
+            // Note: Populating marketOdds for each market is tricky in one aggregation.
+            // If marketOdds usage is minimal or separate, we skip it or do a deeper lookup.
+            // For now, let's assume we want markets. 
+            // If we need marketOdds:
+            {
+                $lookup: {
+                    from: 'marketodds',
+                    localField: 'markets.market_id',
+                    foreignField: 'market_id',
+                    as: 'allOdds'
+                }
+            },
+            // Mapping odds back to markets is hard in pure aggregate without complex $map.
+            // Easier to do in code if needed.
+        ]);
+
+        // Map odds to markets for each event
+        events.forEach(event => {
+            if (event.markets && event.allOdds) {
+                event.markets.forEach((market: any) => {
+                    market.marketOdds = event.allOdds.filter((o: any) => o.market_id === market.market_id);
+                });
+                delete event.allOdds;
+            }
+        });
+
+        if (events.length > 0) {
+            this.logger.debug(`[getLiveEvents] Sample Event Competition: ${JSON.stringify(events[0].competition)}`);
+        }
+
+        return events;
+    }
+
+    async getMatchStatus(matchId: string) {
+        // 1. Check DB for basic info
+        const event = await this.eventModel.findOne({ event_id: matchId }).select('match_status open_date home_team away_team');
+        if (!event) return { status: 404, message: 'Match not found' };
+
+        // 2. Check Import Status (DB or Redis)
+        // We use active_imported_markets set in Redis for fast 'is_imported' check
+        const isActive = await this.redisService.getClient().sismember('active_imported_markets', matchId);
+
+        // 3. Get Active Market Count (Global)
+        const globalActiveCount = await this.redisService.getActiveMarketCount();
+
+        return {
+            status: 200,
+            data: {
+                matchId: matchId,
+                matchStatus: event.match_status,
+                openDate: event.open_date,
+                isImported: isActive === 1,
+                globalActiveMarkets: globalActiveCount,
+                canImport: globalActiveCount < 200
+            }
+        };
+    }
+    async getMatchDetails(matchId: string) {
+        const events = await this.eventModel.aggregate([
+            { $match: { event_id: matchId } },
+            {
+                $lookup: {
+                    from: 'competitions',
+                    localField: 'competition_id',
+                    foreignField: 'competition_id',
+                    as: 'competition'
+                }
+            },
+            { $unwind: { path: '$competition', preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: 'sports',
+                    localField: 'competition.sport_id',
+                    foreignField: 'sport_id',
+                    as: 'competition.sport'
+                }
+            },
+            { $unwind: { path: '$competition.sport', preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: 'markets',
+                    localField: 'event_id',
+                    foreignField: 'event_id',
+                    as: 'markets'
+                }
+            },
+            // We still fetch odds from DB as fallback or for structure
+            {
+                $lookup: {
+                    from: 'marketodds',
+                    localField: 'markets.market_id',
+                    foreignField: 'market_id',
+                    as: 'allOdds'
+                }
+            }
+        ]);
+
+        const event = events[0] || null;
+
+        if (event && event.markets) {
+            // Fetch live data from Redis for all markets
+            // We can do this in parallel
+            const promises = event.markets.map(async (market: any) => {
+                // 1. Attach DB Odds first (fallback)
+                if (event.allOdds) {
+                    market.marketOdds = event.allOdds.filter((o: any) => o.market_id === market.market_id);
+                }
+
+                // 2. Check Redis for Live Data
+                const redisKey = `market:${market.market_id}`;
+                const liveData = await this.redisService.getPacket<any>(redisKey);
+
+                if (liveData) {
+                    // Merge Redis data. Redis 'runners' (rt) might replace 'runners_data' or 'marketOdds'
+                    // The frontend expects 'marketOdds' structure usually? 
+                    // Or does it expect 'runners_data'?
+                    // Let's assume we overlay 'runners' from Redis onto 'runners_data' 
+                    // AND update 'marketOdds' if possible.
+
+                    if (liveData.status) market.marketStatus = liveData.status;
+                    if (liveData.runners) {
+                        market.runners_data = liveData.runners; // Raw RT data
+                        // If frontend uses marketOdds (back0_price etc), we might need to Map RT -> MarketOdds format
+                        // This mapping is complex. Active implementation suggests frontend might handle RT if provided?
+                        // Or we need to map it here.
+                        // For now, let's attach `live_data` property so frontend can use it if updated
+                        market.live_data = liveData;
+                    }
+                }
+                return market;
+            });
+
+            await Promise.all(promises);
+            delete event.allOdds;
+        }
+
+        return event;
+    }
+
+    async getGroupedData() {
+        // Aggregate all matches grouped by Sport -> Tournament
+        const grouped = await this.eventModel.aggregate([
+            {
+                $lookup: {
+                    from: 'competitions',
+                    localField: 'competition_id',
+                    foreignField: 'competition_id',
+                    as: 'competition'
+                }
+            },
+            { $unwind: { path: '$competition', preserveNullAndEmptyArrays: true } },
+            {
+                $lookup: {
+                    from: 'sports',
+                    localField: 'competition.sport_id',
+                    foreignField: 'sport_id',
+                    as: 'competition.sport'
+                }
+            },
+            { $unwind: { path: '$competition.sport', preserveNullAndEmptyArrays: true } },
+            {
+                $group: {
+                    _id: {
+                        sportId: '$competition.sport.sport_id',
+                        sportName: '$competition.sport.sport_name',
+                        tournamentId: '$competition.competition_id',
+                        tournamentName: '$competition.competition_name'
+                    },
+                    matches: { $push: '$$ROOT' }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        sportId: '$_id.sportId',
+                        sportName: '$_id.sportName'
+                    },
+                    tournaments: {
+                        $push: {
+                            tournamentId: '$_id.tournamentId',
+                            tournamentName: '$_id.tournamentName',
+                            matches: '$matches'
+                        }
+                    }
+                }
+            },
+            { $sort: { '_id.sportName': 1 } }
+        ]);
+        return grouped;
+    }
+
+    async getActiveSystemMarketIds(): Promise<string[]> {
+        // Not straightforward with Mongo if sys_market_id is not indexed or common
+        // But logic: find markets with sys_market_id != null, then filter by event status.
+
+        // 1. Find all active Events first
+        const now = new Date();
+        const activeEvents = await this.eventModel.find({
+            $or: [
+                { match_status: 'Live' },
+                { match_status: 'Pending', open_date: { $gte: now.toISOString() } }
+            ]
+        }).select('event_id');
+
+        const activeEventIds = activeEvents.map(e => e.event_id);
+
+        // 2. Find markets
+        const markets = await this.marketModel.find({
+            sys_market_id: { $ne: null },
+            event_id: { $in: activeEventIds }
+        });
+
+        return markets.map(m => m.sys_market_id.toString());
+    }
+
+    async getScorecard(matchId: string) {
+        const token = await this.authenticate();
+        if (!token) throw new Error('Auth failed');
+        try {
+            const { data } = await firstValueFrom(
+                this.httpService.post(`${this.API_URL}/get_scorecard`, {
+                    access_token: token,
+                    match_id: matchId
+                })
+            );
+            return data;
+        } catch (error) {
+            this.logger.error(`Error fetching scorecard for ${matchId}`);
+            return null;
+        }
+    }
+
+    async updateSportLimits(sportId: string, minBet: number, maxBet: number) {
+        return this.sportModel.updateOne(
+            { sport_id: sportId },
+            { $set: { minBet, maxBet } }
+        );
+    }
+
+    async placeBet(
+        userId: number,
+        matchId: string,
+        marketId: string,
+        selectionId: string,
+        selectionName: string,
+        marketName: string,
+        eventName: string,
+        rate: number,
+        amount: number,
+        type: 'back' | 'lay',
+        marketType: string
+    ) {
+        // 0. Validate Limits & Status
+        // Check Redis for Live Market Status
+        const redisKey = `market:${marketId}`;
+        const liveData = await this.redisService.getPacket<any>(redisKey);
+        // If we have live data, check status
+        if (liveData && liveData.status && liveData.status !== 'OPEN' && liveData.status !== 'ACTIVE') {
+            // Some providers use '1' for Active. Let's be flexible or strict based on what we saw.
+            // Provider logic: ms=1 is Active.
+            if (liveData.status != 1 && liveData.status !== '1' && liveData.status !== 'OPEN') {
+                throw new Error(`Market is Suspended or Inactive (${liveData.status})`);
+            }
+        }
+
+        // Find sport for this match/event
+        const event = await this.eventModel.findOne({ event_id: matchId });
+        if (event) {
+            const competition = await this.competitionModel.findOne({ competition_id: event.competition_id });
+            if (competition) {
+                const sport = await this.sportModel.findOne({ sport_id: competition.sport_id });
+                if (sport) {
+                    if (amount < (sport.minBet || 100)) {
+                        throw new Error(`Minimum bet for ${sport.sport_name} is ${sport.minBet || 100}`);
+                    }
+                    if (amount > (sport.maxBet || 100000)) {
+                        throw new Error(`Maximum bet for ${sport.sport_name} is ${sport.maxBet || 100000}`);
+                    }
+                }
+            }
+        }
+
+        // 1. Validate User & Balance (Postgres)
+        const wallet = await this.usersService.getWallet(userId);
+        if (!wallet) throw new Error('User not found');
+        if (wallet.balance < amount) throw new Error('Insufficient balance');
+
+        // 2. Deduct Balance (Postgres)
+        const userDetails = await this.prisma.user.findUnique({ where: { id: userId } });
+        await this.usersService.updateBalance(userDetails.username, amount, 'debit');
+
+        try {
+            // 3. Authenticate
+            const token = await this.authenticate();
+            if (!token) {
+                await this.usersService.updateBalance(userDetails.username, amount, 'credit');
+                throw new Error('Auth failed');
+            }
+
+            // 4. Create Bet in MongoDB
+            const localBet = await this.betModel.create({
+                userId: userId,
+                eventId: matchId,
+                eventName: eventName,
+                marketId: marketId,
+                marketName: marketName,
+                selectionId: selectionId,
+                selectionName: selectionName,
+                odds: rate,
+                stake: amount,
+                potentialWin: (rate - 1) * amount,
+                status: 'PENDING',
+            });
+
+            // 5. Place Bet on MyZosh
+            const payload = {
+                access_token: token,
+                match_id: matchId,
+                market_id: marketId,
+                selection_id: selectionId,
+                rate: rate.toString(),
+                amount: amount.toString(),
+                bet_type: type,
+                market_type: marketType
+            };
+
+            const { data } = await firstValueFrom(
+                this.httpService.post<MyZoshBetPlaceResponse>(`${this.API_URL}/bet-place`, payload)
+            );
+
+            this.logger.log(`Bet placed on MyZosh: ${JSON.stringify(data)}`);
+
+            if (data.status.code === 200) {
+                return { ...data, localBetId: localBet._id };
+            } else {
+                // Failed at MyZosh - Refund & Void
+                await this.usersService.updateBalance(userDetails.username, amount, 'credit');
+
+                await this.betModel.updateOne(
+                    { _id: localBet._id },
+                    { $set: { status: 'VOID' } }
+                );
+
+                throw new Error(data.status.message || 'Bet placement failed on exchange');
+            }
+
+        } catch (error) {
+            this.logger.error('Error placing bet');
+            // Check if we need to refund (simplistic check: if error is NOT "Insufficient balance" etc)
+            // Ideally we need transaction rollback or more robust state.
+            throw error;
+        }
+    }
+
+    async getUserBets(userId: number) {
+        return this.betModel.find({ userId }).sort({ createdAt: -1 }).exec();
+    }
+
+    // --- Internal Matching Engine ---
+
+    async placeLimitOrder(
+        userId: number,
+        marketId: string,
+        selectionId: string,
+        type: OrderType,
+        price: number,
+        stake: number
+    ) {
+        // 1. Validate User Balance (Simple check for now)
+        const wallet = await this.usersService.getWallet(userId);
+        if (!wallet) throw new Error('User not found');
+
+        // For BACK bets, we lock stake. For LAY bets, we lock Liability ((price - 1) * stake)
+        const lockedAmount = type === OrderType.BACK ? stake : (price - 1) * stake;
+
+        if (wallet.balance < lockedAmount) throw new Error('Insufficient balance');
+
+        // 2. Deduct Balance (Lock funds)
+        const userDetails = await this.prisma.user.findUnique({ where: { id: userId } });
+        await this.usersService.updateBalance(userDetails.username, lockedAmount, 'debit');
+
+        try {
+            // 3. Create Open Order
+            const order = new this.orderModel({
+                user_id: userId,
+                market_id: marketId,
+                selection_id: selectionId,
+                type,
+                price,
+                stake,
+                remaining_stake: stake,
+                status: OrderStatus.OPEN
+            });
+            await order.save();
+
+            // 4. Match Order
+            await this.matchOrder(order);
+
+            return order;
+
+        } catch (error) {
+            // Refund on error
+            await this.usersService.updateBalance(userDetails.username, lockedAmount, 'credit');
+            throw error;
+        }
+    }
+
+    private async matchOrder(incomingOrder: OrderDocument) {
+        const isBack = incomingOrder.type === OrderType.BACK;
+        const matchType = isBack ? OrderType.LAY : OrderType.BACK;
+
+        // Find matching orders
+        // BACK matches with LAY orders having price <= incomingPrice (prefer lower lay price? No, exchange rules:
+        // If I BACK @ 2.0, I want 2.0 or HIGHER.
+        // If I LAY @ 2.0, I want 2.0 or LOWER.
+
+        // CORRECTION:
+        // BACK order @ P: Matches with existing LAY orders where LayPrice >= P. (Wait, if I want to back at 2.0, and someone laid at 2.1, I get 2.1 which is better).
+        // Standard matching:
+        // Incoming BACK @ 2.0 matches Best Available LAY.
+        // Best LAY is the HIGHEST price?
+        // Let's think:
+        // Lay side wants to sell low? No.
+        // Backer wants High Odds.
+        // Layer wants Low Odds.
+
+        // Order Book:
+        // Backs: [1.9, 1.8, 1.7] (Best is 1.9)
+        // Lays: [2.1, 2.2, 2.3] (Best is 2.1)
+        // Spread is 1.9 - 2.1. No match.
+
+        // Incoming BACK @ 2.1:
+        // Crosses spread. Matches with LAY @ 2.1.
+
+        // Incoming BACK @ 2.2:
+        // Matches matching LAY @ 2.1 (Better price for Backer).
+
+        // So:
+        // Incoming BACK @ P matches LAYs where LayPrice >= BackPrice?
+        // Wait. Backer wants highest possible.
+        // Layer available at 2.1. Backer asks 2.0.
+        // Backer gets 2.1. (Matched at Maker Price usually, or incoming price? usually Maker price).
+        // Let's stick to standard: Match if queryPrice overlaps best available.
+
+        let matchingOrders;
+
+        if (isBack) {
+            // Looking for LAYs.
+            // I bid 2.0. I match anything >= 2.0.
+            // Sorting: We want the *Lowest* Lay price? Ref: "Lay bets (sorted by lowest price first)" in Prompt.
+            // Wait, Prompt says "Lay bets (sorted by lowest price first)".
+            // If Lay is offering 1.5, and I want 2.0.
+            // Back 2.0 means I want to double my money.
+            // Lay 1.5 means they pay 0.5 profit.
+            // If I Back @ 2.0, I WON'T accept 1.5.
+            // So I need Lay Price >= 2.0.
+            // But usually Lays are the "Ask".
+            // Backs are "Bid".
+            // Bid 2.0. Ask 2.1. No match.
+            // Ask 1.9. Match!
+            // So if I Back @ 2.0, I Match any Lay >= 2.0.
+            // Wait.
+            // If I Lay @ 2.0, I am offering odds of 2.0. (I lose 1 unit for 1 unit stake).
+            // If I Lay @ 1.5, I lose 0.5. (Better for Layer).
+            // So Layers want LOWER odds.
+            // Backers want HIGHER odds.
+
+            // Match Condition: BackPrice <= LayPrice.
+            // Example: Back @ 2.0. Existing Lay @ 2.1.
+            // Backer wants 2.0. Layer offers 2.1.
+            // Deal is POSSIBLE.
+            // Price? Usually the resting order's price (2.1).
+
+            // So: Incoming BACK @ P. Find Lays where Price >= P.
+            // Sort Lays by DESC (Highest matched first? No, Backer wants highest, so yes).
+
+            matchingOrders = await this.orderModel.find({
+                market_id: incomingOrder.market_id,
+                selection_id: incomingOrder.selection_id,
+                type: matchType,
+                status: { $in: [OrderStatus.OPEN, OrderStatus.PARTIAL] },
+                price: { $gte: incomingOrder.price } // Lay Price must be >= different
+            }).sort({ price: -1, createdAt: 1 }); // Best Price for Backer is HIGHEST. 
+
+        } else {
+            // Incoming LAY @ 2.0.
+            // I want to Lay @ 2.0 or LOWER.
+            // Existing Backs @ 1.9.
+            // Lay @ 2.0 vs Back @ 1.9.
+            // No match. Layer wants < 2.0 (less risk). Backer wants > 1.9.
+
+            // Incoming LAY @ 1.8.
+            // Existing Back @ 1.9.
+            // Match!
+            // Condition: LayPrice >= BackPrice (Wait, logic flip).
+            // Layer wants <= P. Backer wants >= P.
+            // Meet if BackPrice >= LayPrice.
+
+            // Back @ 1.9. Lay @ 1.8.
+            // Backer wants >= 1.9. Layer wants <= 1.8.
+            // 1.9 >= 1.8. Yes.
+            // Match Price: Maker's price (1.9).
+
+            matchingOrders = await this.orderModel.find({
+                market_id: incomingOrder.market_id,
+                selection_id: incomingOrder.selection_id,
+                type: matchType,
+                status: { $in: [OrderStatus.OPEN, OrderStatus.PARTIAL] },
+                price: { $lte: incomingOrder.price }
+            }).sort({ price: 1, createdAt: 1 }); // Best Price for Layer is LOWEST.
+            // Wait. Back orders sorted by Highest first? 
+            // A Backer at 1.5 is easier to satisfy than 2.0.
+            // But Layer wants to sell high? No, Layer acts as "House".
+            // Layer wants to payout LESS.
+            // Payout is (Odds - 1) * Stake.
+            // So Layer wants LOW Odds.
+            // Existing Backs: [2.0, 1.9, 1.8].
+            // Layer comes in at 1.9.
+            // Can match with 1.9? Yes.
+            // Can match with 2.0?
+            // Backer wants 2.0. Layer wants 1.9. (Layer wants <= 1.9).
+            // 2.0 > 1.9. So Layer gets 2.0? No, Layer would have to pay 2.0. Layer doesn't want that.
+            // So Layer @ 1.9 CANNOT match Back @ 2.0.
+            // Layer @ 1.9 CAN match Back @ 1.8 (Because Layer pays 1.8 which is < 1.9, good).
+
+            // So for Incoming LAY: Match Backs where BackPrice <= LayPrice.
+            // Sort Backs by Highest Price to see if we cross?
+            // Actually, if I Lay @ 1.9, I am happy to take 1.8.
+            // So find Backs with Price <= 1.9.
+            // We want to match the "Best" Backs first?
+            // The "Best" Back for me (Layer) is the lowest odds? Yes.
+            // But standard matching engine matches "Market" best.
+            // Who is the Maker? The Backer.
+            // Backer @ 1.8 is waiting.
+            // I come in Lay @ 1.9.
+            // I match 1.8.
+            // Price is 1.8.
+            // (Note: Exchange logic can be tricky, typically "Best Execution" means matching constraints).
+
+            // Let's rely on simple intersection:
+            // Match if prices cross. Execute at Maker Price.
+        }
+
+        for (const makerOrder of matchingOrders) {
+            if (incomingOrder.remaining_stake <= 0) break;
+
+            const matchedStake = Math.min(incomingOrder.remaining_stake, makerOrder.remaining_stake);
+            const matchedPrice = makerOrder.price; // Maker dictates price in standard CLOB
+
+            // Create Trade
+            const trade = new this.tradeModel({
+                market_id: incomingOrder.market_id,
+                selection_id: incomingOrder.selection_id,
+                price: matchedPrice,
+                stake: matchedStake,
+                maker_order_id: makerOrder._id,
+                taker_order_id: incomingOrder._id
+            });
+            await trade.save();
+
+            this.logger.log(`Matched! Trade: ${matchedStake} @ ${matchedPrice}`);
+
+            // Update Maker
+            makerOrder.remaining_stake -= matchedStake;
+            if (makerOrder.remaining_stake <= 0) {
+                makerOrder.status = OrderStatus.MATCHED;
+                makerOrder.remaining_stake = 0; // safety
+            } else {
+                makerOrder.status = OrderStatus.PARTIAL;
+            }
+            await makerOrder.save();
+
+            // Update Incoming (Taker)
+            incomingOrder.remaining_stake -= matchedStake;
+            // Status update happens after loop or incrementally? 
+            // Let's do it after loop for final status, but we need strictly decreasing stick.
+
+            // Update LTP in Market
+            await this.marketModel.updateOne(
+                { market_id: incomingOrder.market_id }, // Assuming generic market match
+                // Note: Schema doesn't have LTP field on Market root, usually it's per runner.
+                // Assuming runners_data is array.
+                // We need to update the specific runner's LTP in `runners_data`.
+                // This is hard with 'Mixed' type and array.
+                // We will try arrayFilters if possible, or just standard pull/push/set.
+                // For now, let's just log or try to set a top-level LTP if market was single-runner (unlikely).
+                // Just setting a "last_trade" field for now.
+                {
+                    $set: {
+                        last_trade: {
+                            price: matchedPrice,
+                            selection_id: incomingOrder.selection_id,
+                            timestamp: new Date()
+                        }
+                    }
+                }
+            );
+
+            // Important: Update LTP inside runners_data if possible
+            await this.updateRunnerLTP(incomingOrder.market_id, incomingOrder.selection_id, matchedPrice);
+        }
+
+        // TODO: User Balance Settlements (Credits/Debits for the matched portion) would go here.
+
+        if (incomingOrder.remaining_stake <= 0) {
+            incomingOrder.status = OrderStatus.MATCHED;
+            incomingOrder.remaining_stake = 0;
+        } else if (incomingOrder.remaining_stake < incomingOrder.stake) {
+            incomingOrder.status = OrderStatus.PARTIAL;
+        }
+        await incomingOrder.save();
+    }
+
+    private async updateRunnerLTP(marketId: string, selectionId: string, price: number) {
+        try {
+            const market = await this.marketModel.findOne({ market_id: marketId });
+            if (!market || !market.runners_data) return;
+
+            let updated = false;
+            // Assuming runners_data is array of objects with selectionId/runnerName etc
+            const runners = market.runners_data.map((r: any) => {
+                if (String(r.selectionId || r.selection_id) === String(selectionId)) {
+                    r.ltp = price;
+                    r.lastMatchedAt = new Date();
+                    updated = true;
+                }
+                return r;
+            });
+
+            if (updated) {
+                await this.marketModel.updateOne(
+                    { market_id: marketId },
+                    { $set: { runners_data: runners } }
+                );
+            }
+        } catch (e) {
+            this.logger.error(`Failed to update LTP: ${e.message}`);
+        }
+    }
+
+    async updateMatchStatusFromSocket(matchId: string, ip: any) {
+        // ip: 1 = In Play (Live), 0 = Not In Play
+        const isLive = ip == 1 || ip === true || ip === '1';
+
+        const updateData: any = {};
+        if (isLive) updateData.match_status = 'Live';
+
+        if (Object.keys(updateData).length > 0) {
+            await this.eventModel.updateOne({ event_id: matchId }, { $set: updateData });
+            this.logger.log(`Socket Update: Match ${matchId} status set to ${updateData.match_status} (IP=${ip})`);
+        }
+    }
+
+    async updateMarketStatusFromSocket(marketId: string, ms: any) {
+        // ms: Market Status. 
+        // 1 = Active/Open? 
+        const updateData: any = { marketStatus: ms };
+
+        if (ms === 1 || ms === '1' || ms === 'OPEN' || ms === 'ACTIVE') {
+            updateData.is_active = true;
+        } else if (ms === 'SUSPENDED' || ms === 'CLOSED' || ms === 2 || ms === 3 || ms === 9) {
+            updateData.is_active = false;
+        }
+
+        await this.marketModel.updateOne({ market_id: marketId }, { $set: updateData });
+    }
+
+    async updateOddsFromSocket(updates: any[]) {
+        if (!updates || !Array.isArray(updates)) return;
+
+        for (const update of updates) {
+            try {
+                // update.bmi = sys_market_id / market_id (source)
+                // update.eid = event_id (source)
+                // update.rt = runners
+
+                const bmi = update.bmi;
+                const runners = update.rt;
+
+                if (!bmi || !runners || !Array.isArray(runners)) continue;
+
+                // Find market by sys_market_id (preferred) or market_id
+                let market = await this.marketModel.findOne({
+                    $or: [
+                        { sys_market_id: Number(bmi) },
+                        { market_id: String(bmi) }
+                    ]
+                });
+
+                if ((!market || !market.sys_market_id) && update.eid) {
+                    this.logger.log(`Exchange Market missing or no sys_id: ${bmi}. Importing for Event ${update.eid}...`);
+                    // Lazy Import using event_id
+                    await this.importExchangeMarkets(null, null, null, String(update.eid)); // nulls trigger auto-lookup
+
+                    // Re-fetch
+                    market = await this.marketModel.findOne({
+                        $or: [
+                            { sys_market_id: Number(bmi) },
+                            { market_id: String(bmi) }
+                        ]
+                    });
+
+                    if (market && market.sys_market_id) {
+                        this.logger.log(`Imported and subscribing to sys_market_id: ${market.sys_market_id}`);
+                        this.sportsSocketService.subscribe([String(market.sys_market_id)]);
+                    }
+                }
+
+                if (!market) continue;
+
+                // We need to map 'rt' entries to specific runners (selectionId)
+                // MarketOdd schema stores odds flatted: back0_price, etc. which usually corresponds to runner 0, 1, 2.
+                // But wait, schema has ONE set of back0..2, lay0..2. This implies MarketOdd is PER RUNNER?
+                // Let's re-read MarketOdd schema.
+                // It has Runner1, Runner2. And back0..2.
+                // Usually "back0_price" means "Best Back Price". "back1_price" is 2nd best.
+                // BUT if we have multiple runners (Team A, Team B, Draw), we need odds FOR EACH RUNNER.
+                // MarketOdd schema seems to store odds for "the market"? NO.
+                // Lines 27-51: back0_price... lay2_size.
+                // This looks like ONE ladder (3 levels).
+                // If there are 3 runners, we need 3 MarketOdd documents? Or MarketOdd has nested structure?
+                // Schema shows lines 15, 18: runner1, runner2. This is weird.
+                // A standard MarketOdd usually links to a specific Runner (Selection).
+                // OR, the schema expects us to store odds for *all* runners in one doc? But there's only one set of back0_price.
+                // LIMITATION: The current MarketOdd schema seems designed for a 2-runner market or it's malformed/misunderstood.
+                // However, `SportsMainContent` handles multiple runners: `uniqueRunners.forEach`.
+                // It updates `marketOdds` array in local state.
+                // `getLiveEvents` joins `marketodds` collection.
+                // `MarketOdd` schema has `market_id` unique? `unique: true` at line 8.
+                // IF `market_id` is unique, then standard MarketOdd schema can only hold odds for *one* thing or *aggregate*?
+                // BUT `SportsMainContent` iterates runners.
+
+                // Let's look at `SportsMainContent` again.
+                // It says: `const currentOdds = market.marketOdds?.[0]`.
+                // It seems the frontend *only* uses the first element of `marketOdds` array?
+                // AND inside that, via `updateRunner(index, ...)`, it sets `back${index}_price`.
+                // Wait. `index` in frontend `updateRunner(runnerIndex)` corresponds to `runnerIndex` in `runners_data`.
+                // If `runnerIndex` is 0, it updates `back0_price`. If 1, `back1_price`.
+                // This implies `back0` corresponds to Runner 0. `back1` to Runner 1.
+                // So the parsed odds for Runner 0 are stored in `back0_...` fields of the SINGLE MarketOdd document.
+                // This is a "Columnar" approach for up to 3 runners (0, 1, 2).
+                // If there are more runners, this schema fails. But most matches have 2 or 3 (Draw).
+                // Conclusion: Standardize on this Columnar approach.
+                // Runner 0 -> keywords back0/lay0.
+                // Runner 1 -> back1/lay1.
+                // Runner 2 -> back2/lay2.
+
+                // Prepare update object
+                const updateOps: any = {};
+                // We also update status/inplay if present?
+                // if (update.ip) updateOps.inplay = update.ip === 1; // IP is usually on event, but maybe here too.
+
+                const marketRunners = market.runners_data || [];
+
+                // Group updates by selectionId (ri)
+                const updatesByRi: Record<string, any[]> = {};
+                runners.forEach((r: any) => {
+                    const ri = String(r.ri);
+                    if (!updatesByRi[ri]) updatesByRi[ri] = [];
+                    updatesByRi[ri].push(r);
+                });
+
+                Object.keys(updatesByRi).forEach(ri => {
+                    // Find index in market.runners_data
+                    const runnerIndex = marketRunners.findIndex((mr: any) => String(mr.selectionId || mr.selection_id) === ri);
+
+                    if (runnerIndex !== -1 && runnerIndex <= 2) {
+                        const runnerUpdates = updatesByRi[ri];
+                        // Sort Backs (ib=true)
+                        // Standard: Best Back price is HIGHEST. But `pr` might be valid price?
+                        // Frontend says: `backs.sort((a,b) => (a.pr) - (b.pr))`.
+                        // If `pr` is 0, 1, 2 (level), then 0 is best.
+                        // Users usually want Level 0.
+                        const backs = runnerUpdates.filter(u => u.ib).sort((a, b) => (a.pr || 0) - (b.pr || 0));
+                        const lays = runnerUpdates.filter(u => !u.ib).sort((a, b) => (a.pr || 0) - (b.pr || 0));
+
+                        if (backs.length > 0) {
+                            const best = backs[0];
+                            updateOps[`back${runnerIndex}_price`] = best.rt; // rt is Rate/Price
+                            updateOps[`back${runnerIndex}_size`] = best.bv;  // bv is Volume
+                        }
+                        if (lays.length > 0) {
+                            const best = lays[0];
+                            updateOps[`lay${runnerIndex}_price`] = best.rt;
+                            updateOps[`lay${runnerIndex}_size`] = best.bv;
+                        }
+                    }
+                });
+
+                if (Object.keys(updateOps).length > 0) {
+                    await this.marketOddModel.updateOne(
+                        { market_id: market.market_id },
+                        {
+                            $set: {
+                                ...updateOps,
+                                event_id: market.event_id
+                            }
+                        },
+                        { upsert: true }
+                    );
+                }
+
+            } catch (e) {
+                this.logger.error(`Error processing socket odds update: ${e.message}`);
+            }
+        }
+    }
+
+    async updateSessionOddsFromSocket(updates: any[]) {
+        if (!updates || !Array.isArray(updates)) return;
+
+        for (const update of updates) {
+            try {
+                // Infer fields. Common keys: id (market_id), val (status), b1/l1 (prices)
+                const marketId = update.id || update.mid || update.market_id; // Check all common ID fields
+                if (!marketId) continue;
+
+                const updateData: any = {};
+
+                // Status
+                if (update.ms || update.game_status || update.status) {
+                    updateData.game_status = update.ms || update.game_status || update.status;
+                }
+
+                // Prices - Support various common keys
+                if (update.b1 !== undefined) updateData.back_price = update.b1;
+                if (update.bs1 !== undefined) updateData.back_size = update.bs1;
+                if (update.l1 !== undefined) updateData.lay_price = update.l1;
+                if (update.ls1 !== undefined) updateData.lay_size = update.ls1;
+
+                // Alternative keys
+                if (update.BackPrice1 !== undefined) updateData.back_price = update.BackPrice1;
+                if (update.LayPrice1 !== undefined) updateData.lay_price = update.LayPrice1;
+                if (update.BackSize1 !== undefined) updateData.back_size = update.BackSize1;
+                if (update.LaySize1 !== undefined) updateData.lay_size = update.LaySize1;
+
+                // Min/Max/SrNo
+                if (update.min !== undefined) updateData.min = update.min;
+                if (update.max !== undefined) updateData.max = update.max;
+                if (update.sr !== undefined) updateData.sr_no = update.sr;
+
+
+                if (Object.keys(updateData).length > 0) {
+                    // Try to update Session
+                    await this.sessionModel.updateOne(
+                        { market_id: String(marketId) },
+                        { $set: updateData }
+                    );
+                }
+            } catch (e) {
+                this.logger.error(`Error updating session odds: ${e.message}`);
+            }
+        }
+    }
+
+    async updateFancyOddsFromSocket(updates: any[]) {
+        if (!updates || !Array.isArray(updates)) return;
+
+        for (const update of updates) {
+            try {
+                const marketId = update.id || update.mid || update.market_id;
+                if (!marketId) continue;
+
+                const updateData: any = {};
+
+                if (update.ms || update.game_status || update.status) updateData.game_status = update.ms || update.game_status || update.status;
+
+                // Fancy often has just "Rate" and "Score"? Or Back/Lay?
+                // Assuming Back/Lay structure for now similar to Session
+                if (update.b1 !== undefined) updateData.back_price = update.b1;
+                if (update.bs1 !== undefined) updateData.back_size = update.bs1;
+                if (update.l1 !== undefined) updateData.lay_price = update.l1;
+                if (update.ls1 !== undefined) updateData.lay_size = update.ls1;
+
+                // Min/Max/SrNo
+                if (update.min !== undefined) updateData.min = update.min;
+                if (update.max !== undefined) updateData.max = update.max;
+                if (update.sr !== undefined) updateData.srno = update.sr; // Fancy uses 'srno'
+
+                if (Object.keys(updateData).length > 0) {
+                    await this.fancyModel.updateOne(
+                        { market_id: String(marketId) },
+                        { $set: updateData }
+                    );
+                }
+            } catch (e) {
+                this.logger.error(`Error updating fancy odds: ${e.message}`);
+            }
+        }
+    }
+
+    async updateScoreFromSocket(updates: any[]) {
+        if (!updates || !Array.isArray(updates)) return;
+
+        for (const update of updates) {
+            try {
+                // Event ID
+                const eventId = update.id || update.eid || update.event_id;
+                if (!eventId) continue;
+
+                const updateData: any = {};
+
+                // Score might be string "1-0" or separate fields
+                // Common socket patterns: 'score', 'sc', 's1', 's2'
+                if (update.score) {
+                    const parts = update.score.split('-');
+                    if (parts.length === 2) {
+                        updateData.score1 = parts[0].trim();
+                        updateData.score2 = parts[1].trim();
+                    }
+                }
+                if (update.s1 !== undefined) updateData.score1 = update.s1;
+                if (update.s2 !== undefined) updateData.score2 = update.s2;
+
+                // Also update match_info if present (e.g. "Over 1.2")
+                if (update.info || update.commentary) {
+                    updateData.match_info = update.info || update.commentary;
+                }
+
+                if (Object.keys(updateData).length > 0) {
+                    await this.eventModel.updateOne(
+                        { event_id: String(eventId) },
+                        { $set: updateData }
+                    );
+                }
+            } catch (e) {
+                this.logger.error(`Error updating score: ${e.message}`);
+            }
+        }
+    }
+
+    async updateBookmakerOddsFromSocket(updates: any[]) {
+        // Bookmaker odds often look like Match Odds but might be sent separately 
+        // to avoid mixing with Exchange odds involved in matching.
+        // Usage: Fixed odds, usually back/lay or just back.
+
+        if (!updates || !Array.isArray(updates)) return;
+
+        // Re-use updateOddsFromSocket logic or custom?
+        // Let's assume they are similar to Match Odds (runners with prices).
+        // But if they come as 'bm_odds', we process them here.
+        await this.updateOddsFromSocket(updates);
+    }
+    async handleFancySocketMessage(updates: any[]) {
+        if (!updates || !Array.isArray(updates)) return;
+
+        for (const update of updates) {
+            try {
+                // update = { mi: 123, eid: 456, rt: [...] }
+                const marketId = String(update.mi);
+                const eventId = String(update.eid);
+
+                if (!marketId || !eventId) continue;
+
+                // 1. Check if Market exists and has sys_market_id
+                let market = await this.marketModel.findOne({ market_id: marketId });
+
+                if (!market || !market.sys_market_id) {
+                    // Import (this will fetch all session markets for the match)
+                    // We pass null for sport/tournament to trigger auto-lookup
+                    await this.importSessionMarkets(null, null, null, eventId);
+
+                    // Re-fetch
+                    market = await this.marketModel.findOne({ market_id: marketId });
+
+                    if (market && market.sys_market_id) {
+                        // 2. Subscribe to the new System Market ID
+                        // The user said: "set socket with imported marketed sys market id"
+                        this.sportsSocketService.subscribe([String(market.sys_market_id)]);
+                    }
+                }
+
+                // 3. Process the Odds Update (rt array)
+                if (update.rt && Array.isArray(update.rt) && market) {
+                    // Reuse updateOddsFromSocket logic but adapted for single update object
+                    // We need to construct an object that updateOddsFromSocket's logic (or similar) can handle
+                    // OR just write specific logic here since 'rt' format is specific.
+
+                    // Helper to process RT array into MarketOdd format
+                    // update.rt = [{ri:..., rt:..., pt:...}, ...]
+                    const marketRunners = market.runners_data || [];
+                    const updateOps: any = {};
+
+                    const updatesByRi: Record<string, any[]> = {};
+                    update.rt.forEach((r: any) => {
+                        const ri = String(r.ri);
+                        if (!updatesByRi[ri]) updatesByRi[ri] = [];
+                        updatesByRi[ri].push(r);
+                    });
+
+                    Object.keys(updatesByRi).forEach(ri => {
+                        // Find runner index
+                        const runnerIndex = marketRunners.findIndex((mr: any) => String(mr.selectionId || mr.selection_id) === ri);
+
+                        if (runnerIndex !== -1 && runnerIndex <= 2) {
+                            const runnerUpdates = updatesByRi[ri];
+                            // Sort and extract Best Prices
+                            const backs = runnerUpdates.filter((u: any) => u.ib).sort((a: any, b: any) => (a.pr || 0) - (b.pr || 0));
+                            const lays = runnerUpdates.filter((u: any) => !u.ib).sort((a: any, b: any) => (a.pr || 0) - (b.pr || 0));
+
+                            if (backs.length > 0) {
+                                // For Fancy/Session, usually rt is price/value. 
+                                updateOps[`back${runnerIndex}_price`] = backs[0].rt;
+                                updateOps[`back${runnerIndex}_size`] = backs[0].bv;
+                            }
+                            if (lays.length > 0) {
+                                updateOps[`lay${runnerIndex}_price`] = lays[0].rt;
+                                updateOps[`lay${runnerIndex}_size`] = lays[0].bv;
+                            }
+                        }
+                    });
+
+                    if (Object.keys(updateOps).length > 0) {
+                        await this.marketOddModel.updateOne(
+                            { market_id: market.market_id },
+                            { $set: { ...updateOps, event_id: market.event_id } },
+                            { upsert: true }
+                        );
+                    }
+                }
+
+            } catch (e) {
+                this.logger.error(`Error processing fancy socket message: ${e.message}`);
+            }
+        }
+    }
+}

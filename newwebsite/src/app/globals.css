@@ -1,0 +1,573 @@
+@import "tailwindcss";
+
+:root {
+  /* 1. Core Background & Dark Layers */
+  --bg-base: #1A181C;
+  /* Pure Black (outer frame) — deeper for contrast */
+  --bg-section: #1E1C20;
+  /* Deep App Background / Main background */
+  --bg-card: #2A2628;
+  /* Card / Tile Background / Primary App Background */
+  --bg-elevated: #252228;
+  /* Secondary Background */
+  --bg-hover: #38343A;
+  /* Hover / Active Surface */
+  --divider: #3E3C40;
+  /* Divider / Border Subtle — softer */
+
+  /* 2. Gold / Orange Primary Brand Colors (MOST IMPORTANT) */
+  --action-primary: #E37D32;
+  /* Primary Gold (CTA) */
+  --action-hover: #EFA05B;
+  /* Bright Gold Accent / Hover / Glow */
+  --action-active: #AE5910;
+  /* Deep Bronze Shadow */
+  --gold-soft: #EFC083;
+  /* Soft Gold Background / Banner gradients */
+  --gold-muted: #A47C4A;
+  /* Muted Gold / Icons & Highlights */
+  --brown-accent: #5D4027;
+  /* Dark Brown Accent */
+
+  /* 3. Text Hierarchy */
+  --text-primary: #F0E4DF;
+  /* Headings — brighter for readability */
+  --text-secondary: #C9C0B8;
+  /* Secondary Text / Body */
+  --text-muted: #918E8D;
+  /* Muted Text — slightly lighter */
+  --text-disabled: #5A585C;
+  /* Disabled Text */
+  --text-inverse: #1A1208;
+  /* Inverse Text (on gold) */
+
+  /* 4. Status Colors */
+  --success-primary: #4CAF50;
+  /* Success Green */
+  --live-indicator: #2ECC71;
+  /* Live Indicator Green */
+  --success-soft: #1F3326;
+  /* Soft Success BG */
+
+  /* 5. Error / Loss / Warning */
+  --danger-primary: #E24C4C;
+  /* Danger Red */
+  --danger-soft: #2A1414;
+  /* Soft Danger BG */
+  --danger-muted: #B94A4A;
+  /* Muted Danger */
+
+  /* 6. Rare Accent Colors */
+  --accent-blue: #2D7DD2;
+  --accent-teal: #2FA4A9;
+  --accent-purple: #7B5CD6;
+
+  /* Base Variables */
+  --background: var(--bg-base);
+  --foreground: var(--text-primary);
+
+  /* Glow shadows */
+  --shadow-glow-gold: 0 0 24px rgba(227, 125, 50, 0.3), 0 4px 16px rgba(227, 125, 50, 0.18);
+  --shadow-glow-danger: 0 0 16px rgba(226, 76, 76, 0.35);
+
+  /* Spacing tokens */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* Radius tokens */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+}
+
+/* ══════════════════════════════════════════════
+   CRYPTO WALLET THEME  (data-wallet="crypto")
+   Swaps all brand-gold/orange → purple
+   Applied to <html> by WalletContext
+   ══════════════════════════════════════════════ */
+[data-wallet="crypto"] {
+  /* ── Core brand token override ── */
+  --action-primary: #9B59D9;
+  /* Purple CTA */
+  --action-hover: #B47EE8;
+  /* Bright Purple Hover */
+  --action-active: #6B3DA8;
+  /* Deep Purple Active */
+  --gold-soft: #C5A8F0;
+  /* Soft Purple Glow */
+  --gold-muted: #7E5BAE;
+  /* Muted Purple */
+  --brown-accent: #3B2563;
+  /* Dark Purple Accent */
+  --text-inverse: #FFFFFF;
+  /* White text on purple backgrounds */
+
+  /* Purple glows */
+  --shadow-glow-gold: 0 0 20px rgba(155, 89, 217, 0.45), 0 4px 12px rgba(155, 89, 217, 0.25);
+}
+
+/* ── White text on purple/colored backgrounds ──
+   When brand buttons switch to purple, any dark text
+   that was readable on gold becomes unreadable — make it white */
+[data-wallet="crypto"] .bg-brand-gold .text-text-inverse,
+[data-wallet="crypto"] .bg-brand-gold,
+[data-wallet="crypto"] .bg-orange-400,
+[data-wallet="crypto"] .bg-orange-500,
+[data-wallet="crypto"] .bg-orange-600,
+[data-wallet="crypto"] .bg-amber-400,
+[data-wallet="crypto"] .bg-amber-500,
+[data-wallet="crypto"] .bg-yellow-400,
+[data-wallet="crypto"] .bg-yellow-500 {
+  color: #ffffff !important;
+}
+
+/* text-black / text-gray-900 on branded elements → white */
+[data-wallet="crypto"] .bg-brand-gold>.text-black,
+[data-wallet="crypto"] .bg-brand-gold>.text-gray-900,
+[data-wallet="crypto"] .bg-orange-500>.text-black,
+[data-wallet="crypto"] .bg-amber-500>.text-black {
+  color: #ffffff !important;
+}
+
+/* Direct text-black on anything that's been given a purple bg override */
+[data-wallet="crypto"] .text-black {
+  color: #ffffff !important;
+}
+
+[data-wallet="crypto"] .text-gray-900 {
+  color: #f3f0ff !important;
+}
+
+/* ── Hardcoded Tailwind orange/amber/yellow → purple ──
+   Covers every component that doesn't use CSS variables.
+   Using !important to beat Tailwind specificity.         */
+
+/* text colors */
+[data-wallet="crypto"] .text-orange-200 {
+  color: #d8b4fe !important;
+}
+
+[data-wallet="crypto"] .text-orange-300 {
+  color: #c084fc !important;
+}
+
+[data-wallet="crypto"] .text-orange-400 {
+  color: #a855f7 !important;
+}
+
+[data-wallet="crypto"] .text-orange-500 {
+  color: #9333ea !important;
+}
+
+[data-wallet="crypto"] .text-amber-300 {
+  color: #d8b4fe !important;
+}
+
+[data-wallet="crypto"] .text-amber-400 {
+  color: #a855f7 !important;
+}
+
+[data-wallet="crypto"] .text-amber-500 {
+  color: #9333ea !important;
+}
+
+[data-wallet="crypto"] .text-yellow-300 {
+  color: #e9d5ff !important;
+}
+
+[data-wallet="crypto"] .text-yellow-400 {
+  color: #c084fc !important;
+}
+
+[data-wallet="crypto"] .text-yellow-500 {
+  color: #a855f7 !important;
+}
+
+/* background colors */
+[data-wallet="crypto"] .bg-orange-400 {
+  background-color: #a855f7 !important;
+}
+
+[data-wallet="crypto"] .bg-orange-500 {
+  background-color: #9333ea !important;
+}
+
+[data-wallet="crypto"] .bg-orange-600 {
+  background-color: #7e22ce !important;
+}
+
+[data-wallet="crypto"] .bg-amber-400 {
+  background-color: #a855f7 !important;
+}
+
+[data-wallet="crypto"] .bg-amber-500 {
+  background-color: #9333ea !important;
+}
+
+[data-wallet="crypto"] .bg-yellow-400 {
+  background-color: #a855f7 !important;
+}
+
+[data-wallet="crypto"] .bg-yellow-500 {
+  background-color: #9333ea !important;
+}
+
+/* border colors */
+[data-wallet="crypto"] .border-orange-400 {
+  border-color: #a855f7 !important;
+}
+
+[data-wallet="crypto"] .border-orange-500 {
+  border-color: #9333ea !important;
+}
+
+[data-wallet="crypto"] .border-amber-500 {
+  border-color: #9333ea !important;
+}
+
+[data-wallet="crypto"] .border-yellow-400 {
+  border-color: #c084fc !important;
+}
+
+[data-wallet="crypto"] .border-yellow-500 {
+  border-color: #a855f7 !important;
+}
+
+/* opacity background variants — handled via the solid color overrides above */
+
+/* ── Hardcoded hex overrides ── */
+[data-wallet="crypto"] [class*="text-[#E37D"] {
+  color: #9B59D9 !important;
+}
+
+[data-wallet="crypto"] [class*="text-[#EFA0"] {
+  color: #B47EE8 !important;
+}
+
+[data-wallet="crypto"] [class*="bg-[#E37D"] {
+  background-color: #9B59D9 !important;
+}
+
+[data-wallet="crypto"] [class*="bg-[#EFA0"] {
+  background-color: #B47EE8 !important;
+}
+
+[data-wallet="crypto"] [class*="border-[#E37D"] {
+  border-color: #9B59D9 !important;
+}
+
+
+
+/* Smooth color transition on all elements when theme switches */
+*,
+*::before,
+*::after {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.2s ease, box-shadow 0.3s ease;
+}
+
+/* But DON'T transition transforms / layout properties (keeps animations snappy) */
+*[class*="animate-"],
+*[class*="transition-"] {
+  transition-property: color, background-color, border-color, box-shadow;
+}
+
+
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-poppins);
+
+  /* Extending Palette */
+  --color-bg-base: var(--bg-base);
+  --color-bg-section: var(--bg-section);
+  --color-bg-card: var(--bg-card);
+  --color-bg-elevated: var(--bg-elevated);
+  --color-bg-hover: var(--bg-hover);
+
+  --color-brand-gold: var(--action-primary);
+  --color-brand-gold-hover: var(--action-hover);
+  --color-brand-active: var(--action-active);
+  --color-gold-soft: var(--gold-soft);
+  --color-gold-muted: var(--gold-muted);
+  --color-brown-accent: var(--brown-accent);
+
+  /* Keeping legacy names mapped to new colors for compatibility */
+  --color-brand-green: var(--action-primary);
+  --color-brand-green-hover: var(--action-hover);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-disabled: var(--text-disabled);
+  --color-text-inverse: var(--text-inverse);
+
+  --color-success: var(--success-primary);
+  --color-live: var(--live-indicator);
+  --color-danger: var(--danger-primary);
+  --color-danger-soft: var(--danger-soft);
+
+  --color-border-subtle: var(--divider);
+
+  --color-accent-blue: var(--accent-blue);
+  --color-accent-teal: var(--accent-teal);
+  --color-accent-purple: var(--accent-purple);
+
+  /* Shadows & Glows (Enhanced for Borderless) */
+  --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0,0,0,0.2);
+  /* Softer, deeper shadow with secondary layer */
+  --shadow-hard: 0 16px 48px rgba(0, 0, 0, 0.65);
+  /* Hard shadow for elevated items */
+  --shadow-float: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 1px rgba(255,255,255,0.05);
+  /* Float shadow for modals & overlays */
+
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: var(--bg-base);
+    --foreground: var(--text-primary);
+  }
+}
+
+/* Custom Fonts */
+@font-face {
+  font-family: 'Adx-Bold';
+  src: url('/fonts/Adx-ExtraBold.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Adx-SemiBold';
+  src: url('/fonts/Adx-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Adx-SemiBold', sans-serif;
+}
+
+.font-adx-bold {
+  font-family: 'Adx-Bold', sans-serif;
+}
+
+/* Utilities for new design system */
+
+/* Gradient Recipes */
+.bg-gradient-gold {
+  background: linear-gradient(135deg, var(--action-primary) 0%, var(--action-hover) 100%);
+}
+
+.bg-gradient-banner {
+  background: linear-gradient(120deg, var(--brown-accent) 0%, var(--gold-soft) 50%, var(--action-primary) 100%);
+}
+
+.bg-gradient-dark {
+  background: linear-gradient(180deg, var(--bg-base) 0%, var(--bg-section) 100%);
+}
+
+.text-gradient-gold {
+  background: linear-gradient(135deg, var(--action-primary) 0%, var(--action-hover) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Text Glows */
+.text-glow-gold {
+  text-shadow: 0 0 12px rgba(227, 125, 50, 0.45), 0 0 4px rgba(227, 125, 50, 0.2);
+}
+
+/* Shadow Glows */
+.shadow-glow-gold {
+  box-shadow: var(--shadow-glow-gold);
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: rgba(30, 28, 32, 0.65);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.card-hover {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-hover:hover {
+  background-color: var(--bg-hover);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Premium card surface */
+.card-premium {
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-lg);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card-premium:hover {
+  border-color: rgba(227, 125, 50, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(227, 125, 50, 0.08);
+  transform: translateY(-2px);
+}
+
+/* Auth Modal Utilities (Simple & Clean) */
+.bg-auth-base {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+}
+
+.bg-auth-action {
+  background-color: var(--action-primary);
+  color: var(--text-inverse);
+}
+
+.bg-auth-action:hover {
+  background-color: var(--action-hover);
+}
+
+.bg-auth-secondary {
+  background-color: transparent;
+  border: 1px solid var(--divider);
+  color: var(--text-muted);
+}
+
+
+/* Hide scrollbar globally but keep scrolling */
+* {
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
+}
+
+*::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Safe-area inset utilities (iPhone X+ home indicator & notch) ── */
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-inset-left: env(safe-area-inset-left, 0px);
+  --safe-area-inset-right: env(safe-area-inset-right, 0px);
+  /* Mobile bottom nav total height = 64px + safe-area */
+  --mobile-nav-height: calc(64px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Ensure touch targets are responsive without 300ms delay */
+/* Also: font-size ≥ 16px prevents iOS auto-zoom on input focus */
+a,
+button,
+[role="button"],
+input,
+select,
+textarea {
+  touch-action: manipulation;
+  font-size: max(16px, 1em);
+}
+
+/* Prevent horizontal overflow on mobile */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100vw;
+  height: 100%;
+}
+
+/* Animations */
+@keyframes scroll {
+  0% {
+    transform: translateX(0);
+  }
+
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-scroll {
+  animation: scroll 30s linear infinite;
+}
+
+/* ── Premium pulse-glow for CTAs ── */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(227, 125, 50, 0.2); }
+  50% { box-shadow: 0 0 20px rgba(227, 125, 50, 0.4), 0 0 40px rgba(227, 125, 50, 0.15); }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2.5s ease-in-out infinite;
+}
+
+/* ── Float animation for promotional elements ── */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* ── Shimmer / Swimmer skeleton animation ── */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* ── shimmerBar: loading bar sweep for game launcher ── */
+@keyframes shimmerBar {
+  0%   { transform: translateX(-100%); }
+  50%  { transform: translateX(100%); }
+  100% { transform: translateX(100%); }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(90deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0.10) 40%,
+      rgba(255, 255, 255, 0.04) 80%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* Skeleton base block */
+.skeleton-block {
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  position: relative;
+}
+
+.skeleton-block::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.08) 40%,
+      transparent 80%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}

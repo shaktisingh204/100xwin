@@ -1,0 +1,52 @@
+# System
+.DS_Store
+*.log
+
+# Dependencies (Root level if any)
+node_modules/
+.env
+
+# Nested ignore rules are handled by .gitignore files inside subfolders, 
+# but specifically ignore other sibling folders if not part of this deployment:
+admin/
+backend/
+client/
+
+/videos/
+# Ensure these are NOT ignored (redundant but safe)
+!newwebsite/
+!newbackend/
+/mobileapp/
+sports-sync-rust/target/
+
+/kuber/
+/Aviator 1.58/
+
+# Backup credentials — never commit these
+scripts/backup.env
+node_modules/
+.next/
+dist/
+build/
+.env
+*.log
+*.apk
+*.zip
+*.tar
+*.gz
+.DS_Storenode_modules/
+.next/
+build/
+node_modules/
+.next/
+dist/
+build/
+coverage/
+.env
+*.log
+*.zip
+*.tar
+*.gz
+*.mp4
+*.apk
+.DS_Store

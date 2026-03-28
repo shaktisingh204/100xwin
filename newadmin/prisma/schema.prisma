@@ -1,0 +1,310 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  TECH_MASTER
+  SUPER_ADMIN
+  MANAGER
+  MASTER      // New: Level 1 Agent
+  AGENT       // New: Level 2 Agent
+  USER
+}
+
+model User {
+  id          Int      @id @default(autoincrement())
+  email       String?  @unique
+  phoneNumber String?  @unique
+  password    String
+  username    String?  @unique
+  role        Role     @default(USER)
+  currency    String?  @default("INR")
+  country     String?  // ISO-2 country code
+  isBanned    Boolean  @default(false)
+  bonus_id    String?
+  balance     Float    @default(0)
+  exposure    Float    @default(0)
+  bonus       Float    @default(0)
+  fiatBonus   Float    @default(0)
+  cryptoBonus Float    @default(0)
+  casinoBonus Float    @default(0)
+  sportsBonus Float    @default(0)
+  cryptoBalance Float  @default(0)
+  activeWallet  String @default("fiat")
+  wageringRequired     Float @default(0)
+  wageringDone         Float @default(0)
+  casinoBonusWageringRequired Float @default(0)
+  casinoBonusWageringDone     Float @default(0)
+  sportsBonusWageringRequired Float @default(0)
+  sportsBonusWageringDone     Float @default(0)
+  depositWageringRequired Float @default(0)
+  depositWageringDone     Float @default(0)
+  totalDeposited   Float @default(0)
+  totalWagered     Float @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  casinoTransactions CasinoTransaction[]
+  transactions Transaction[]
+  notifications Notification[]
+  // bets relation removed as Bet is now in MongoDB
+
+  // Referral System
+  referralCode    String?  @unique
+  referrerId      Int?
+  referrer        User?    @relation("UserReferrals", fields: [referrerId], references: [id])
+  referrals       User[]   @relation("UserReferrals")
+  referralHistoryGiven ReferralHistory[] @relation("ReferrerRelation")
+  referralHistoryReceived ReferralHistory[] @relation("ReferredRelation")
+
+  // Manager System
+  managerId       Int?
+  manager         User?    @relation("UserManager", fields: [managerId], references: [id])
+  managedUsers    User[]   @relation("UserManager")
+
+  // KYC & Responsible Gambling
+  kycStatus       KycStatus @default(NONE)
+  kycDocuments    KycDocument[]
+  depositLimit    Float?
+  lossLimit       Float?
+  selfExclusionUntil DateTime?
+
+  // Support
+  supportTickets  SupportTicket[]
+
+  // VIP
+  vipApplication  VipApplication?
+
+  // User Bonuses
+  userBonuses     UserBonus[]
+}
+
+enum KycStatus {
+  NONE
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model KycDocument {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  type      String   // ID_CARD, PASSPORT, PROOF_OF_ADDRESS
+  url       String
+  status    KycStatus @default(PENDING)
+  reason    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model CasinoTransaction {
+  id          Int      @id @default(autoincrement())
+  txn_id      String   @unique
+  user_id     Int
+  username    String
+  amount      Float
+  type        String   // debit, credit, refund
+  provider    String
+  game_code   String
+  game_name   String?
+  round_id    String?
+  wallet_type String   @default("fiat")
+  timestamp   DateTime @default(now())
+  user        User     @relation(fields: [user_id], references: [id])
+}
+
+model Transaction {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  amount          Float
+  type            String   // DEPOSIT, WITHDRAWAL
+  status          String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  paymentMethod   String?
+  paymentDetails  Json?
+  transactionId   String?  @unique // unique transaction id from payment gateway or manual reference
+  proof           String?
+  utr             String?  @unique
+  adminId         Int?     // Admin who approved/rejected
+  remarks         String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id])
+}
+
+model SystemConfig {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+
+model HomeCategory {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  image       String?
+  link        String
+  isLarge     Boolean  @default(false)
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ReferralReward {
+  id             Int      @id @default(autoincrement())
+  name           String
+  description    String?
+  conditionType  String   // SIGNUP, DEPOSIT_FIRST, DEPOSIT_RECURRING, BET_Volume
+  conditionValue Float    @default(0) // Minimum deposit/bet amount to trigger
+  rewardType     String   // FIXED, PERCENTAGE
+  rewardAmount   Float    // Fixed amount or percentage value
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  referralHistory ReferralHistory[]
+}
+
+model PaymentMethod {
+  id        Int      @id @default(autoincrement())
+  name      String   // UPI, BANK, CRYPTO
+  type      String   // DEPOSIT, WITHDRAWAL
+  minAmount Float
+  maxAmount Float
+  fee       Float    @default(0)
+  feeType   String   @default("PERCENTAGE") // PERCENTAGE, FIXED
+  isActive  Boolean  @default(true)
+  details   Json?    // Bank details or wallet address
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ReferralHistory {
+  id             Int      @id @default(autoincrement())
+  referrerId     Int
+  referredUserId Int
+  rewardId       Int?
+  amount         Float
+  status         String   @default("PENDING") // PENDING, COMPLETED, FAILED
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  referrer       User     @relation("ReferrerRelation", fields: [referrerId], references: [id])
+  referredUser   User     @relation("ReferredRelation", fields: [referredUserId], references: [id])
+  reward         ReferralReward? @relation(fields: [rewardId], references: [id])
+}
+
+model SupportTicket {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  status    String   @default("OPEN") // OPEN, CLOSED
+  subject   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+  messages  SupportMessage[]
+}
+
+model SupportMessage {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  sender    String   // 'USER' or 'ADMIN'
+  message   String
+  createdAt DateTime @default(now())
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  adminId   Int
+  action    String   // 'UPDATE_USER', 'APPROVE_WITHDRAWAL', etc.
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
+
+// ─── VIP System ───────────────────────────────────────────────────────────────
+
+enum VipStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  TRANSFER_REQUESTED
+}
+
+model VipApplication {
+  id               Int       @id @default(autoincrement())
+  userId           Int       @unique
+  user             User      @relation(fields: [userId], references: [id])
+  status           VipStatus @default(PENDING)
+  message          String?   @db.Text
+  currentPlatform  String?
+  platformUsername String?
+  monthlyVolume    Float?
+  reviewedBy       Int?
+  reviewNotes      String?   @db.Text
+  reviewedAt       DateTime?
+  ipAddress        String?
+  userAgent        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  @@index([status])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+// ─── Bonus Wagering Tracking ──────────────────────────────────────────────────
+
+enum BonusStatus {
+  ACTIVE
+  COMPLETED
+  FORFEITED
+  EXPIRED
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  title     String
+  body      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([isRead])
+}
+
+model UserBonus {
+  id               Int         @id @default(autoincrement())
+  userId           Int
+  user             User        @relation(fields: [userId], references: [id])
+  bonusId          String
+  bonusCode        String
+  bonusTitle       String
+  bonusCurrency    String      @default("INR")
+  applicableTo     String      @default("BOTH")
+  depositAmount    Float
+  bonusAmount      Float
+  wageringRequired Float
+  wageringDone     Float       @default(0)
+  status           BonusStatus @default(ACTIVE)
+  isEnabled        Boolean     @default(false)
+  expiresAt        DateTime?
+  completedAt      DateTime?
+  forfeitedAt      DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  @@index([userId])
+  @@index([status])
+}
