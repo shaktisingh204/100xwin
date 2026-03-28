@@ -71,22 +71,7 @@ export class SportsService implements OnModuleInit {
     private readonly SPORTS_BASE_URL = (process.env.SPORTS_BASE_URL || 'https://zeero.bet').replace(/\/$/, '');
     private readonly SPORTS_API_KEY = process.env.SPORTS_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
 
-    // ─── Authoritative admin sports list (eid = Diamond API sport ID) ─────────
-    // These are the sports enabled in the admin panel. Only these sports are
-    // synced, displayed in the sidebar, and used in event queries.
-    private readonly ADMIN_SPORTS = [
-        { eid: 4, ename: 'Cricket', active: true, tab: true, isdefault: true, oid: 1 },
-        { eid: 1, ename: 'Football', active: true, tab: true, isdefault: false, oid: 2 },
-        { eid: 2, ename: 'Tennis', active: true, tab: true, isdefault: false, oid: 3 },
-        { eid: 10, ename: 'Horse Racing', active: true, tab: true, isdefault: false, oid: 6 },
-        { eid: 66, ename: 'Kabaddi', active: true, tab: true, isdefault: false, oid: 24 },
-        { eid: 40, ename: 'Politics', active: true, tab: true, isdefault: false, oid: 20 },
-        { eid: 8, ename: 'Table Tennis', active: false, tab: true, isdefault: false, oid: 7 },
-        { eid: 15, ename: 'Basketball', active: true, tab: true, isdefault: false, oid: 8 },
-        { eid: 6, ename: 'Boxing', active: true, tab: true, isdefault: false, oid: 9 },
-        { eid: 18, ename: 'Volleyball', active: true, tab: true, isdefault: false, oid: 12 },
-        { eid: 22, ename: 'Badminton', active: true, tab: true, isdefault: false, oid: 13 },
-    ];
+
 
     // ─── Lazy Redis client (ioredis) ──────────────────────────────────────────
     private redisClient: Redis | null = null;
@@ -1368,20 +1353,7 @@ export class SportsService implements OnModuleInit {
         return events;
     }
 
-    // Sport definitions — mirrors ADMIN_SPORTS in TurnkeySyncService
-    private readonly SPORT_LIST = [
-        { eid: 4,  name: 'Cricket' },
-        { eid: 1,  name: 'Football' },
-        { eid: 2,  name: 'Tennis' },
-        { eid: 10, name: 'Horse Racing' },
-        { eid: 66, name: 'Kabaddi' },
-        { eid: 40, name: 'Politics' },
-        { eid: 8,  name: 'Table Tennis' },
-        { eid: 15, name: 'Basketball' },
-        { eid: 6,  name: 'Boxing' },
-        { eid: 18, name: 'Volleyball' },
-        { eid: 22, name: 'Badminton' },
-    ];
+
 
     /**
      * getAllEvents — reads from TurnkeySync allevents:* Redis caches, transforms
@@ -1399,7 +1371,10 @@ export class SportsService implements OnModuleInit {
 
         const allEvents: any[] = [];
 
-        await Promise.all(this.SPORT_LIST.map(async (sport) => {
+        const dbSports: any[] = await this.sportModel.find({ isVisible: true }).lean();
+        const activeSports = dbSports.map(s => ({ eid: Number(s.sport_id), name: s.sport_name }));
+
+        await Promise.all(activeSports.map(async (sport) => {
             try {
                 const raw = await redis.get(`allevents:${sport.eid}`);
                 if (!raw) return;

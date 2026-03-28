@@ -29,20 +29,7 @@ const API_KEY =
 // Request timeout per individual URL (ms) – matches Rust 1.4 s
 const URL_TIMEOUT_MS = 1400;
 
-// ─── Authoritative sports list (matches Rust ADMIN_SPORTS) ─────────────────
-const ADMIN_SPORTS = [
-    { eid: 4, ename: 'Cricket', active: true, tab: true, isdefault: true, oid: 1 },
-    { eid: 1, ename: 'Football', active: true, tab: true, isdefault: false, oid: 2 },
-    { eid: 2, ename: 'Tennis', active: true, tab: true, isdefault: false, oid: 3 },
-    { eid: 10, ename: 'Horse Racing', active: true, tab: true, isdefault: false, oid: 6 },
-    { eid: 66, ename: 'Kabaddi', active: true, tab: true, isdefault: false, oid: 24 },
-    { eid: 40, ename: 'Politics', active: true, tab: true, isdefault: false, oid: 20 },
-    { eid: 8, ename: 'Table Tennis', active: false, tab: true, isdefault: false, oid: 7 },
-    { eid: 15, ename: 'Basketball', active: true, tab: true, isdefault: false, oid: 8 },
-    { eid: 6, ename: 'Boxing', active: true, tab: true, isdefault: false, oid: 9 },
-    { eid: 18, ename: 'Volleyball', active: true, tab: true, isdefault: false, oid: 12 },
-    { eid: 22, ename: 'Badminton', active: true, tab: true, isdefault: false, oid: 13 },
-];
+
 
 @Injectable()
 export class TurnkeySyncService implements OnModuleInit {
@@ -145,47 +132,33 @@ export class TurnkeySyncService implements OnModuleInit {
 
     // ─── Sports Cron ───────────────────────────────────────────────────────────
     async runSportsCron() {
-        this.logger.log('[SportsCron] Seeding sports...');
+        this.logger.log('[SportsCron] Syncing sports to Redis from DB...');
         const redis = this.getRedis();
-        let count = 0;
 
-        for (const sport of ADMIN_SPORTS) {
-            await this.sportModel.updateOne(
-                { sport_id: String(sport.eid) },
-                {
-                    $set: {
-                        sport_name: sport.ename,
-                        isVisible: sport.active,
-                        tab: sport.tab,
-                        isdefault: sport.isdefault,
-                        oid: sport.oid,
-                    },
-                },
-                { upsert: true },
-            );
-            count++;
-        }
+        // Load all sports directly from the DB
+        const dbSports: any[] = await this.sportModel.find().lean();
 
-        // Cache in Redis for 24h (matches Rust)
-        const sportsJson = ADMIN_SPORTS.map((s) => ({
-            eid: s.eid,
-            id: s.eid,
-            ename: s.ename,
-            name: s.ename,
-            active: s.active,
-            tab: s.tab,
-            isdefault: s.isdefault,
-            oid: s.oid,
+        // Cache in Redis for 24h (matches Rust format)
+        const sportsJson = dbSports.map((s) => ({
+            eid: Number(s.sport_id),
+            id: Number(s.sport_id),
+            ename: s.sport_name,
+            name: s.sport_name,
+            active: s.isVisible,
+            tab: s.isVisible,
+            isdefault: s.sport_id === '4', // make cricket default
+            oid: 1, // Optional: order ID if you had it on schema, otherwise default 1
         }));
         await redis.setex('sports:all', 86400, JSON.stringify(sportsJson));
-        this.logger.log(`[SportsCron] Seeded ${count} sports, cached in Redis.`);
+        this.logger.log(`[SportsCron] Seeded ${dbSports.length} DB sports into Redis cache.`);
     }
 
     // ─── Events Cron ───────────────────────────────────────────────────────────
     async runEventsCron() {
         this.logger.log('[EventsCron] Syncing matches per sport...');
         const redis = this.getRedis();
-        const activeSports = ADMIN_SPORTS.filter((s) => s.tab);
+        const dbSports: any[] = await this.sportModel.find({ isVisible: true }).lean();
+        const activeSports = dbSports.map(s => ({ eid: Number(s.sport_id), ename: s.sport_name }));
         let successCount = 0;
         let failCount = 0;
         let mongoUpsertCount = 0;
@@ -382,7 +355,8 @@ export class TurnkeySyncService implements OnModuleInit {
 
     private async executeOddsSyncCycle(isLive: boolean) {
         const redis = this.getRedis();
-        const activeSports = ADMIN_SPORTS.filter((s) => s.tab);
+        const dbSports: any[] = await this.sportModel.find({ isVisible: true }).lean();
+        const activeSports = dbSports.map(s => ({ eid: Number(s.sport_id) }));
 
         // Collect all gmids from Redis cache (same as Rust)
         const gmidToSportId = new Map<string, number>();
