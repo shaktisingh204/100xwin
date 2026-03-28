@@ -20,7 +20,7 @@ import { io, Socket } from 'socket.io-client';
 
 // ─── Config ────────────────────────────────────────────────────────────────
 const SPORTS_WS_URL =
-    process.env.NEXT_PUBLIC_SPORTS_WS_URL || 'https://api.zeero.bet';
+    process.env.NEXT_PUBLIC_SPORTS_WS_URL || 'https://zeero.bet';
 
 const SPORTS_WS_NAMESPACE = '/external';
 

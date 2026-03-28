@@ -6,7 +6,7 @@ import axios from 'axios';
 // Base: https://api.zeero.bet/api/external/sports
 // Auth: x-api-token header required on every request
 const SPORTS_BASE_URL =
-    (process.env.NEXT_PUBLIC_SPORTS_API_URL || 'https://api.zeero.bet/api/external/sports')
+    (process.env.NEXT_PUBLIC_SPORTS_API_URL || 'https://zeero.bet/api/external/sports')
         .replace(/\/$/, '');
 
 const SPORTS_API_TOKEN =
