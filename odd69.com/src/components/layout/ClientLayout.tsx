@@ -13,6 +13,8 @@ import Sidebar from "./Sidebar";
 import Footer from "./Footer";
 import MobileBottomNav from "./MobileBottomNav";
 import AuthModal from "@/components/auth/AuthModal";
+import DepositModal from "@/components/deposit/DepositModal";
+import ManualDepositModal from "@/components/deposit/ManualDepositModal";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -36,6 +38,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   <MobileBottomNav />
                 </div>
                 <AuthModal />
+                <DepositModal />
+                <ManualDepositModal />
                 <Toaster
                   position="top-center"
                   toastOptions={{ style: { background: "#1a1d24", color: "#fff", border: "1px solid rgba(255,255,255,0.06)" } }}

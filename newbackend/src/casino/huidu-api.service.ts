@@ -30,8 +30,17 @@ export class HuiduApiService implements OnModuleInit {
     async onModuleInit() {
         this.logger.log('Loading adxwinimages.json...');
         try {
-            const mapPath = path.join(process.cwd(), '../newwebsite/public/adxwinimages.json');
-            if (fs.existsSync(mapPath)) {
+            const possiblePaths = [
+                path.join(process.cwd(), '../odd69.com/public/adxwinimages.json'),
+                path.join(process.cwd(), '../newwebsite/public/adxwinimages.json'),
+                path.join('/var/www/odd69/odd69.com/public/adxwinimages.json'),
+                path.join('/var/www/odd69/newwebsite/public/adxwinimages.json'),
+                path.join(process.cwd(), 'adxwinimages.json')
+            ];
+            
+            const mapPath = possiblePaths.find(p => fs.existsSync(p));
+
+            if (mapPath) {
                 const data = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
                 data.forEach((item: any) => {
                     if (item.fileName && item.relativePath) {
@@ -53,15 +62,16 @@ export class HuiduApiService implements OnModuleInit {
                         }
                     }
                 });
-                this.logger.log(`Loaded ${Object.keys(this.gameIconMap).length} mapped keys from adxwinimages.json.`);
+                this.logger.log(`Loaded ${Object.keys(this.gameIconMap).length} mapped keys from ${mapPath}.`);
             } else {
-                this.logger.warn(`adxwinimages.json not found at ${mapPath}`);
+                this.logger.warn(`adxwinimages.json not found in any standard paths checked: ${possiblePaths.join(', ')}`);
             }
         } catch (e) {
             this.logger.error('Failed to load adxwinimages.json', e.message);
         }
 
-        this.logger.log('HUIDU Initial Sync on Startup is disabled. Will run at 12 PM daily.');
+        this.logger.log('Executing Initial HUIDU Sync on Startup...');
+        this.syncHuiduData().catch(e => this.logger.error('Startup sync execution failed:', e));
     }
 
     @Cron('0 12 * * *') // Runs every 24 hours at 12 PM

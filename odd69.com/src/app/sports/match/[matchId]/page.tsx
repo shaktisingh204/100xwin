@@ -41,8 +41,8 @@ export default function MatchDetailPage() {
   const { socket, isConnected } = useSocket();
   const { user } = useAuth();
 
-  const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "https://zeero.bet/api").replace(/\/$/, "");
-  const proxyUrl = (url: string | null) => url ? `${API_BASE}/sports/stream-proxy?url=${encodeURIComponent(url)}` : null;
+  const SPORTS_API_BASE = (process.env.NEXT_PUBLIC_SPORTS_API_URL || "https://api.zeero.bet").replace(/\/$/, "");
+  const proxyUrl = (url: string | null) => url ? `${SPORTS_API_BASE}/sports/stream-proxy?url=${encodeURIComponent(url)}` : null;
 
   /* ── Fetch match data ── */
   useEffect(() => {

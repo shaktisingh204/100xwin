@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: typeof window === 'undefined' ? (process.env.API_URL || 'https://api.odd69.com') : '/api', // Relative for client (rewrites), Absolute for SSR
+    baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://api.odd69.com/api', // Direct backend connection for both Client and SSR
     headers: {
         'Content-Type': 'application/json',
     },

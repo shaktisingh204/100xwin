@@ -224,7 +224,7 @@ function RegisterForm({ onSwitchToLogin, onClose }: { onSwitchToLogin: () => voi
       else payload.phone = `+91${phone}`;
       if (referralCode.trim()) payload.referralCode = referralCode.trim().toUpperCase();
 
-      const res = await api.post("/auth/register", payload);
+      const res = await api.post("/auth/signup", payload);
       login(res.data.access_token, res.data.user);
       toast.success("Account created! Welcome to Odd69");
       onClose();

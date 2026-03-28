@@ -1,6 +1,13 @@
 "use client";
 
 import api from './api';
+import axios from 'axios';
+
+const SPORTS_BASE_URL = process.env.NEXT_PUBLIC_SPORTS_API_URL || 'https://zeero.bet/api';
+// Create an Axios instance for sports fetching (bypassing local backend)
+const sportsAxios = axios.create({
+    baseURL: SPORTS_BASE_URL
+});
 
 export interface DiamondMarketOdds {
     sid: number;
@@ -67,7 +74,7 @@ export const sportsApi = {
     getLiveEvents: async (sportId?: string | number): Promise<Event[]> => {
         try {
             const url = sportId ? `/sports/live?sportId=${sportId}` : '/sports/live';
-            const response = await api.get(url);
+            const response = await sportsAxios.get(url);
             return response.data;
         } catch (error) {
             console.error("Error fetching live events:", error);
@@ -77,7 +84,7 @@ export const sportsApi = {
     getUpcomingEvents: async (sportId?: string | number): Promise<Event[]> => {
         try {
             const url = sportId ? `/sports/upcoming?sportId=${sportId}` : '/sports/upcoming';
-            const response = await api.get(url);
+            const response = await sportsAxios.get(url);
             return response.data;
         } catch (error) {
             console.error("Error fetching upcoming events:", error);
@@ -88,7 +95,7 @@ export const sportsApi = {
     getAllEvents: async (sportId?: string | number): Promise<Event[]> => {
         try {
             const url = sportId ? `/sports/all-events?sportId=${sportId}` : '/sports/all-events';
-            const response = await api.get(url);
+            const response = await sportsAxios.get(url);
             return response.data;
         } catch (error) {
             console.error("Error fetching all events:", error);
@@ -97,7 +104,7 @@ export const sportsApi = {
     },
     getCompetitions: async () => {
         try {
-            const response = await api.get('/sports/competitions');
+            const response = await sportsAxios.get('/sports/competitions');
             return response.data;
         } catch (error) {
             console.error("Error fetching competitions:", error);
@@ -106,7 +113,7 @@ export const sportsApi = {
     },
     getEventsBySport: async (sportId: number) => {
         try {
-            const response = await api.get(`/sports/events/${sportId}`);
+            const response = await sportsAxios.get(`/sports/events/${sportId}`);
             return response.data;
         } catch (error) {
             console.error("Error fetching events by sport:", error);
@@ -115,7 +122,7 @@ export const sportsApi = {
     },
     getMatchDetails: async (matchId: string): Promise<Event> => {
         try {
-            const response = await api.get(`/sports/db/match/${matchId}`);
+            const response = await sportsAxios.get(`/sports/db/match/${matchId}`);
             return response.data;
         } catch (error) {
             console.error("Error fetching match details:", error);
@@ -127,7 +134,7 @@ export const sportsApi = {
             const url = userId
                 ? `/sports/match-details/${sportId}/${matchId}?userId=${userId}`
                 : `/sports/match-details/${sportId}/${matchId}`;
-            const response = await api.get(url);
+            const response = await sportsAxios.get(url);
             return response.data;
         } catch (error) {
             console.error("Error fetching diamond match details:", error);
@@ -136,7 +143,7 @@ export const sportsApi = {
     },
     getScorecardAndTvData: async (sportId: string, matchId: string) => {
         try {
-            const response = await api.get(`/sports/scorecard-tv/${sportId}/${matchId}`);
+            const response = await sportsAxios.get(`/sports/scorecard-tv/${sportId}/${matchId}`);
             return response.data;
         } catch (error) {
             console.error("Error fetching tv and scorecard data:", error);
@@ -145,7 +152,7 @@ export const sportsApi = {
     },
     getTvUrl: async (sportId: string, matchId: string): Promise<string | null> => {
         try {
-            const response = await api.get(`/sports/tv-url/${sportId}/${matchId}`);
+            const response = await sportsAxios.get(`/sports/tv-url/${sportId}/${matchId}`);
             return response.data?.url || null;
         } catch (error) {
             console.error("Error fetching tv url:", error);
@@ -154,7 +161,7 @@ export const sportsApi = {
     },
     getScoreUrl: async (sportId: string, matchId: string): Promise<string | null> => {
         try {
-            const response = await api.get(`/sports/score-url/${sportId}/${matchId}`);
+            const response = await sportsAxios.get(`/sports/score-url/${sportId}/${matchId}`);
             return response.data?.url || null;
         } catch (error) {
             console.error("Error fetching score url:", error);
@@ -163,7 +170,7 @@ export const sportsApi = {
     },
     getTopEvents: async () => {
         try {
-            const response = await api.get('/sports/top-events');
+            const response = await sportsAxios.get('/sports/top-events');
             return response.data;
         } catch (error) {
             console.error("Error fetching top events:", error);
@@ -172,7 +179,7 @@ export const sportsApi = {
     },
     getHomeEvents: async () => {
         try {
-            const response = await api.get('/sports/home-events');
+            const response = await sportsAxios.get('/sports/home-events');
             return response.data;
         } catch (error) {
             console.error("Error fetching home events:", error);
@@ -181,7 +188,7 @@ export const sportsApi = {
     },
     checkOdds: async (bets: { eventId?: string; marketId: string; selectionId: string; odds: number }[]) => {
         try {
-            const response = await api.post('/sports/check-odds', { bets });
+            const response = await sportsAxios.post('/sports/check-odds', { bets });
             return response.data as {
                 success: boolean;
                 results: {
@@ -201,7 +208,7 @@ export const sportsApi = {
     },
     getTeamIcons: async (): Promise<Record<string, string>> => {
         try {
-            const response = await api.get('/sports/team-icons');
+            const response = await sportsAxios.get('/sports/team-icons');
             const icons: { team_name: string; icon_url: string }[] = response.data || [];
             const map: Record<string, string> = {};
             for (const i of icons) {
