@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { sportsApi, Event } from "@/services/sports";
 import { ChevronLeft, Calendar, Activity, Trophy, ChevronDown, Tv, Clock } from "lucide-react";
 import { useBets } from "@/context/BetContext";
-import { useSocket } from "@/context/SocketContext";
+import { useSportsSocket } from "@/context/SportsSocketContext";
 import { useAuth } from "@/context/AuthContext";
 import { showBetErrorToast, showBetPlacedToast } from "@/utils/betToasts";
 
@@ -38,7 +38,7 @@ export default function MatchDetailPage() {
   const sportIdRef = useRef<string | null>(null);
 
   const { addBet, placeSingleBet, oneClickEnabled, oneClickStake, isOneClickPending } = useBets();
-  const { socket, isConnected } = useSocket();
+  const { sportsSocket, isSportsConnected, joinMatch, leaveMatch } = useSportsSocket();
   const { user } = useAuth();
 
   const SPORTS_API_BASE = (process.env.NEXT_PUBLIC_SPORTS_API_URL || "https://api.zeero.bet").replace(/\/$/, "");
@@ -80,23 +80,23 @@ export default function MatchDetailPage() {
     if (match) sportIdRef.current = String((match as any).sport_id || match?.competition?.sport?.sport_id || "");
   }, [match]);
 
-  /* ── Socket: join/leave ── */
+  /* ── Sports Socket: join/leave ── */
   useEffect(() => {
-    if (!socket || !isConnected || !matchId) return;
-    socket.emit("join-match", matchId);
-    return () => { socket.emit("leave-match", matchId); };
-  }, [socket, isConnected, matchId]);
+    if (!isSportsConnected || !matchId) return;
+    joinMatch(matchId);
+    return () => { leaveMatch(matchId); };
+  }, [isSportsConnected, matchId, joinMatch, leaveMatch]);
 
-  /* ── Socket: heartbeat ── */
+  /* ── Sports Socket: heartbeat ── */
   useEffect(() => {
-    if (!socket || !isConnected || !matchId) return;
-    const hb = setInterval(() => socket.emit("match-heartbeat", matchId), 30_000);
+    if (!sportsSocket || !isSportsConnected || !matchId) return;
+    const hb = setInterval(() => sportsSocket.emit('match-heartbeat', matchId), 30_000);
     return () => clearInterval(hb);
-  }, [socket, isConnected, matchId]);
+  }, [sportsSocket, isSportsConnected, matchId]);
 
-  /* ── Socket: live odds ── */
+  /* ── Sports Socket: live odds ── */
   useEffect(() => {
-    if (!socket) return;
+    if (!sportsSocket) return;
     const handler = (data: any) => {
       if (!data) return;
       setLiveMarkets((prev) => {
@@ -175,9 +175,9 @@ export default function MatchDetailPage() {
         return next;
       });
     };
-    socket.on("socket-data", handler);
-    return () => { socket.off("socket-data", handler); };
-  }, [socket]);
+    sportsSocket.on("socket-data", handler);
+    return () => { sportsSocket.off("socket-data", handler); };
+  }, [sportsSocket]);
 
   /* ── Media view change ── */
   const handleMediaViewChange = async (view: "match" | "tv") => {

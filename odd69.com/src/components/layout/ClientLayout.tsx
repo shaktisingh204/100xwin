@@ -4,6 +4,7 @@ import React from "react";
 import { AuthProvider } from "@/context/AuthContext";
 import { ModalProvider } from "@/context/ModalContext";
 import { SocketProvider } from "@/context/SocketContext";
+import { SportsSocketProvider } from "@/context/SportsSocketContext";
 import { LayoutProvider } from "@/context/LayoutContext";
 import { WalletProvider } from "@/context/WalletContext";
 import { BetProvider } from "@/context/BetContext";
@@ -15,11 +16,13 @@ import MobileBottomNav from "./MobileBottomNav";
 import AuthModal from "@/components/auth/AuthModal";
 import DepositModal from "@/components/deposit/DepositModal";
 import ManualDepositModal from "@/components/deposit/ManualDepositModal";
+import WithdrawModal from "@/components/deposit/WithdrawModal";
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
       <SocketProvider>
+        <SportsSocketProvider>
         <ModalProvider>
           <WalletProvider>
             <BetProvider>
@@ -40,6 +43,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 <AuthModal />
                 <DepositModal />
                 <ManualDepositModal />
+                <WithdrawModal />
                 <Toaster
                   position="top-center"
                   toastOptions={{ style: { background: "#1a1d24", color: "#fff", border: "1px solid rgba(255,255,255,0.06)" } }}
@@ -48,6 +52,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             </BetProvider>
           </WalletProvider>
         </ModalProvider>
+        </SportsSocketProvider>
       </SocketProvider>
     </AuthProvider>
   );

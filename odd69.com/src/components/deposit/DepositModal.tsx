@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import api from "@/services/api";
 import { useModal } from "@/context/ModalContext";
 import { useAuth } from "@/context/AuthContext";
+import { useEffect as _useEffect } from "react"; // keep import tidy
 import { useWallet } from "@/context/WalletContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -64,7 +65,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 
 export default function DepositModal() {
   const { isDepositOpen, closeUPIDeposit, openManualDeposit } = useModal();
-  const { token } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { fiatBalance, refreshWallet } = useWallet();
 
   // Tab
@@ -195,7 +196,7 @@ export default function DepositModal() {
     e.preventDefault();
     setUpiError("");
     if (!validUpi) { setUpiError(`Minimum deposit is ₹${MIN_UPI_DEPOSIT}`); return; }
-    if (!token) { toast.error("Please log in."); return; }
+    if (!isAuthenticated) { toast.error("Please log in to deposit."); return; }
 
     setUpiLoading(true);
     try {
@@ -206,7 +207,7 @@ export default function DepositModal() {
         res = await api.post("/payment2/create", {
           orderNo, amount: numUpi, currency: "INR", payType: "UPI",
           bonusCode: bonusCode.trim().toUpperCase() || undefined,
-        }, { headers: { Authorization: `Bearer ${token}` } });
+        });
       } else {
         const now = new Date();
         const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")} ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}:${String(now.getSeconds()).padStart(2,"0")}`;
@@ -216,7 +217,7 @@ export default function DepositModal() {
           goods_name: "Wallet Deposit",
           page_url: window.location.origin + "/profile/transactions",
           bonusCode: bonusCode.trim().toUpperCase() || undefined,
-        }, { headers: { Authorization: `Bearer ${token}` } });
+        });
       }
 
       if (res.data?.manualRequired) { setManualRequired(true); return; }
@@ -251,7 +252,7 @@ export default function DepositModal() {
     setCryptoError("");
     if (!cryptoAmount || numCrypto <= 0) { setCryptoError("Please enter a valid amount (USD)."); return; }
     if (numCrypto < MIN_CRYPTO_USD) { setCryptoError(`Minimum crypto deposit is $${MIN_CRYPTO_USD}`); return; }
-    if (!token) { toast.error("Please log in."); return; }
+    if (!isAuthenticated) { toast.error("Please log in to deposit."); return; }
 
     setCryptoLoading(true);
     try {
@@ -260,7 +261,7 @@ export default function DepositModal() {
         payCurrency: selectedCoin.id,
         priceCurrency: "usd",
         bonusCode: bonusCode.trim().toUpperCase() || undefined,
-      }, { headers: { Authorization: `Bearer ${token}` } });
+      });
 
       const data: PaymentData = res.data.data;
       setPaymentData(data);
