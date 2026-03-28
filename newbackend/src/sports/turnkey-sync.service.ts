@@ -26,8 +26,8 @@ const FEED_URLS: string[] = (
 const API_KEY =
     process.env.SPORTS_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
 
-// Request timeout per individual URL (ms) – matches Rust 1.4 s
-const URL_TIMEOUT_MS = 1400;
+// Request timeout per individual URL (ms) – increased for extra proxy latency
+const URL_TIMEOUT_MS = 5000;
 
 
 
