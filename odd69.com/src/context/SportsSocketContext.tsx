@@ -25,7 +25,7 @@ const SPORTS_WS_URL =
 const SPORTS_WS_NAMESPACE = '/external';
 
 const SPORTS_API_TOKEN =
-    process.env.NEXT_PUBLIC_SPORTS_API_TOKEN || 'ext_live_sports_abc123XYZ_changeMe2026';
+    process.env.NEXT_PUBLIC_SPORTS_API_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export interface SportsOddsUpdate {

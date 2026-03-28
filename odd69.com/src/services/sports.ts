@@ -10,7 +10,7 @@ const SPORTS_BASE_URL =
         .replace(/\/$/, '');
 
 const SPORTS_API_TOKEN =
-    process.env.NEXT_PUBLIC_SPORTS_API_TOKEN || 'ext_live_sports_abc123XYZ_changeMe2026';
+    process.env.NEXT_PUBLIC_SPORTS_API_TOKEN || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
 
 const sportsAxios = axios.create({ baseURL: SPORTS_BASE_URL });
 
