@@ -18,13 +18,13 @@ import { Market, MarketDocument } from './schemas/market.schema';
 // ─── Feed URLs (tried in parallel – first success wins) ────────────────────
 const FEED_URLS: string[] = (
     process.env.SPORTS_FEED_URLS ||
-    'http://primarydiamondfeeds.turnkeyxgaming.com:8000,http://secondary.turnkeyxgaming.com:8000,http://local.turnkeyxgaming.com:8000'
+    'https://zeero.bet'
 )
     .split(',')
     .map((u) => u.trim().replace(/\/$/, ''));
 
 const API_KEY =
-    process.env.SPORTS_API_KEY || '6a9d10424b039000ab1caa11';
+    process.env.SPORTS_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
 
 // Request timeout per individual URL (ms) – matches Rust 1.4 s
 const URL_TIMEOUT_MS = 1400;

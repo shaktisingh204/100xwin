@@ -31,8 +31,8 @@ CLICKHOUSE_PASSWORD=""
 CLICKHOUSE_DB="default"
 
 # Turnkey / Diamond Sports API
-SPORTS_BASE_URL="http://primarydiamondfeeds.turnkeyxgaming.com:8000"
-SPORTS_API_KEY="6a9d10424b039000ab1caa11"
+SPORTS_BASE_URL="https://zeero.bet"
+SPORTS_API_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
 SPORTS_FEED_URLS=""
 DIAMOND_API_URL="https://diamond-sports-api-d247-sky-exchange-betfair.p.rapidapi.com"
 DIAMOND_API_HOST="diamond-sports-api-d247-sky-exchange-betfair.p.rapidapi.com"

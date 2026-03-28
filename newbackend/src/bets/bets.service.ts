@@ -52,10 +52,10 @@ export class BetsService {
   private readonly logger = new Logger(BetsService.name);
   private readonly SPORTS_BASE_URL = (
     process.env.SPORTS_BASE_URL ||
-    'http://primarydiamondfeeds.turnkeyxgaming.com:8000'
+    'https://zeero.bet'
   ).replace(/\/$/, '');
   private readonly SPORTS_API_KEY =
-    process.env.SPORTS_API_KEY || '6a9d10424b039000ab1caa11';
+    process.env.SPORTS_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
 
   constructor(
     private prisma: PrismaService,

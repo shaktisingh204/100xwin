@@ -5,7 +5,7 @@ const { URL } = require('url');
 
 // Configuration
 const API_URL = 'http://cloud.turnkeyxgaming.com:8086/sports/betfairscorecardandtv';
-const API_KEY = '6a9d10424b039000ab1caa11';
+const API_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
 
 // Important: The server might use self-signed certificates for their dynamic score URLs
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });

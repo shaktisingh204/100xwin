@@ -68,8 +68,8 @@ export class SportsService implements OnModuleInit {
     private isSyncing = false;
 
     // ─── Sports API (TurnkeyXGaming) ───────────────────────────────────────────
-    private readonly SPORTS_BASE_URL = (process.env.SPORTS_BASE_URL || 'http://primarydiamondfeeds.turnkeyxgaming.com:8000').replace(/\/$/, '');
-    private readonly SPORTS_API_KEY = process.env.SPORTS_API_KEY || '6a9d10424b039000ab1caa11';
+    private readonly SPORTS_BASE_URL = (process.env.SPORTS_BASE_URL || 'https://zeero.bet').replace(/\/$/, '');
+    private readonly SPORTS_API_KEY = process.env.SPORTS_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
 
     // ─── Authoritative admin sports list (eid = Diamond API sport ID) ─────────
     // These are the sports enabled in the admin panel. Only these sports are
@@ -2807,7 +2807,7 @@ export class SportsService implements OnModuleInit {
                     `http://cloud.turnkeyxgaming.com:8086/sports/betfairscorecardandtv?diamondeventid=${matchId}&diamondsportsid=${sportId}`,
                     {
                         headers: {
-                            'x-turnkeyxgaming-key': '6a9d10424b039000ab1caa11'
+                            'x-turnkeyxgaming-key': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9'
                         },
                         timeout: 5000
                     }

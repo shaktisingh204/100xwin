@@ -7,8 +7,8 @@ import { PrismaService } from '../prisma.service';
 @Injectable()
 export class DiamondPostQueueService {
     private readonly logger = new Logger(DiamondPostQueueService.name);
-    private readonly SPORTS_BASE_URL = (process.env.SPORTS_BASE_URL || 'http://primarydiamondfeeds.turnkeyxgaming.com:8000').replace(/\/$/, '');
-    private readonly SPORTS_API_KEY = process.env.SPORTS_API_KEY || '6a9d10424b039000ab1caa11';
+    private readonly SPORTS_BASE_URL = (process.env.SPORTS_BASE_URL || 'https://zeero.bet').replace(/\/$/, '');
+    private readonly SPORTS_API_KEY = process.env.SPORTS_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
     private isRunning = false;
 
     constructor(
