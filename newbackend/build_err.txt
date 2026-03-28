@@ -1,0 +1,1023 @@
+
+> newbackend@0.0.1 prebuild
+> rm -rf dist tsconfig.build.tsbuildinfo
+
+
+> newbackend@0.0.1 build
+> tsc -p tsconfig.build.json
+
+src/agents/agent.controller.ts(1,68): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/agents/agent.controller.ts(6,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/agents/agent.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/agents/agent.service.ts(1,49): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/agents/agent.service.ts(3,25): error TS2307: Cannot find module 'bcrypt' or its corresponding type declarations.
+src/agents/agent.service.ts(16,41): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/agents/agent.service.ts(43,43): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/agents/agent.service.ts(59,28): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/agents/agent.service.ts(77,44): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/agents/agent.service.ts(88,48): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/analytics/analytics.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/analytics/analytics.service.ts(1,42): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/analytics/analytics.service.ts(2,30): error TS2307: Cannot find module '@clickhouse/client' or its corresponding type declarations.
+src/analytics/analytics.service.ts(10,18): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/analytics/analytics.service.ts(11,23): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/analytics/analytics.service.ts(12,23): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/analytics/analytics.service.ts(13,23): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/announcements/announcements.controller.ts(1,83): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/announcements/announcements.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/announcements/announcements.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/announcements/announcements.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/announcements/announcements.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/announcements/announcements.service.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/announcements/schemas/announcement.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/announcements/schemas/announcement.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/app.controller.ts(1,33): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/app.controller.ts(22,39): error TS2339: Property 'systemConfig' does not exist on type 'PrismaService'.
+src/app.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/app.module.ts(2,27): error TS2307: Cannot find module '@nestjs/core' or its corresponding type declarations.
+src/app.module.ts(4,45): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/app.module.ts(5,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/app.module.ts(22,35): error TS2307: Cannot find module '@nestjs/serve-static' or its corresponding type declarations.
+src/app.module.ts(23,22): error TS2307: Cannot find module 'path' or its corresponding type declarations.
+src/app.module.ts(58,32): error TS2307: Cannot find module '@nestjs/schedule' or its corresponding type declarations.
+src/app.module.ts(67,24): error TS2304: Cannot find name '__dirname'.
+src/app.module.ts(71,24): error TS2304: Cannot find name '__dirname'.
+src/app.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/auth.controller.ts(1,103): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/auth.controller.ts(4,27): error TS2307: Cannot find module '@nestjs/passport' or its corresponding type declarations.
+src/auth.controller.ts(72,62): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/auth.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/auth.module.ts(3,45): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/auth.module.ts(5,32): error TS2307: Cannot find module '@nestjs/passport' or its corresponding type declarations.
+src/auth.module.ts(6,27): error TS2307: Cannot find module '@nestjs/jwt' or its corresponding type declarations.
+src/auth.service.ts(1,118): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/auth.service.ts(2,28): error TS2307: Cannot find module '@nestjs/jwt' or its corresponding type declarations.
+src/auth.service.ts(4,25): error TS2307: Cannot find module 'bcrypt' or its corresponding type declarations.
+src/auth.service.ts(6,30): error TS2307: Cannot find module 'uuid' or its corresponding type declarations.
+src/auth.service.ts(50,44): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/auth.service.ts(133,50): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/auth.service.ts(138,44): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/auth.service.ts(184,40): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/auth.service.ts(188,27): error TS2339: Property 'passwordResetToken' does not exist on type 'PrismaService'.
+src/auth.service.ts(196,27): error TS2339: Property 'passwordResetToken' does not exist on type 'PrismaService'.
+src/auth.service.ts(201,40): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/auth.service.ts(215,42): error TS2339: Property 'passwordResetToken' does not exist on type 'PrismaService'.
+src/auth.service.ts(223,27): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/auth.service.ts(224,25): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/auth.service.ts(228,25): error TS2339: Property 'passwordResetToken' does not exist on type 'PrismaService'.
+src/auth.service.ts(257,40): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/auth.service.ts(288,40): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/auth.service.ts(295,27): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/auth.service.ts(296,25): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/auth.service.ts(300,25): error TS2339: Property 'passwordResetToken' does not exist on type 'PrismaService'.
+src/auth/dto/auth.dto.ts(1,88): error TS2307: Cannot find module 'class-validator' or its corresponding type declarations.
+src/auth/jwt-auth.guard.ts(1,69): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/auth/jwt-auth.guard.ts(2,27): error TS2307: Cannot find module '@nestjs/core' or its corresponding type declarations.
+src/auth/jwt-auth.guard.ts(3,27): error TS2307: Cannot find module '@nestjs/passport' or its corresponding type declarations.
+src/auth/jwt-auth.guard.ts(34,44): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/auth/jwt.strategy.ts(1,38): error TS2307: Cannot find module 'passport-jwt' or its corresponding type declarations.
+src/auth/jwt.strategy.ts(2,34): error TS2307: Cannot find module '@nestjs/passport' or its corresponding type declarations.
+src/auth/jwt.strategy.ts(3,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/auth/jwt.strategy.ts(4,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/auth/public.decorator.ts(1,29): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/auth/roles.decorator.ts(1,29): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/auth/roles.decorator.ts(2,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/auth/roles.guard.ts(2,59): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/auth/roles.guard.ts(3,27): error TS2307: Cannot find module '@nestjs/core' or its corresponding type declarations.
+src/auth/roles.guard.ts(4,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/auth/security-token.guard.ts(1,82): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/auth/security-token.guard.ts(8,28): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/aviator/aviator.gateway.ts(5,8): error TS2307: Cannot find module '@nestjs/websockets' or its corresponding type declarations.
+src/aviator/aviator.gateway.ts(6,32): error TS2307: Cannot find module 'socket.io' or its corresponding type declarations.
+src/aviator/aviator.gateway.ts(7,22): error TS2307: Cannot find module 'jsonwebtoken' or its corresponding type declarations.
+src/aviator/aviator.gateway.ts(8,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/aviator/aviator.gateway.ts(9,38): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/aviator/aviator.gateway.ts(71,27): error TS2339: Property 'handshake' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.gateway.ts(71,71): error TS2339: Property 'handshake' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.gateway.ts(77,37): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.gateway.ts(84,12): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.gateway.ts(92,12): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.gateway.ts(96,36): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.gateway.ts(106,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.gateway.ts(107,29): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.gateway.ts(109,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.gateway.ts(118,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.gateway.ts(126,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.gateway.ts(137,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.gateway.ts(138,29): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.gateway.ts(142,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.gateway.ts(151,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/aviator/aviator.module.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/aviator/aviator.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/aviator/aviator.module.ts(3,30): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/aviator/aviator.service.ts(1,76): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/aviator/aviator.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/aviator/aviator.service.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/aviator/aviator.service.ts(4,25): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+src/aviator/aviator.service.ts(142,25): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/aviator/aviator.service.ts(168,36): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/aviator/aviator.service.ts(171,23): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/aviator/schemas/aviator-bet.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/aviator/schemas/aviator-bet.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/aviator/schemas/aviator-round.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/aviator/schemas/aviator-round.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/bets/bets.controller.ts(1,86): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/bets/bets.controller.ts(6,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/bets/bets.module.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/bets/bets.module.ts(2,28): error TS2307: Cannot find module '@nestjs/axios' or its corresponding type declarations.
+src/bets/bets.module.ts(6,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/bets/bets.service.ts(10,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/bets/bets.service.ts(11,29): error TS2307: Cannot find module '@nestjs/axios' or its corresponding type declarations.
+src/bets/bets.service.ts(13,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/bets/bets.service.ts(14,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/bets/bets.service.ts(15,32): error TS2307: Cannot find module 'rxjs' or its corresponding type declarations.
+src/bets/bets.service.ts(16,19): error TS2307: Cannot find module 'ioredis' or its corresponding type declarations.
+src/bets/bets.service.ts(17,28): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+src/bets/bets.service.ts(54,5): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/bets/bets.service.ts(58,5): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/bets/bets.service.ts(402,38): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/bets/bets.service.ts(534,45): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/bets/bets.service.ts(1416,31): error TS2339: Property 'diamondPostQueue' does not exist on type 'PrismaService'.
+src/bets/bets.service.ts(1510,30): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/bets/bets.service.ts(1593,27): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/bets/bets.service.ts(1955,23): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/bets/diamond-post-queue.service.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/bets/diamond-post-queue.service.ts(2,38): error TS2307: Cannot find module '@nestjs/schedule' or its corresponding type declarations.
+src/bets/diamond-post-queue.service.ts(3,29): error TS2307: Cannot find module '@nestjs/axios' or its corresponding type declarations.
+src/bets/diamond-post-queue.service.ts(4,32): error TS2307: Cannot find module 'rxjs' or its corresponding type declarations.
+src/bets/diamond-post-queue.service.ts(10,41): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/bets/diamond-post-queue.service.ts(11,39): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/bets/diamond-post-queue.service.ts(29,44): error TS2339: Property 'diamondPostQueue' does not exist on type 'PrismaService'.
+src/bets/diamond-post-queue.service.ts(40,35): error TS2339: Property 'diamondPostQueue' does not exist on type 'PrismaService'.
+src/bets/diamond-post-queue.service.ts(63,39): error TS2339: Property 'diamondPostQueue' does not exist on type 'PrismaService'.
+src/bets/diamond-post-queue.service.ts(81,39): error TS2339: Property 'diamondPostQueue' does not exist on type 'PrismaService'.
+src/bets/dto/execute-cashout.dto.ts(1,22): error TS2307: Cannot find module 'class-transformer' or its corresponding type declarations.
+src/bets/dto/execute-cashout.dto.ts(2,59): error TS2307: Cannot find module 'class-validator' or its corresponding type declarations.
+src/bets/dto/place-bet.dto.ts(1,33): error TS2307: Cannot find module 'class-transformer' or its corresponding type declarations.
+src/bets/dto/place-bet.dto.ts(2,70): error TS2307: Cannot find module 'class-validator' or its corresponding type declarations.
+src/bets/schemas/bet.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/bets/schemas/bet.schema.ts(2,52): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/bonus/bonus.controller.ts(1,92): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/bonus/bonus.module.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/bonus/bonus.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/bonus/bonus.service.ts(1,57): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/bonus/bonus.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/bonus/bonus.service.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/bonus/bonus.service.ts(150,28): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/bonus/bonus.service.ts(387,42): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/bonus/bonus.service.ts(571,35): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/bonus/bonus.service.ts(707,27): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/bonus/bonus.service.ts(931,27): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/bonus/bonus.service.ts(1044,27): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/bonus/bonus.service.ts(1149,27): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/bonus/bonus.service.ts(1219,27): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/bonus/bonus.service.ts(1355,27): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/bonus/schemas/bonus.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/bonus/schemas/bonus.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/bonus/schemas/pending-deposit-bonus.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/bonus/schemas/pending-deposit-bonus.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/casino/casino.controller.ts(1,95): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/casino/casino.controller.ts(8,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/casino/casino.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/casino/casino.module.ts(2,28): error TS2307: Cannot find module '@nestjs/axios' or its corresponding type declarations.
+src/casino/casino.module.ts(6,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/casino/casino.service.ts(1,51): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/casino/casino.service.ts(2,29): error TS2307: Cannot find module '@nestjs/axios' or its corresponding type declarations.
+src/casino/casino.service.ts(3,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/casino/casino.service.ts(5,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/casino/casino.service.ts(6,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/casino/casino.service.ts(8,30): error TS2307: Cannot find module 'uuid' or its corresponding type declarations.
+src/casino/casino.service.ts(10,19): error TS2307: Cannot find module 'axios' or its corresponding type declarations.
+src/casino/casino.service.ts(14,21): error TS2307: Cannot find module 'qs' or its corresponding type declarations.
+src/casino/casino.service.ts(26,40): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/casino/casino.service.ts(27,40): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/casino/casino.service.ts(30,41): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/casino/casino.service.ts(31,38): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/casino/casino.service.ts(32,44): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/casino/casino.service.ts(33,39): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/casino/casino.service.ts(78,42): error TS2339: Property 'icon' does not exist on type 'unknown'.
+src/casino/casino.service.ts(81,63): error TS2339: Property 'provider' does not exist on type 'unknown'.
+src/casino/casino.service.ts(87,37): error TS2339: Property 'gameCode' does not exist on type 'unknown'.
+src/casino/casino.service.ts(89,37): error TS2339: Property 'name' does not exist on type 'unknown'.
+src/casino/casino.service.ts(90,41): error TS2339: Property 'provider' does not exist on type 'unknown'.
+src/casino/casino.service.ts(91,62): error TS2339: Property 'provider' does not exist on type 'unknown'.
+src/casino/casino.service.ts(92,37): error TS2339: Property 'subType' does not exist on type 'unknown'.
+src/casino/casino.service.ts(92,50): error TS2339: Property 'type' does not exist on type 'unknown'.
+src/casino/casino.service.ts(92,60): error TS2339: Property 'category' does not exist on type 'unknown'.
+src/casino/casino.service.ts(499,35): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/casino/casino.service.ts(649,46): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/casino/casino.service.ts(781,28): error TS2339: Property 'casinoTransaction' does not exist on type 'PrismaService'.
+src/casino/huidu-api.service.ts(1,50): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/casino/huidu-api.service.ts(2,38): error TS2307: Cannot find module '@nestjs/schedule' or its corresponding type declarations.
+src/casino/huidu-api.service.ts(3,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/casino/huidu-api.service.ts(4,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/casino/huidu-api.service.ts(5,29): error TS2307: Cannot find module '@nestjs/axios' or its corresponding type declarations.
+src/casino/huidu-api.service.ts(6,32): error TS2307: Cannot find module 'rxjs' or its corresponding type declarations.
+src/casino/huidu-api.service.ts(9,21): error TS2307: Cannot find module 'fs' or its corresponding type declarations.
+src/casino/huidu-api.service.ts(10,23): error TS2307: Cannot find module 'path' or its corresponding type declarations.
+src/casino/huidu-api.service.ts(34,27): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/casino/huidu-api.service.ts(35,27): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/casino/huidu-api.service.ts(38,27): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/casino/huidu-crypto.service.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/casino/huidu-crypto.service.ts(2,25): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+src/casino/huidu-crypto.service.ts(12,72): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/casino/huidu-crypto.service.ts(25,76): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/casino/schemas/casino-category.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/casino/schemas/casino-category.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/casino/schemas/casino-game.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/casino/schemas/casino-game.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/casino/schemas/casino-provider.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/casino/schemas/casino-provider.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/casino/schemas/casino-section-game.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/casino/schemas/casino-section-game.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/casino/schemas/casino.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/casino/schemas/casino.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/chat/chat.controller.ts(4,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/chat/chat.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/chat/chat.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/chat/chat.service.ts(1,67): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/chat/chat.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/chat/chat.service.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/chat/schemas/chat-message.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/chat/schemas/chat-message.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/contact-settings/contact-settings.controller.ts(1,57): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/contact-settings/contact-settings.controller.ts(6,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/contact-settings/contact-settings.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/contact-settings/contact-settings.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/contact-settings/contact-settings.service.ts(26,46): error TS2339: Property 'systemConfig' does not exist on type 'PrismaService'.
+src/contact-settings/contact-settings.service.ts(38,27): error TS2339: Property 'systemConfig' does not exist on type 'PrismaService'.
+src/contact-settings/schemas/contact-settings.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/contact-settings/schemas/contact-settings.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/crm/crm.controller.ts(1,63): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/crm/crm.controller.ts(6,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/crm/crm.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/crm/crm.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/crm/crm.service.ts(16,44): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/crm/crm.service.ts(21,49): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/crm/crm.service.ts(26,47): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/crm/crm.service.ts(31,48): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/crm/crm.service.ts(40,38): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/crm/crm.service.ts(70,25): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/crm/crm.service.ts(77,25): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/dashboard/dashboard.controller.ts(1,44): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/dashboard/dashboard.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/dashboard/dashboard.module.ts(4,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/dashboard/dashboard.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/dashboard/dashboard.service.ts(3,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/dashboard/dashboard.service.ts(4,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/dashboard/dashboard.service.ts(21,25): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/dashboard/dashboard.service.ts(22,25): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/dashboard/dashboard.service.ts(26,25): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/dashboard/dashboard.service.ts(70,56): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/dashboard/dashboard.service.ts(96,48): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/dashboard/dashboard.service.ts(141,41): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/dice/dice.module.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/dice/dice.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/dice/dice.service.ts(4,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/dice/dice.service.ts(5,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/dice/dice.service.ts(6,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/dice/dice.service.ts(10,25): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+src/dice/dice.service.ts(78,36): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/dice/dice.service.ts(85,23): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/dice/dice.service.ts(127,25): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/dto/update-home-category.dto.ts(1,29): error TS2307: Cannot find module '@nestjs/mapped-types' or its corresponding type declarations.
+src/email/email.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/email/email.service.ts(1,57): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/email/email.service.ts(3,29): error TS2307: Cannot find module 'nodemailer' or its corresponding type declarations.
+src/email/email.service.ts(30,46): error TS2339: Property 'systemConfig' does not exist on type 'PrismaService'.
+src/email/email.service.ts(41,46): error TS2339: Property 'systemConfig' does not exist on type 'PrismaService'.
+src/events.gateway.ts(7,8): error TS2307: Cannot find module '@nestjs/websockets' or its corresponding type declarations.
+src/events.gateway.ts(8,32): error TS2307: Cannot find module 'socket.io' or its corresponding type declarations.
+src/events.gateway.ts(9,22): error TS2307: Cannot find module 'jsonwebtoken' or its corresponding type declarations.
+src/events.gateway.ts(14,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/events.gateway.ts(15,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/events.module.ts(1,44): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/finance/finance.controller.ts(1,109): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/finance/finance.controller.ts(6,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/finance/finance.controller.ts(7,33): error TS2307: Cannot find module '@nestjs/platform-express' or its corresponding type declarations.
+src/finance/finance.controller.ts(42,43): error TS2503: Cannot find namespace 'Express'.
+src/finance/finance.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/finance/finance.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/finance/finance.service.ts(10,28): error TS2339: Property 'paymentMethod' does not exist on type 'PrismaService'.
+src/finance/finance.service.ts(16,28): error TS2339: Property 'paymentMethod' does not exist on type 'PrismaService'.
+src/finance/finance.service.ts(20,28): error TS2339: Property 'paymentMethod' does not exist on type 'PrismaService'.
+src/finance/finance.service.ts(27,28): error TS2339: Property 'paymentMethod' does not exist on type 'PrismaService'.
+src/finance/finance.service.ts(33,45): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/health/health.controller.ts(1,44): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/health/health.controller.ts(6,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/health/health.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/health/health.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/health/health.service.ts(17,21): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/health/health.service.ts(23,31): error TS2339: Property '$queryRaw' does not exist on type 'PrismaService'.
+src/health/health.service.ts(52,26): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/health/health.service.ts(53,23): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/health/health.service.ts(54,43): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/health/health.service.ts(60,28): error TS2339: Property 'auditLog' does not exist on type 'PrismaService'.
+src/home-category.controller.ts(1,67): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/home-category.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/home-category.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/home-category/dto/update-home-category.dto.ts(1,29): error TS2307: Cannot find module '@nestjs/mapped-types' or its corresponding type declarations.
+src/home-category/home-category.controller.ts(1,78): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/home-category/home-category.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/home-category/home-category.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/home-category/home-category.service.ts(1,47): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/home-category/home-category.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/home-category/home-category.service.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/home-category/schemas/home-category.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/home-category/schemas/home-category.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/limbo/limbo.gateway.ts(5,8): error TS2307: Cannot find module '@nestjs/websockets' or its corresponding type declarations.
+src/limbo/limbo.gateway.ts(6,32): error TS2307: Cannot find module 'socket.io' or its corresponding type declarations.
+src/limbo/limbo.gateway.ts(7,22): error TS2307: Cannot find module 'jsonwebtoken' or its corresponding type declarations.
+src/limbo/limbo.gateway.ts(8,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/limbo/limbo.gateway.ts(9,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/limbo/limbo.gateway.ts(32,15): error TS2339: Property 'handshake' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(33,15): error TS2339: Property 'handshake' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(39,37): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(44,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(47,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(49,12): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(53,36): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(63,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(64,29): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(66,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(73,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(80,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(91,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(92,29): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(94,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(102,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(104,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(113,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(114,29): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(119,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(127,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(136,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(149,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.gateway.ts(152,12): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/limbo/limbo.module.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/limbo/limbo.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/limbo/limbo.module.ts(3,30): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/limbo/limbo.service.ts(1,96): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/limbo/limbo.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/limbo/limbo.service.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/limbo/limbo.service.ts(4,25): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+src/limbo/limbo.service.ts(41,36): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/limbo/limbo.service.ts(43,23): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/limbo/limbo.service.ts(58,25): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/limbo/schemas/limbo-bet.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/limbo/schemas/limbo-bet.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/live-pulse/live-pulse.controller.ts(1,56): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/live-pulse/live-pulse.module.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/live-pulse/live-pulse.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/live-pulse/live-pulse.service.ts(1,70): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/live-pulse/live-pulse.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/live-pulse/live-pulse.service.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/live-pulse/live-pulse.service.ts(4,22): error TS2307: Cannot find module '@nestjs/schedule' or its corresponding type declarations.
+src/live-pulse/schemas/live-pulse.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/live-pulse/schemas/live-pulse.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/main.ts(1,29): error TS2307: Cannot find module '@nestjs/core' or its corresponding type declarations.
+src/main.ts(3,32): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/main.ts(13,20): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/manual-deposit/manual-deposit.controller.ts(11,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/manual-deposit/manual-deposit.controller.ts(15,35): error TS2307: Cannot find module 'express' or its corresponding type declarations.
+src/manual-deposit/manual-deposit.controller.ts(56,38): error TS2339: Property 'systemConfig' does not exist on type 'PrismaService'.
+src/manual-deposit/manual-deposit.controller.ts(145,42): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/manual-deposit/manual-deposit.controller.ts(156,37): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/manual-deposit/manual-deposit.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/match-cashback/controllers/admin-match-cashback-promotions.controller.ts(1,76): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/match-cashback/controllers/match-settlement.controller.ts(1,51): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/match-cashback/controllers/public-match-cashback-promotions.controller.ts(1,33): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/match-cashback/dto/create-match-cashback-promotion.dto.ts(1,22): error TS2307: Cannot find module 'class-transformer' or its corresponding type declarations.
+src/match-cashback/dto/create-match-cashback-promotion.dto.ts(2,112): error TS2307: Cannot find module 'class-validator' or its corresponding type declarations.
+src/match-cashback/dto/set-promotion-trigger.dto.ts(1,22): error TS2307: Cannot find module 'class-transformer' or its corresponding type declarations.
+src/match-cashback/dto/set-promotion-trigger.dto.ts(2,73): error TS2307: Cannot find module 'class-validator' or its corresponding type declarations.
+src/match-cashback/dto/settle-match.dto.ts(1,61): error TS2307: Cannot find module 'class-validator' or its corresponding type declarations.
+src/match-cashback/dto/update-match-cashback-promotion.dto.ts(1,29): error TS2307: Cannot find module '@nestjs/mapped-types' or its corresponding type declarations.
+src/match-cashback/match-cashback.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/match-cashback/match-cashback.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/match-cashback/repositories/bet.repository.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/match-cashback/repositories/bet.repository.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/match-cashback/repositories/bet.repository.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/match-cashback/repositories/match-cashback-promotion.repository.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/match-cashback/repositories/match-cashback-promotion.repository.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/match-cashback/repositories/match-cashback-promotion.repository.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/match-cashback/repositories/match-cashback-refund.repository.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/match-cashback/repositories/match-cashback-refund.repository.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/match-cashback/repositories/match-cashback-refund.repository.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/match-cashback/repositories/match.repository.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/match-cashback/repositories/match.repository.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/match-cashback/repositories/match.repository.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/match-cashback/repositories/transaction.repository.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/match-cashback/repositories/transaction.repository.ts(13,28): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/match-cashback/repositories/wallet.repository.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/match-cashback/repositories/wallet.repository.ts(16,28): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/match-cashback/schemas/match-cashback-promotion.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/match-cashback/schemas/match-cashback-promotion.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/match-cashback/schemas/match-cashback-refund.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/match-cashback/schemas/match-cashback-refund.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/match-cashback/schemas/match.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/match-cashback/schemas/match.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/match-cashback/services/match-cashback-promotions.service.ts(1,87): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/match-cashback/services/match-cashback-promotions.service.ts(111,56): error TS2339: Property 'promotionType' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(112,33): error TS2339: Property 'matchId' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(114,18): error TS2339: Property 'isActive' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(123,24): error TS2339: Property 'teamA' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(124,24): error TS2339: Property 'teamB' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(125,28): error TS2339: Property 'matchDate' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(125,53): error TS2339: Property 'matchDate' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(128,27): error TS2339: Property 'teams' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(129,19): error TS2339: Property 'teams' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(134,17): error TS2339: Property 'triggerConfig' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(143,28): error TS2339: Property 'eventName' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(145,26): error TS2339: Property 'sportId' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(147,35): error TS2339: Property 'refundPercentage' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(148,29): error TS2339: Property 'walletType' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(149,34): error TS2339: Property 'maxRefundAmount' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(150,27): error TS2339: Property 'isActive' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(151,39): error TS2339: Property 'showOnPromotionsPage' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(152,28): error TS2339: Property 'cardTitle' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(153,34): error TS2339: Property 'cardDescription' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(154,31): error TS2339: Property 'cardGradient' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(155,30): error TS2339: Property 'cardBgImage' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(156,28): error TS2339: Property 'cardBadge' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-promotions.service.ts(157,24): error TS2339: Property 'order' does not exist on type 'UpdateMatchCashbackPromotionDto'.
+src/match-cashback/services/match-cashback-refund.service.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/match-cashback/services/match-cashback-refund.service.ts(98,59): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/match-cashback/services/match-settlement.service.ts(1,55): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/match-cashback/services/match-settlement.service.ts(42,31): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/match-cashback/services/wallet-credit.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/mines/dto/cashout.dto.ts(1,26): error TS2307: Cannot find module 'class-validator' or its corresponding type declarations.
+src/mines/dto/reveal-tile.dto.ts(1,46): error TS2307: Cannot find module 'class-validator' or its corresponding type declarations.
+src/mines/dto/start-mines.dto.ts(1,64): error TS2307: Cannot find module 'class-validator' or its corresponding type declarations.
+src/mines/mines.controller.ts(10,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/mines/mines.module.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/mines/mines.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/mines/mines.service.ts(4,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/mines/mines.service.ts(5,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/mines/mines.service.ts(6,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/mines/mines.service.ts(12,25): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+src/mines/mines.service.ts(61,36): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/mines/mines.service.ts(73,23): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/mines/mines.service.ts(184,23): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/notifications/notifications.controller.ts(8,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/notifications/notifications.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/notifications/notifications.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/notifications/notifications.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/notifications/notifications.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/notifications/notifications.service.ts(3,30): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/notifications/schemas/notification.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/notifications/schemas/notification.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/notifications/schemas/push-notification.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/notifications/schemas/push-notification.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/nowpayments/nowpayments.controller.ts(14,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/nowpayments/nowpayments.controller.ts(18,26): error TS2307: Cannot find module 'express' or its corresponding type declarations.
+src/nowpayments/nowpayments.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/nowpayments/nowpayments.service.ts(1,57): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/nowpayments/nowpayments.service.ts(2,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/nowpayments/nowpayments.service.ts(3,25): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+src/nowpayments/nowpayments.service.ts(102,47): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/nowpayments/nowpayments.service.ts(197,47): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/nowpayments/nowpayments.service.ts(214,31): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/nowpayments/nowpayments.service.ts(231,60): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/nowpayments/nowpayments.service.ts(257,31): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/nowpayments/nowpayments.service.ts(265,31): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/originals/ggr.service.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/originals/ggr.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/originals/ggr.service.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/originals/originals-access.controller.ts(1,38): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/originals/originals-admin.controller.ts(4,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/originals/originals-admin.service.ts(1,68): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/originals/originals-admin.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/originals/originals-admin.service.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/originals/originals-admin.service.ts(56,43): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/originals/originals-admin.service.ts(91,37): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/originals/originals-public.controller.ts(1,59): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/originals/originals-public.controller.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/originals/originals-public.controller.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/originals/originals.gateway.ts(5,8): error TS2307: Cannot find module '@nestjs/websockets' or its corresponding type declarations.
+src/originals/originals.gateway.ts(6,32): error TS2307: Cannot find module 'socket.io' or its corresponding type declarations.
+src/originals/originals.gateway.ts(7,22): error TS2307: Cannot find module 'jsonwebtoken' or its corresponding type declarations.
+src/originals/originals.gateway.ts(8,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/originals/originals.gateway.ts(9,44): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/originals/originals.gateway.ts(10,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/originals/originals.gateway.ts(11,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/originals/originals.gateway.ts(59,27): error TS2339: Property 'handshake' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(59,71): error TS2339: Property 'handshake' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(69,37): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(76,28): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(83,36): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(85,26): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(96,12): error TS2339: Property 'join' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(97,37): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(99,28): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(103,12): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(109,12): error TS2339: Property 'leave' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(119,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(120,29): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(122,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(127,43): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(128,44): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(129,62): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(130,63): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(137,14): error TS2339: Property 'join' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(138,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(140,38): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/originals/originals.gateway.ts(148,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(159,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(160,29): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(167,16): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(174,40): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/originals/originals.gateway.ts(183,16): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(189,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(200,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(201,29): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(206,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(207,14): error TS2339: Property 'leave' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(212,38): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/originals/originals.gateway.ts(233,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(241,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(245,14): error TS2339: Property 'join' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(246,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(248,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(259,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(260,29): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(262,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(267,43): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(268,62): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(269,63): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(276,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(278,38): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/originals/originals.gateway.ts(288,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(296,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(299,12): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(306,50): error TS2339: Property 'id' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(308,14): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(310,12): error TS2339: Property 'join' does not exist on type 'AuthedSocket'.
+src/originals/originals.gateway.ts(312,12): error TS2339: Property 'emit' does not exist on type 'AuthedSocket'.
+src/originals/originals.module.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/originals/originals.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/originals/schemas/dice-game.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/originals/schemas/dice-game.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/originals/schemas/mines-game.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/originals/schemas/mines-game.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/originals/schemas/originals-config.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/originals/schemas/originals-config.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/originals/schemas/originals-engagement-event.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/originals/schemas/originals-engagement-event.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/originals/schemas/originals-ggr-snapshot.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/originals/schemas/originals-ggr-snapshot.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/originals/schemas/originals-session.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/originals/schemas/originals-session.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/payment/payment-retry.util.ts(77,48): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment/payment-retry.util.ts(101,44): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(12,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/payment/payment.controller.ts(14,35): error TS2307: Cannot find module 'express' or its corresponding type declarations.
+src/payment/payment.controller.ts(15,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/payment/payment.controller.ts(114,48): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(118,33): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(266,38): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(275,42): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(279,27): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(280,23): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(284,23): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(348,37): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(354,29): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(361,29): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(362,25): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(366,25): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(392,37): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(409,50): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(413,25): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(414,21): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(418,21): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(522,38): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(535,41): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(536,21): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/payment/payment.controller.ts(540,21): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment/payment.module.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/payment/payment.service.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/payment/payment.service.ts(2,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/payment/payment.service.ts(3,25): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+src/payment0/payment0.controller.ts(1,106): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/payment0/payment0.controller.ts(3,35): error TS2307: Cannot find module 'express' or its corresponding type declarations.
+src/payment0/payment0.controller.ts(4,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/payment0/payment0.controller.ts(50,56): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment0/payment0.controller.ts(52,43): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment0/payment0.controller.ts(81,27): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/payment0/payment0.controller.ts(186,47): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment0/payment0.controller.ts(197,47): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment0/payment0.controller.ts(220,43): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment0/payment0.controller.ts(225,56): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment0/payment0.controller.ts(228,31): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/payment0/payment0.controller.ts(229,29): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/payment0/payment0.controller.ts(230,29): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment0/payment0.controller.ts(259,43): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment0/payment0.controller.ts(263,31): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment0/payment0.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/payment0/payment0.module.ts(4,30): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/payment0/payment0.service.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/payment0/payment0.service.ts(2,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/payment0/payment0.service.ts(3,25): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+src/payment0/payment0.service.ts(4,19): error TS2307: Cannot find module 'axios' or its corresponding type declarations.
+src/payment0/payment0.service.ts(20,26): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/payment0/payment0.service.ts(52,46): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/payment2/payment2.controller.ts(12,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/payment2/payment2.controller.ts(14,35): error TS2307: Cannot find module 'express' or its corresponding type declarations.
+src/payment2/payment2.controller.ts(15,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/payment2/payment2.controller.ts(162,48): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(166,33): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(452,39): error TS2339: Property 'systemConfig' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(463,46): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(467,31): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(468,27): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(472,27): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(542,48): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(546,33): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(547,29): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(551,29): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(637,37): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(642,29): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(648,29): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(649,25): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(653,25): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(742,37): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(755,50): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(758,25): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(759,21): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/payment2/payment2.controller.ts(763,21): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/payment2/payment2.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/payment2/payment2.service.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/payment2/payment2.service.ts(2,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/payment2/payment2.service.ts(3,25): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+src/prisma.module.ts(1,32): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/prisma.service.ts(1,59): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/prisma.service.ts(2,30): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/prisma.service.ts(7,20): error TS2339: Property '$connect' does not exist on type 'PrismaService'.
+src/prisma.service.ts(11,20): error TS2339: Property '$disconnect' does not exist on type 'PrismaService'.
+src/promo-card/promo-card.controller.ts(1,83): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/promo-card/promo-card.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/promo-card/promo-card.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/promo-card/promo-card.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/promo-card/promo-card.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/promo-card/promo-card.service.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/promo-card/schemas/promo-card.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/promo-card/schemas/promo-card.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/promo-team/promo-team.controller.ts(4,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/promo-team/promo-team.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/promo-team/promo-team.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/promo-team/promo-team.service.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/promo-team/promo-team.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/promo-team/promo-team.service.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/promo-team/schemas/promo-team.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/promo-team/schemas/promo-team.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/promotions/promotions.controller.ts(1,83): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/promotions/promotions.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/promotions/promotions.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/promotions/promotions.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/promotions/promotions.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/promotions/promotions.service.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/promotions/schemas/promotion.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/promotions/schemas/promotion.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/push-notifications/push-notifications.controller.ts(10,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/push-notifications/push-notifications.controller.ts(15,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/push-notifications/push-notifications.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/push-notifications/push-notifications.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/push-notifications/push-notifications.service.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/push-notifications/push-notifications.service.ts(2,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/push-notifications/push-notifications.service.ts(3,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/push-notifications/push-notifications.service.ts(4,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/push-notifications/push-notifications.service.ts(42,46): error TS2339: Property 'systemConfig' does not exist on type 'PrismaService'.
+src/push-notifications/push-notifications.service.ts(59,27): error TS2339: Property 'systemConfig' does not exist on type 'PrismaService'.
+src/push-notifications/push-notifications.service.ts(71,28): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/push-notifications/push-notifications.service.ts(152,33): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/push-notifications/push-notifications.service.ts(168,29): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/redis/redis.module.ts(1,32): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/redis/redis.module.ts(2,45): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/redis/redis.module.ts(3,19): error TS2307: Cannot find module 'ioredis' or its corresponding type declarations.
+src/redis/redis.service.ts(1,61): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/redis/redis.service.ts(2,23): error TS2307: Cannot find module 'ioredis' or its corresponding type declarations.
+src/referral/referral.controller.ts(1,90): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/referral/referral.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/referral/referral.service.ts(1,49): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/referral/referral.service.ts(3,29): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+src/referral/referral.service.ts(12,44): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(18,40): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(25,40): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(29,27): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(43,27): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(54,40): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(64,41): error TS2339: Property 'referralReward' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(75,52): error TS2339: Property 'referralHistory' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(94,35): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(95,33): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(102,33): error TS2339: Property 'referralHistory' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(118,48): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(122,53): error TS2339: Property 'referralHistory' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(127,51): error TS2339: Property 'referralHistory' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(133,55): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(167,49): error TS2339: Property 'referralHistory' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(177,49): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(219,25): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(233,25): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(241,44): error TS2339: Property 'referralHistory' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(282,25): error TS2339: Property 'referralHistory' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(292,25): error TS2339: Property 'referralHistory' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(328,38): error TS2339: Property 'referralReward' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(335,28): error TS2339: Property 'referralReward' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(342,28): error TS2339: Property 'referralReward' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(348,40): error TS2339: Property 'referralReward' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(350,28): error TS2339: Property 'referralReward' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(357,28): error TS2339: Property 'referralReward' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(362,51): error TS2339: Property 'referralHistory' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(368,50): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(373,56): error TS2339: Property 'referralHistory' does not exist on type 'PrismaService'.
+src/referral/referral.service.ts(383,44): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/risk/risk.controller.ts(1,44): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/risk/risk.controller.ts(6,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/risk/risk.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/risk/risk.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/risk/risk.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/risk/risk.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/risk/risk.service.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/scripts/backfill-bonus-wallets.ts(1,43): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/scripts/backfill-bonus-wallets.ts(2,25): error TS2307: Cannot find module 'dotenv' or its corresponding type declarations.
+src/scripts/backfill-bonus-wallets.ts(51,16): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/backfill-bonus-wallets.ts(556,5): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/check-db.ts(1,22): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/scripts/check-db.ts(2,25): error TS2307: Cannot find module 'dotenv' or its corresponding type declarations.
+src/scripts/check-db.ts(5,19): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/debug-auth.ts(2,1): error TS2580: Cannot find name 'require'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/debug-auth.ts(3,15): error TS2580: Cannot find name 'require'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/debug-auth.ts(5,17): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/debug-auth.ts(6,20): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/debug-auth.ts(7,20): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/debug-auth.ts(8,22): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/debug-market-ltp.ts(2,29): error TS2307: Cannot find module '@nestjs/core' or its corresponding type declarations.
+src/scripts/debug-market-ltp.ts(5,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/scripts/debug-market-ltp.ts(6,29): error TS2307: Cannot find module '@nestjs/axios' or its corresponding type declarations.
+src/scripts/debug-market-ltp.ts(7,32): error TS2307: Cannot find module 'rxjs' or its corresponding type declarations.
+src/scripts/debug-market-ltp.ts(35,24): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/debug-market-ltp.ts(87,9): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/fix-event-teams.ts(2,29): error TS2307: Cannot find module '@nestjs/core' or its corresponding type declarations.
+src/scripts/fix-event-teams.ts(5,36): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/scripts/fix-event-teams.ts(6,28): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/scripts/fix-event-teams.ts(59,5): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/group-tournaments.ts(2,29): error TS2307: Cannot find module '@nestjs/core' or its corresponding type declarations.
+src/scripts/group-tournaments.ts(5,36): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/scripts/group-tournaments.ts(6,28): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/scripts/group-tournaments.ts(39,5): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/refresh-casino-data.ts(2,22): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/scripts/refresh-casino-data.ts(3,21): error TS2307: Cannot find module 'fs' or its corresponding type declarations.
+src/scripts/refresh-casino-data.ts(4,23): error TS2307: Cannot find module 'path' or its corresponding type declarations.
+src/scripts/refresh-casino-data.ts(5,23): error TS2307: Cannot find module 'csv-parse/sync' or its corresponding type declarations.
+src/scripts/refresh-casino-data.ts(6,25): error TS2307: Cannot find module 'dotenv' or its corresponding type declarations.
+src/scripts/refresh-casino-data.ts(11,33): error TS2304: Cannot find name '__dirname'.
+src/scripts/refresh-casino-data.ts(13,19): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/refresh-casino-data.ts(17,5): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/refresh-casino-data.ts(35,38): error TS2304: Cannot find name '__dirname'.
+src/scripts/refresh-casino-data.ts(38,13): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/refresh-casino-data.ts(130,9): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/repair-orphaned-bonus-user468.ts(24,30): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/scripts/repair-orphaned-bonus-user468.ts(25,25): error TS2307: Cannot find module 'dotenv' or its corresponding type declarations.
+src/scripts/repair-orphaned-bonus-user468.ts(31,15): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/repair-orphaned-bonus-user468.ts(50,5): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/repair-orphaned-bonus-user468.ts(146,5): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/setup-admin-users.ts(2,36): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/scripts/setup-admin-users.ts(3,25): error TS2307: Cannot find module 'bcrypt' or its corresponding type declarations.
+src/scripts/setup-admin-users.ts(59,9): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/test-matching-engine.ts(2,29): error TS2307: Cannot find module '@nestjs/core' or its corresponding type declarations.
+src/scripts/test-matching-engine.ts(6,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/scripts/test-matching-engine.ts(61,9): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/verify-admin-login.ts(2,30): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/scripts/verify-admin-login.ts(3,25): error TS2307: Cannot find module 'bcrypt' or its corresponding type declarations.
+src/scripts/verify-admin-login.ts(45,9): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/verify-match-details.ts(2,29): error TS2307: Cannot find module '@nestjs/core' or its corresponding type declarations.
+src/scripts/verify-match-details.ts(5,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/scripts/verify-match-details.ts(6,31): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/scripts/verify-match-details.ts(9,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/scripts/verify-match-details.ts(18,19): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/scripts/verify-match-details.ts(62,9): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/settlement/schemas/settled-market.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/settlement/schemas/settled-market.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/settlement/settlement.controller.ts(1,89): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/settlement/settlement.controller.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/settlement/settlement.controller.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/settlement/settlement.controller.ts(8,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/settlement/settlement.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/settlement/settlement.module.ts(2,28): error TS2307: Cannot find module '@nestjs/axios' or its corresponding type declarations.
+src/settlement/settlement.module.ts(3,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/settlement/settlement.service.ts(1,44): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/settlement/settlement.service.ts(2,22): error TS2307: Cannot find module '@nestjs/schedule' or its corresponding type declarations.
+src/settlement/settlement.service.ts(3,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/settlement/settlement.service.ts(4,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/settlement/settlement.service.ts(5,29): error TS2307: Cannot find module '@nestjs/axios' or its corresponding type declarations.
+src/settlement/settlement.service.ts(6,32): error TS2307: Cannot find module 'rxjs' or its corresponding type declarations.
+src/settlement/settlement.service.ts(7,19): error TS2307: Cannot find module 'ioredis' or its corresponding type declarations.
+src/settlement/settlement.service.ts(36,41): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/settlement/settlement.service.ts(37,40): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/settlement/settlement.service.ts(86,27): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/settlement/settlement.service.ts(143,39): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+src/settlement/settlement.service.ts(507,27): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/sms/sms.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/sms/sms.service.ts(1,57): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/sms/sms.service.ts(3,25): error TS2307: Cannot find module 'crypto' or its corresponding type declarations.
+src/sms/sms.service.ts(4,24): error TS2307: Cannot find module 'https' or its corresponding type declarations.
+src/sms/sms.service.ts(46,39): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sms/sms.service.ts(80,42): error TS2339: Property 'phoneOtp' does not exist on type 'PrismaService'.
+src/sms/sms.service.ts(98,27): error TS2339: Property 'phoneOtp' does not exist on type 'PrismaService'.
+src/sms/sms.service.ts(111,43): error TS2339: Property 'systemConfig' does not exist on type 'PrismaService'.
+src/sms/sms.service.ts(151,39): error TS2339: Property 'phoneOtp' does not exist on type 'PrismaService'.
+src/sms/sms.service.ts(171,31): error TS2339: Property 'phoneOtp' does not exist on type 'PrismaService'.
+src/sms/sms.service.ts(184,27): error TS2339: Property 'phoneOtp' does not exist on type 'PrismaService'.
+src/sports/dto/webhook.dto.ts(1,84): error TS2307: Cannot find module 'class-validator' or its corresponding type declarations.
+src/sports/dto/webhook.dto.ts(2,22): error TS2307: Cannot find module 'class-transformer' or its corresponding type declarations.
+src/sports/schemas/competition.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/schemas/competition.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/schemas/event.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/schemas/event.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/schemas/fancy.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/schemas/fancy.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/schemas/home-event.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/schemas/home-event.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/schemas/market-odd.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/schemas/market-odd.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/schemas/market.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/schemas/market.schema.ts(2,52): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/schemas/navigation.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/schemas/navigation.schema.ts(2,52): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/schemas/order.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/schemas/order.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/schemas/session.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/schemas/session.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/schemas/sport.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/schemas/sport.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/schemas/team-icon.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/schemas/team-icon.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/schemas/top-event.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/schemas/top-event.schema.ts(2,26): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/schemas/trade.schema.ts(1,45): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/schemas/trade.schema.ts(2,52): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/sports.controller.ts(1,64): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/sports/sports.controller.ts(7,27): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/sports/sports.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/sports/sports.module.ts(4,28): error TS2307: Cannot find module '@nestjs/axios' or its corresponding type declarations.
+src/sports/sports.module.ts(5,32): error TS2307: Cannot find module '@nestjs/schedule' or its corresponding type declarations.
+src/sports/sports.module.ts(6,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/sports.service.ts(1,70): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/sports/sports.service.ts(2,19): error TS2307: Cannot find module 'ioredis' or its corresponding type declarations.
+src/sports/sports.service.ts(3,29): error TS2307: Cannot find module '@nestjs/axios' or its corresponding type declarations.
+src/sports/sports.service.ts(5,22): error TS2307: Cannot find module '@nestjs/schedule' or its corresponding type declarations.
+src/sports/sports.service.ts(6,32): error TS2307: Cannot find module 'rxjs' or its corresponding type declarations.
+src/sports/sports.service.ts(7,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/sports.service.ts(8,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/sports.service.ts(71,41): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.service.ts(72,39): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.service.ts(80,26): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.service.ts(81,35): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.service.ts(82,30): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.service.ts(83,33): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.service.ts(225,46): error TS2339: Property 'systemConfig' does not exist on type 'PrismaService'.
+src/sports/sports.service.ts(256,35): error TS2339: Property 'systemConfig' does not exist on type 'PrismaService'.
+src/sports/sports.service.ts(345,40): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.service.ts(346,41): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.service.ts(347,40): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.service.ts(1707,47): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/sports/sports.service.ts(1797,47): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/sports/sports.service.ts(2441,49): error TS2339: Property 'eventLock' does not exist on type 'PrismaService'.
+src/sports/sports.service.ts(2664,78): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.service.ts(2668,27): error TS2580: Cannot find name 'require'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.service.ts(2683,35): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.service.ts(2686,28): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.service.ts(2704,27): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.service.ts(2711,19): error TS2580: Cannot find name 'Buffer'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/sports.socket.service.ts(1,50): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/sports/sports.socket.service.ts(2,23): error TS2307: Cannot find module 'ws' or its corresponding type declarations.
+src/sports/sports.socket.service.ts(5,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/sports/sports.socket.service.ts(11,32): error TS2503: Cannot find namespace 'NodeJS'.
+src/sports/sports.socket.service.ts(12,32): error TS2503: Cannot find namespace 'NodeJS'.
+src/sports/turnkey-sync.service.ts(7,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/sports/turnkey-sync.service.ts(8,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/sports/turnkey-sync.service.ts(9,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/sports/turnkey-sync.service.ts(10,43): error TS2307: Cannot find module 'axios' or its corresponding type declarations.
+src/sports/turnkey-sync.service.ts(11,19): error TS2307: Cannot find module 'ioredis' or its corresponding type declarations.
+src/sports/turnkey-sync.service.ts(20,5): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/turnkey-sync.service.ts(27,5): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/turnkey-sync.service.ts(94,26): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/turnkey-sync.service.ts(95,35): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/turnkey-sync.service.ts(96,30): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/sports/turnkey-sync.service.ts(97,33): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+src/support/support.controller.ts(1,75): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/support/support.controller.ts(6,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/support/support.gateway.ts(1,99): error TS2307: Cannot find module '@nestjs/websockets' or its corresponding type declarations.
+src/support/support.gateway.ts(2,32): error TS2307: Cannot find module 'socket.io' or its corresponding type declarations.
+src/support/support.gateway.ts(4,27): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/support/support.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/support/support.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/support/support.service.ts(10,28): error TS2339: Property 'supportTicket' does not exist on type 'PrismaService'.
+src/support/support.service.ts(21,32): error TS2339: Property 'supportTicket' does not exist on type 'PrismaService'.
+src/support/support.service.ts(32,28): error TS2339: Property 'supportTicket' does not exist on type 'PrismaService'.
+src/support/support.service.ts(42,28): error TS2339: Property 'supportTicket' does not exist on type 'PrismaService'.
+src/support/support.service.ts(52,39): error TS2339: Property 'supportMessage' does not exist on type 'PrismaService'.
+src/support/support.service.ts(56,27): error TS2339: Property 'supportTicket' does not exist on type 'PrismaService'.
+src/support/support.service.ts(65,28): error TS2339: Property 'supportTicket' does not exist on type 'PrismaService'.
+src/support/support.service.ts(72,28): error TS2339: Property 'supportTicket' does not exist on type 'PrismaService'.
+src/support/support.service.ts(80,25): error TS2339: Property 'supportTicket' does not exist on type 'PrismaService'.
+src/support/support.service.ts(81,25): error TS2339: Property 'supportTicket' does not exist on type 'PrismaService'.
+src/support/support.service.ts(82,25): error TS2339: Property 'supportTicket' does not exist on type 'PrismaService'.
+src/transactions/transactions.controller.ts(1,100): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/transactions/transactions.controller.ts(5,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/transactions/transactions.module.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/transactions/transactions.service.ts(1,49): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/transactions/transactions.service.ts(3,24): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/transactions/transactions.service.ts(19,55): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/transactions/transactions.service.ts(27,28): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/transactions/transactions.service.ts(44,40): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/transactions/transactions.service.ts(62,28): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/transactions/transactions.service.ts(92,28): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/transactions/transactions.service.ts(118,25): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/transactions/transactions.service.ts(125,25): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/transactions/transactions.service.ts(140,47): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/transactions/transactions.service.ts(148,28): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/transactions/transactions.service.ts(260,47): error TS2339: Property 'transaction' does not exist on type 'PrismaService'.
+src/transactions/transactions.service.ts(267,28): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/upload/upload.controller.ts(4,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/upload/upload.controller.ts(5,31): error TS2307: Cannot find module '@nestjs/config' or its corresponding type declarations.
+src/upload/upload.controller.ts(8,33): error TS2307: Cannot find module '@nestjs/platform-express' or its corresponding type declarations.
+src/upload/upload.controller.ts(9,44): error TS2307: Cannot find module 'multer' or its corresponding type declarations.
+src/upload/upload.controller.ts(10,25): error TS2307: Cannot find module 'path' or its corresponding type declarations.
+src/upload/upload.controller.ts(99,52): error TS2503: Cannot find namespace 'Express'.
+src/upload/upload.controller.ts(112,44): error TS2307: Cannot find module 'form-data' or its corresponding type declarations.
+src/upload/upload.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/upload/upload.service.ts(1,28): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/users/users.controller.ts(1,90): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/users/users.controller.ts(6,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/users/users.module.ts(1,36): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/users/users.service.ts(1,48): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/users/users.service.ts(3,25): error TS2307: Cannot find module 'bcrypt' or its corresponding type declarations.
+src/users/users.service.ts(15,40): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(31,40): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(43,47): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(84,28): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(88,28): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(97,40): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(109,47): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(125,39): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(151,38): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(223,25): error TS2339: Property 'casinoTransaction' does not exist on type 'PrismaService'.
+src/users/users.service.ts(229,25): error TS2339: Property 'casinoTransaction' does not exist on type 'PrismaService'.
+src/users/users.service.ts(249,44): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(252,27): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(260,40): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(267,27): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(289,25): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(310,25): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(326,28): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(336,28): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(343,28): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(349,28): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(357,43): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(361,28): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(370,28): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/users/users.service.ts(406,28): error TS2339: Property 'kycDocument' does not exist on type 'PrismaService'.
+src/users/users.service.ts(418,27): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(429,28): error TS2339: Property 'kycDocument' does not exist on type 'PrismaService'.
+src/users/users.service.ts(436,28): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(446,32): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(453,32): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(514,32): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(529,27): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(541,40): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/users/users.service.ts(550,27): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/vip/dto/vip.dto.ts(1,87): error TS2307: Cannot find module 'class-validator' or its corresponding type declarations.
+src/vip/dto/vip.dto.ts(2,33): error TS2307: Cannot find module 'class-transformer' or its corresponding type declarations.
+src/vip/vip.controller.ts(4,8): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/vip/vip.controller.ts(10,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/vip/vip.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/vip/vip.service.ts(1,107): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/vip/vip.service.ts(16,44): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(30,32): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(48,28): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(64,39): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(86,57): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(87,25): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(105,25): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(113,39): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(135,39): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(142,28): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(156,31): error TS2339: Property '$transaction' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(157,29): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(158,29): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(159,29): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(160,29): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(161,29): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/vip/vip.service.ts(162,29): error TS2339: Property 'vipApplication' does not exist on type 'PrismaService'.
+src/wagering-backfill/wagering-backfill.controller.ts(1,45): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/wagering-backfill/wagering-backfill.controller.ts(5,22): error TS2307: Cannot find module '@prisma/client' or its corresponding type declarations.
+src/wagering-backfill/wagering-backfill.module.ts(1,24): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/wagering-backfill/wagering-backfill.module.ts(2,32): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/wagering-backfill/wagering-backfill.service.ts(1,50): error TS2307: Cannot find module '@nestjs/common' or its corresponding type declarations.
+src/wagering-backfill/wagering-backfill.service.ts(2,29): error TS2307: Cannot find module '@nestjs/mongoose' or its corresponding type declarations.
+src/wagering-backfill/wagering-backfill.service.ts(3,23): error TS2307: Cannot find module 'mongoose' or its corresponding type declarations.
+src/wagering-backfill/wagering-backfill.service.ts(67,46): error TS2339: Property 'casinoTransaction' does not exist on type 'PrismaService'.
+src/wagering-backfill/wagering-backfill.service.ts(102,56): error TS2339: Property 'user' does not exist on type 'PrismaService'.
+src/wagering-backfill/wagering-backfill.service.ts(114,43): error TS2339: Property 'user' does not exist on type 'PrismaService'.

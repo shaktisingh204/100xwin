@@ -33,8 +33,8 @@ export class SettlementService {
     private readonly logger = new Logger(SettlementService.name);
     private isSettling = false;
 
-    private readonly DIAMOND_API_URL = process.env.SPORTS_BASE_URL || 'https://zeero.bet/';
-    private readonly DIAMOND_API_KEY = process.env.SPORTS_API_KEY || '';
+    private readonly DIAMOND_API_URL = (process.env.SPORTS_BASE_URL || 'https://zeero.bet/').replace(/\/$/, '') + '/';
+    private readonly DIAMOND_API_KEY = process.env.SPORTS_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
 
     constructor(
         private readonly httpService: HttpService,

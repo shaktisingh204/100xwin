@@ -121,7 +121,18 @@ export class TurnkeySyncService implements OnModuleInit {
             axios
                 .get(`${base}${path}`, config)
                 .then((res) => {
-                    if (res.status >= 200 && res.status < 300) return res.data;
+                    if (res.status >= 200 && res.status < 300) {
+                        // The proxy replica might return pure Arrays instead of {success:true, data:[]}
+                        if (Array.isArray(res.data)) {
+                            return { success: true, data: res.data };
+                        }
+                        
+                        if (!res.data || (!res.data.success && res.data.error !== 0)) {
+                            throw new Error(`API returned failure: ${JSON.stringify(res.data)}`);
+                        }
+                        
+                        return res.data;
+                    }
                     throw new Error(`HTTP ${res.status} from ${base}`);
                 }),
         );
@@ -297,10 +308,13 @@ export class TurnkeySyncService implements OnModuleInit {
                 }
 
                 successCount++;
-            } catch (e) {
-                this.logger.error(
-                    `[EventsCron] All URLs failed for sport ${sport.eid} (${sport.ename}): ${e.message}`,
-                );
+            } catch (e: any) {
+                this.logger.error(`[EventsCron] All URLs failed for sport ${sport.eid} (${sport.ename}): ${e?.message}`);
+                if (e?.errors && Array.isArray(e.errors)) {
+                    this.logger.error(`[EventsCron] Inner errors for sport ${sport.eid}: ${e.errors.map((err: any) => err?.message || String(err)).join(' | ')}`);
+                } else if (e) {
+                    this.logger.error(`[EventsCron] Raw Error:`, e);
+                }
                 failCount++;
             }
 
