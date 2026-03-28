@@ -3,16 +3,14 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import {
-  Activity, Trophy, Calendar, Clock, ChevronRight,
-  Loader2, Search, X, Star,
-} from "lucide-react";
+import { Activity, Trophy, Calendar, Clock, ChevronRight, Loader2, Search, X, Star } from "lucide-react";
 import { MdSportsCricket, MdSportsBasketball } from "react-icons/md";
 import { IoFootball, IoTennisball, IoBaseball, IoTrophy } from "react-icons/io5";
 import { GiBaseballBat } from "react-icons/gi";
 import { HiStatusOnline } from "react-icons/hi";
 import { BsCalendar3 } from "react-icons/bs";
 import { sportsApi, Event } from "@/services/sports";
+import { useSocket } from "@/context/SocketContext";
 
 /* ═══ SPORT TABS ═══ */
 const SPORTS = [
@@ -42,10 +40,11 @@ const getTeamInitials = (name?: string) => (name || "??").substring(0, 3).toUppe
 const isEventLive = (e: Event) =>
   e.match_status === "In Play" || e.match_status === "Live" || !!(e as any).in_play;
 
+// Enhanced to support the simplified structured match_odds we manually inject via Socket
 const getQuickOdds = (e: Event): { name: string; back: number | null; lay?: number | null }[] => {
   const mo = e.match_odds;
   if (mo && mo.length >= 1) {
-    return mo.slice(0, 3).map((o) => ({ name: o.name?.slice(0, 14) || "?", back: o.back ?? null, lay: o.lay ?? null }));
+    return mo.slice(0, 3).map((o: any) => ({ name: o.name?.slice(0, 14) || "?", back: o.back ?? null, lay: o.lay ?? null }));
   }
   const market = (e.markets || []).find((m) => m.market_name?.toLowerCase().includes("match") || m.market_name?.toLowerCase().includes("winner"));
   if (!market) return [];
@@ -120,17 +119,17 @@ function EventCard({ event, teamIcons, forceLive }: { event: Event; teamIcons: R
         </div>
 
         {/* Odds row */}
-        {odds.length > 0 && (
+        <div className={`transition-all duration-300 overflow-hidden ${odds.length > 0 ? "max-h-20 opacity-100" : "max-h-0 opacity-0"}`}>
           <div className="flex gap-1 px-2.5 pb-2.5">
             {odds.map((o, i) => (
               <div key={i} className="flex-1 text-center">
                 <span className="block text-[7px] font-bold text-white/15 uppercase truncate mb-0.5">{o.name}</span>
                 <div className="flex gap-0.5">
-                  <div className="flex-1 py-1 rounded-md text-[11px] font-black text-center" style={{ backgroundColor: "rgba(114,187,239,0.12)", color: o.back ? "#72BBEF" : "rgba(255,255,255,0.1)" }}>
+                  <div className="flex-1 py-1 rounded-md text-[11px] font-black text-center transition-colors duration-300" style={{ backgroundColor: "rgba(114,187,239,0.12)", color: o.back ? "#72BBEF" : "rgba(255,255,255,0.1)" }}>
                     {o.back ?? "-"}
                   </div>
-                  {o.lay != null && (
-                    <div className="flex-1 py-1 rounded-md text-[11px] font-black text-center" style={{ backgroundColor: "rgba(250,169,186,0.12)", color: o.lay ? "#FAA9BA" : "rgba(255,255,255,0.1)" }}>
+                  {o.lay !== undefined && (
+                    <div className="flex-1 py-1 rounded-md text-[11px] font-black text-center transition-colors duration-300" style={{ backgroundColor: "rgba(250,169,186,0.12)", color: o.lay ? "#FAA9BA" : "rgba(255,255,255,0.1)" }}>
                       {o.lay ?? "-"}
                     </div>
                   )}
@@ -138,7 +137,7 @@ function EventCard({ event, teamIcons, forceLive }: { event: Event; teamIcons: R
               </div>
             ))}
           </div>
-        )}
+        </div>
       </div>
     </Link>
   );
@@ -149,6 +148,7 @@ function SportsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlSportId = searchParams.get("sport_id");
+  const { socket } = useSocket();
 
   const [selectedSport, setSelectedSport] = useState<string | null>(urlSportId || null);
   const [liveEvents, setLiveEvents] = useState<Event[]>([]);
@@ -169,7 +169,7 @@ function SportsContent() {
     });
   };
 
-  /* Fetch events */
+  /* Initial Fetch Event Data Once */
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -184,9 +184,41 @@ function SportsContent() {
       finally { setLoading(false); }
     };
     load();
-    const interval = setInterval(load, 15000);
-    return () => clearInterval(interval);
+    // Intentionally removed setInterval polling! We let Real-time socket handle odds.
   }, [selectedSport]);
+
+  /* Listen globally for real-time odds updates */
+  useEffect(() => {
+    if (!socket) return;
+    
+    const oddsHandler = (payload: any) => {
+      if (payload?.messageType === "odds" && payload.eventId) {
+        const { eventId, data } = payload;
+        if (!Array.isArray(data)) return;
+
+        const matchMarket = data.find((m: any) => m.mname?.toLowerCase().includes("match") || m.mname?.toLowerCase().includes("winner")) || data[0];
+        if (!matchMarket) return;
+
+        const newOdds = (matchMarket.rt || matchMarket.runners || []).slice(0, 3).map((r: any) => ({
+          name: (r.nat || r.name || "?").slice(0, 14),
+          back: r.back?.[0]?.odds ?? null,
+          lay: r.lay?.[0]?.odds ?? null,
+        }));
+
+        const updater = (prev: Event[]) => prev.map((e: Event) => 
+          String(e.event_id) === String(eventId) || String((e as any).gmid) === String(eventId)
+            ? { ...e, match_odds: newOdds as any } 
+            : e
+        );
+
+        setLiveEvents(updater);
+        setUpcomingEvents(updater);
+      }
+    };
+    
+    socket.on("socket-data", oddsHandler);
+    return () => { socket.off("socket-data", oddsHandler); };
+  }, [socket]);
 
   /* Fetch team icons once */
   useEffect(() => { sportsApi.getTeamIcons().then(setTeamIcons).catch(() => {}); }, []);

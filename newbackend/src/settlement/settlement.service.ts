@@ -195,38 +195,17 @@ export class SettlementService {
      * Cricket=4, Football=1, Tennis=2, Horse Racing=4005, Kabaddi=9, Basketball=7522
      */
     private async processEventWithFallbackSports(gmid: number): Promise<number> {
-        const fallbackSportIds = [4, 1, 2, 5, 6, 9, 7522];
-        for (const sportsid of fallbackSportIds) {
-            try {
-                const response = await firstValueFrom(
-                    this.httpService.get<any>(
-                        `${this.DIAMOND_API_URL}api/v1/posted-market-result?sportsid=${sportsid}&gmid=${gmid}`,
-                        {
-                            headers: {
-                                'x-turnkeyxgaming-key': this.DIAMOND_API_KEY,
-                                'Accept': 'application/json'
-                            },
-                            timeout: 6000
-                        }
-                    )
-                );
-                if (response.data?.success && response.data?.data?.markets?.length > 0) {
-                    this.logger.log(`gmid=${gmid}: found results with fallback sportsid=${sportsid}`);
-                    return this.processEventResults(gmid, sportsid);
-                }
-            } catch (_) { /* silently try next */ }
-        }
-        this.logger.warn(`gmid=${gmid}: no results found with any sport ID — bets remain PENDING`);
-        return 0;
+        // Since the new drop-in proxy abstracts sportsid away, we no longer need fallback iterations.
+        return this.processEventResults(gmid);
     }
 
-    private async processEventResults(gmid: number, sportsid: number): Promise<number> {
+    private async processEventResults(gmid: number, sportsid?: number): Promise<number> {
         // Fetch market results from external API
         let markets: ExternalMarketResult[];
         try {
             const response = await firstValueFrom(
                 this.httpService.get<any>(
-                    `${this.DIAMOND_API_URL}api/v1/posted-market-result?sportsid=${sportsid}&gmid=${gmid}`,
+                    `${this.DIAMOND_API_URL}api/v1/result?gmid=${gmid}`,
                     {
                         headers: {
                             'x-turnkeyxgaming-key': this.DIAMOND_API_KEY,
@@ -237,12 +216,18 @@ export class SettlementService {
                 )
             );
 
-            if (!response.data?.success || !response.data?.data?.markets) {
-                return 0;
+            // Flexible parser: Proxy Array vs Turnkey Wrapper
+            if (Array.isArray(response.data)) {
+                markets = response.data;
+            } else if (response.data?.data?.markets && Array.isArray(response.data.data.markets)) {
+                markets = response.data.data.markets;
+            } else if (response.data?.markets && Array.isArray(response.data.markets)) {
+                markets = response.data.markets;
+            } else {
+                return 0; // Payload unreadable or empty
             }
-            markets = response.data.data.markets;
         } catch (err) {
-            this.logger.error(`Failed to fetch results for gmid=${gmid} sportsid=${sportsid}: ${err.message}`);
+            this.logger.error(`Failed to fetch results for gmid=${gmid}: ${err.message}`);
             return 0;
         }
 
