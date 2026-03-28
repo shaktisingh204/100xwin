@@ -174,13 +174,12 @@ function SportsContent() {
     const load = async () => {
       setLoading(true);
       try {
-        const [live, upcoming] = await Promise.all([
-          sportsApi.getLiveEvents(selectedSport || undefined),
-          sportsApi.getUpcomingEvents(selectedSport || undefined),
-        ]);
-        // Apply client-side sport filter as safety net
-        setLiveEvents(filterBySport(live || [], selectedSport));
-        setUpcomingEvents(filterBySport(upcoming || [], selectedSport));
+        const events = await sportsApi.getAllEvents(selectedSport || undefined);
+        const filtered = filterBySport(events || [], selectedSport);
+        
+        // Split them on frontend based on live status
+        setLiveEvents(filtered.filter(isEventLive));
+        setUpcomingEvents(filtered.filter(e => !isEventLive(e)));
       } catch { setLiveEvents([]); setUpcomingEvents([]); }
       finally { setLoading(false); }
     };

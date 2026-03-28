@@ -1,13 +1,9 @@
 "use client";
 
 import api from './api';
-import axios from 'axios';
 
-const SPORTS_BASE_URL = process.env.NEXT_PUBLIC_SPORTS_API_URL || 'https://zeero.bet/api';
-// Create an Axios instance for sports fetching (bypassing local backend)
-const sportsAxios = axios.create({
-    baseURL: SPORTS_BASE_URL
-});
+// Revert back to local backend (which caches efficiently in Redis)
+export const sportsAxios = api;
 
 export interface DiamondMarketOdds {
     sid: number;

@@ -23,8 +23,7 @@ const FEED_URLS: string[] = (
     .split(',')
     .map((u) => u.trim().replace(/\/$/, ''));
 
-const API_KEY =
-    process.env.SPORTS_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
+const API_KEY = (process.env.SPORTS_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9').replace(/^["']|["']$/g, '');
 
 // Request timeout per individual URL (ms) – increased for extra proxy latency
 const URL_TIMEOUT_MS = 5000;
@@ -127,7 +126,9 @@ export class TurnkeySyncService implements OnModuleInit {
                             return { success: true, data: res.data };
                         }
                         
-                        if (!res.data || (!res.data.success && res.data.error !== 0)) {
+                        // Proxy often strips "success: true" to save bandwidth
+                        // Only throw if 'success' explicitly equals false
+                        if (res.data && res.data.success === false && res.data.error !== 0) {
                             throw new Error(`API returned failure: ${JSON.stringify(res.data)}`);
                         }
                         
