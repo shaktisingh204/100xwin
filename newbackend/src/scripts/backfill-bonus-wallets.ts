@@ -60,6 +60,7 @@ function parseArgs() {
 
   return {
     apply: hasFlag('--apply'),
+    noLog: hasFlag('--no-log'),
     userId: userIdRaw ? Number(userIdRaw) : undefined,
     limit: limitRaw ? Number(limitRaw) : undefined,
   };
@@ -91,8 +92,18 @@ async function createSyntheticBonus(params: {
   wageringRequired: number;
   wageringDone: number;
   note: string;
+  noLog?: boolean;
 }) {
-  const { tx, userId, bucket, bonusAmount, wageringRequired, wageringDone, note } = params;
+  const {
+    tx,
+    userId,
+    bucket,
+    bonusAmount,
+    wageringRequired,
+    wageringDone,
+    note,
+    noLog,
+  } = params;
 
   const bonusCurrency = bucket === 'crypto' ? 'CRYPTO' : 'INR';
   const applicableTo = bucket === 'sports' ? 'SPORTS' : 'CASINO';
@@ -127,17 +138,19 @@ async function createSyntheticBonus(params: {
     },
   });
 
-  await tx.transaction.create({
-    data: {
-      userId,
-      amount: round2(bonusAmount),
-      type: 'BONUS',
-      status: 'APPROVED',
-      remarks: note,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-  });
+  if (!noLog) {
+    await tx.transaction.create({
+      data: {
+        userId,
+        amount: round2(bonusAmount),
+        type: 'BONUS',
+        status: 'APPROVED',
+        remarks: note,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+  }
 }
 
 function summarizeActiveBonuses(activeBonuses: BonusLike[]) {
@@ -303,9 +316,10 @@ async function restoreZeroWagerCompletedBonuses(user: UserSnapshot, apply: boole
 }
 
 async function main() {
-  const { apply, userId, limit } = parseArgs();
+  const { apply, noLog, userId, limit } = parseArgs();
 
   console.log(`[BonusBackfill] Mode: ${apply ? 'APPLY' : 'DRY-RUN'}`);
+  if (noLog) console.log('[BonusBackfill] Synthetic transaction logs: DISABLED');
   if (userId) console.log(`[BonusBackfill] Scoped to userId=${userId}`);
   if (limit) console.log(`[BonusBackfill] Limit=${limit}`);
 
@@ -485,6 +499,7 @@ async function main() {
             wageringRequired: missingCasinoReq,
             wageringDone: missingCasinoDone,
             note: 'Backfilled missing casino bonus record from legacy wallet balance',
+            noLog,
           });
         }
 
@@ -498,6 +513,7 @@ async function main() {
             wageringRequired: missingSportsReq,
             wageringDone: missingSportsDone,
             note: 'Backfilled missing sports bonus record from legacy wallet balance',
+            noLog,
           });
         }
 
@@ -511,6 +527,7 @@ async function main() {
             wageringRequired: remainingGlobalReqAfterFiat,
             wageringDone: remainingGlobalDoneAfterFiat,
             note: 'Backfilled missing crypto bonus record from legacy wallet balance',
+            noLog,
           });
         }
       });

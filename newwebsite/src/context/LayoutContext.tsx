@@ -6,12 +6,15 @@ interface LayoutContextType {
     isMobileSidebarOpen: boolean;
     toggleMobileSidebar: () => void;
     closeMobileSidebar: () => void;
+    isIconRail: boolean;
+    toggleIconRail: () => void;
 }
 
 const LayoutContext = createContext<LayoutContextType | undefined>(undefined);
 
 export const LayoutProvider = ({ children }: { children: ReactNode }) => {
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+    const [isIconRail, setIsIconRail] = useState(false);
 
     const toggleMobileSidebar = () => {
         setIsMobileSidebarOpen(prev => !prev);
@@ -21,8 +24,12 @@ export const LayoutProvider = ({ children }: { children: ReactNode }) => {
         setIsMobileSidebarOpen(false);
     };
 
+    const toggleIconRail = () => {
+        setIsIconRail(prev => !prev);
+    };
+
     return (
-        <LayoutContext.Provider value={{ isMobileSidebarOpen, toggleMobileSidebar, closeMobileSidebar }}>
+        <LayoutContext.Provider value={{ isMobileSidebarOpen, toggleMobileSidebar, closeMobileSidebar, isIconRail, toggleIconRail }}>
             {children}
         </LayoutContext.Provider>
     );

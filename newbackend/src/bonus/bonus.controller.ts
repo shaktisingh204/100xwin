@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards, Query, Request, Req, BadRequestException } from '@nestjs/common';
 import { BonusService } from './bonus.service';
 import { SecurityTokenGuard } from '../auth/security-token.guard';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -76,7 +76,27 @@ export class BonusAdminController {
         },
         @Request() req: any,
     ) {
-        return this.bonusService.adminGiveBonus(req.user?.id || 0, body.userId, body);
+        // SECURITY: reject negative/non-numeric amounts before they reach the
+        // service. Without this, an admin (or leaked admin token) could issue
+        // a negative bonus which silently debits the user's wallet.
+        const customAmount = body.customAmount == null ? undefined : Number(body.customAmount);
+        const amount = body.amount == null ? undefined : Number(body.amount);
+        if (customAmount !== undefined && (!Number.isFinite(customAmount) || customAmount < 0)) {
+            throw new BadRequestException('customAmount must be a non-negative number');
+        }
+        if (amount !== undefined && (!Number.isFinite(amount) || amount < 0)) {
+            throw new BadRequestException('amount must be a non-negative number');
+        }
+        const wageringRequirement = body.wageringRequirement == null ? undefined : Number(body.wageringRequirement);
+        if (wageringRequirement !== undefined && (!Number.isFinite(wageringRequirement) || wageringRequirement < 0)) {
+            throw new BadRequestException('wageringRequirement must be a non-negative number');
+        }
+        return this.bonusService.adminGiveBonus(req.user?.id || 0, body.userId, {
+            ...body,
+            customAmount,
+            amount,
+            wageringRequirement,
+        });
     }
 
     @Post('emit-wallet-update')
@@ -100,9 +120,13 @@ export class BonusController {
      * POST /bonus/validate  { code, depositAmount, depositCurrency }
      */
     @Post('validate')
-    async validateCode(@Body() body: { code: string; depositAmount?: number; depositCurrency?: 'INR' | 'CRYPTO' }, @Request() req: any) {
+    async validateCode(
+        @Body() body: { code: string; depositAmount?: number; depositCurrency?: 'INR' | 'CRYPTO' },
+        @Request() req: any,
+    ) {
+        const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
         const depositAmount = body.depositAmount || 0;
-        return this.bonusService.validatePromoCode(body.code, req.user.userId, depositAmount, body.depositCurrency);
+        return this.bonusService.validatePromoCode(body.code, req.user.userId, depositAmount, body.depositCurrency, ip);
     }
 
     /**
@@ -151,15 +175,6 @@ export class BonusController {
     }
 
     /**
-     * Move an unlocked casino/sports bonus balance into the main wallet.
-     * POST /bonus/convert  { type: 'CASINO' | 'SPORTS' }
-     */
-    @Post('convert')
-    convertBonus(@Body() body: { type: 'CASINO' | 'SPORTS' }, @Request() req: any) {
-        return this.bonusService.convertBonusBalance(req.user.userId, body.type);
-    }
-
-    /**
      * List all publicly active bonus templates (for Promotions page)
      * GET /bonus/promotions  (public — no auth needed)
      */
@@ -187,7 +202,8 @@ export class BonusController {
      */
     @Post('redeem-signup')
     redeemSignupBonus(@Body() body: { bonusCode: string }, @Request() req: any) {
-        return this.bonusService.redeemSignupBonus(req.user.userId, body.bonusCode);
+        const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.ip || '';
+        return this.bonusService.redeemSignupBonus(req.user.userId, body.bonusCode, ip);
     }
 
     /**

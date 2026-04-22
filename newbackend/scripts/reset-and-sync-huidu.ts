@@ -4,7 +4,7 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 const AGENCY_UID = 'ab72cfab44395f7063c6f0c0f05b2325';
-const BASE_URL = 'https://jsgame.live';
+const BASE_URL = 'https://huidu.bet';
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/adxwins';
 
 const providerSchema = new mongoose.Schema({

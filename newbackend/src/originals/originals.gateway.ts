@@ -15,6 +15,7 @@ import { GGRService } from './ggr.service';
 import { PrismaService } from '../prisma.service';
 import { EventsGateway } from '../events.gateway';
 import { OriginalsAdminService } from './originals-admin.service';
+import { PlinkoService } from '../plinko/plinko.service';
 import { OriginalsSession, OriginalsSessionDocument } from './schemas/originals-session.schema';
 import { OriginalsEngagementEvent, OriginalsEngagementEventDocument } from './schemas/originals-engagement-event.schema';
 import { MinesGame, MinesGameDocument } from './schemas/mines-game.schema';
@@ -38,6 +39,8 @@ export class OriginalsGateway implements OnGatewayConnection, OnGatewayDisconnec
     private readonly minesService: MinesService,
     @Inject(forwardRef(() => DiceService))
     private readonly diceService: DiceService,
+    @Inject(forwardRef(() => PlinkoService))
+    private readonly plinkoService: PlinkoService,
     private readonly ggrService: GGRService,
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => EventsGateway))
@@ -59,7 +62,8 @@ export class OriginalsGateway implements OnGatewayConnection, OnGatewayDisconnec
     const token = (client.handshake.auth?.token as string) || (client.handshake.query?.token as string) || '';
     if (token) {
       try {
-        const secret = this.configService.get<string>('JWT_SECRET') || 'secret';
+        const secret = this.configService.get<string>('JWT_SECRET');
+        if (!secret) throw new Error('JWT_SECRET not configured');
         const payload: any = jwt.verify(token, secret);
         const userInfo = {
           userId: Number(payload.sub),
@@ -72,7 +76,7 @@ export class OriginalsGateway implements OnGatewayConnection, OnGatewayDisconnec
         client.role = userInfo.role;
         // Register session (MongoDB)
         await this.sessionModel.create({
-          gameKey: 'mines', userId: userInfo.userId,
+          gameKey: 'lobby', userId: userInfo.userId,
           socketId: client.id, isActive: true, connectedAt: new Date(),
         });
       } catch { /* anonymous */ }
@@ -265,6 +269,7 @@ export class OriginalsGateway implements OnGatewayConnection, OnGatewayDisconnec
 
     const config = await this.ggrService.getConfig('dice').catch(() => null);
     if (config?.maintenanceMode) { client.emit('dice:error', { message: config.maintenanceMessage || 'Game under maintenance.' }); return; }
+    if (!config?.isActive)        { client.emit('dice:error', { message: 'Game is currently disabled.' }); return; }
     if (data.betAmount < (config?.minBet ?? 10))    { client.emit('dice:error', { message: `Minimum bet ₹${config?.minBet ?? 10}` }); return; }
     if (data.betAmount > (config?.maxBet ?? 100000)) { client.emit('dice:error', { message: `Maximum bet ₹${config?.maxBet ?? 100000}` }); return; }
 
@@ -274,6 +279,7 @@ export class OriginalsGateway implements OnGatewayConnection, OnGatewayDisconnec
         clientSeed: data.clientSeed, walletType: data.walletType ?? 'fiat', useBonus: data.useBonus ?? false,
       });
       client.emit('dice:result', result);
+      await this.ggrService.updateSnapshot('dice', 0, 0, result.status === 'WON').catch(() => undefined);
 
       const user = await this.prisma.user.findUnique({ where: { id: userInfo.userId }, select: { balance: true } });
       if (user) this.eventsGateway.emitBalanceUpdate(userInfo.userId, user.balance);
@@ -299,6 +305,82 @@ export class OriginalsGateway implements OnGatewayConnection, OnGatewayDisconnec
     client.emit('dice:history', history);
   }
 
+  // ── Plinko: Play ───────────────────────────────────────────────────────────
+
+  @SubscribeMessage('plinko:play')
+  async handlePlinkoPlay(
+    @ConnectedSocket() client: AuthedSocket,
+    @MessageBody() data: { betAmount: number; rows: number; risk: 'low' | 'medium' | 'high'; clientSeed?: string; walletType?: 'fiat' | 'crypto'; useBonus?: boolean },
+  ) {
+    const userInfo = this.socketUsers.get(client.id);
+    if (!userInfo) { client.emit('plinko:error', { message: 'Unauthorized. Please log in.' }); return; }
+    if (!(await this.originalsAdminService.canUserPlayOriginals(userInfo.userId))) {
+      client.emit('plinko:error', { message: 'Zeero Originals access is not enabled for your account.' });
+      return;
+    }
+
+    const config = await this.ggrService.getConfig('plinko').catch(() => null);
+    if (config?.maintenanceMode) { client.emit('plinko:error', { message: config.maintenanceMessage || 'Game under maintenance.' }); return; }
+    if (!config?.isActive) { client.emit('plinko:error', { message: 'Game is currently disabled.' }); return; }
+    if (data.betAmount < (config?.minBet ?? 10)) { client.emit('plinko:error', { message: `Minimum bet ₹${config?.minBet ?? 10}` }); return; }
+    if (data.betAmount > (config?.maxBet ?? 25000)) { client.emit('plinko:error', { message: `Maximum bet ₹${config?.maxBet ?? 25000}` }); return; }
+
+    try {
+      const result = await this.plinkoService.playPlinko(userInfo.userId, {
+        betAmount: data.betAmount,
+        rows: data.rows,
+        risk: data.risk,
+        clientSeed: data.clientSeed,
+        walletType: data.walletType ?? 'fiat',
+        useBonus: data.useBonus ?? false,
+      });
+      client.emit('plinko:result', result);
+      await this.ggrService.updateSnapshot('plinko', 0, 0, result.status === 'WON').catch(() => undefined);
+      await this.broadcastGGRToAdmin();
+
+      const user = await this.prisma.user.findUnique({ where: { id: userInfo.userId }, select: { balance: true } });
+      if (user) this.eventsGateway.emitBalanceUpdate(userInfo.userId, user.balance);
+
+      const config = await this.ggrService.getConfig('plinko').catch(() => null);
+      const bigWinThreshold = config?.bigWinThreshold ?? 15;
+      if (result.multiplier >= bigWinThreshold) {
+        await this.engagementModel.create({
+          gameKey: 'plinko', userId: userInfo.userId, gameId: result.gameId,
+          eventType: 'BIG_WIN', metadata: { multiplier: result.multiplier, payout: result.payout },
+        });
+        this.server.emit('originals:big-win', {
+          username: this.mask(userInfo.username), multiplier: result.multiplier,
+          payout: result.payout, game: 'Zeero Plinko', ts: Date.now(),
+        });
+      }
+
+      this.server.to('originals:plinko:lobby').emit('originals:live-bet', {
+        type: result.status === 'WON' ? 'cashout' : 'loss',
+        game: 'plinko',
+        username: this.mask(userInfo.username),
+        betAmount: data.betAmount,
+        multiplier: result.multiplier,
+        payout: result.payout,
+        slotIndex: result.slotIndex,
+        risk: result.risk,
+        rows: result.rows,
+        ts: Date.now(),
+      });
+    } catch (err: any) {
+      client.emit('plinko:error', { message: err?.message || 'Plinko drop failed' });
+    }
+  }
+
+  // ── Plinko: History ───────────────────────────────────────────────────────
+
+  @SubscribeMessage('plinko:history')
+  async handlePlinkoHistory(@ConnectedSocket() client: AuthedSocket) {
+    const userInfo = this.socketUsers.get(client.id);
+    if (!userInfo) return;
+    const history = await this.plinkoService.getHistory(userInfo.userId, 30);
+    client.emit('plinko:history', history);
+  }
+
   // ── Admin Room ────────────────────────────────────────────────────────────
 
   @SubscribeMessage('admin:join-originals')
@@ -308,9 +390,9 @@ export class OriginalsGateway implements OnGatewayConnection, OnGatewayDisconnec
       client.emit('mines:error', { message: 'Admin access required' }); return;
     }
     client.join('originals:admin');
-    const ggrStats = await this.ggrService.getLiveGGRStats('mines');
-    client.emit('admin:ggr-update', { ...ggrStats, activePlayers: await this.getActivePlayers('mines') });
+    await this.broadcastGGRToAdmin();
   }
+
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -352,8 +434,16 @@ export class OriginalsGateway implements OnGatewayConnection, OnGatewayDisconnec
   }
 
   private async broadcastGGRToAdmin() {
-    const stats = await this.ggrService.getLiveGGRStats('mines');
-    this.server.to('originals:admin').emit('admin:ggr-update', { ...stats, activePlayers: await this.getActivePlayers('mines') });
+    const [minesStats, plinkoStats, diceStats] = await Promise.all([
+      this.ggrService.getLiveGGRStats('mines'),
+      this.ggrService.getLiveGGRStats('plinko'),
+      this.ggrService.getLiveGGRStats('dice'),
+    ]);
+    const activePlayers = await this.sessionModel.countDocuments({ isActive: true });
+    this.server.to('originals:admin').emit('admin:ggr-update', {
+      mines: { ...minesStats }, plinko: { ...plinkoStats }, dice: { ...diceStats },
+      activePlayers,
+    });
   }
 
   emitToUser(userId: number, event: string, data: any) {

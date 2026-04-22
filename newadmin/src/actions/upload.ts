@@ -5,8 +5,8 @@ import { existsSync } from "fs";
 import { mkdir, writeFile } from "fs/promises";
 import connectMongo from "@/lib/mongo";
 
-const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID || "ae6aabd73c9a3ddfb2f49419c0fbb69a";
-const CF_API_TOKEN  = process.env.CF_IMAGES_TOKEN || "QOCM2u9NAgrdxVgaeCIQUYDnLKnuQoeKqjh5oMlU";
+const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID;
+const CF_API_TOKEN  = process.env.CF_IMAGES_TOKEN;
 const CF_BASE_URL   = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/images/v1`;
 const CF_DELIVERY   = "https://imagedelivery.net/l7vrHxYm1V8kfxard9QBnQ";
 
@@ -20,6 +20,7 @@ export async function uploadToCloudflare(formData: FormData) {
     const folder = (formData.get("folder") as string) || "general";
 
     if (!file) return { success: false, error: "No file provided" };
+    if (!CF_ACCOUNT_ID || !CF_API_TOKEN) return { success: false, error: "Cloudflare credentials not configured" };
 
     const ext           = path.extname(file.name) || ".png";
     const baseName      = path.basename(file.name, ext).replace(/[^a-zA-Z0-9\s\-_.]/g, "").trim();
@@ -90,6 +91,7 @@ export async function uploadCasinoGameImage(formData: FormData) {
     if (!file || !provider || !gameCode || !gameName) {
       return { success: false, error: "Missing required fields" };
     }
+    if (!CF_ACCOUNT_ID || !CF_API_TOKEN) return { success: false, error: "Cloudflare credentials not configured" };
 
     const cleanProvider = provider.replace(/[^a-zA-Z0-9\s\-_]/g, "").trim();
     const originalExt = path.extname(file.name) || ".png";

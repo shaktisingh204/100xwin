@@ -6,10 +6,24 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
     Menu, Trophy, Gamepad2, Tv2, MessageCircle,
     X, Home, Crown, User, Settings, LogOut,
-    ChevronRight, Headphones, Gift, Send, Smile, Users,
-    HelpCircle, Shield, Lock, FileText, BookOpen
+    ChevronRight, Headphones, Gift, Send, Smile, Users, Ticket,
+    HelpCircle, Shield, Lock, FileText, BookOpen, AlignJustify,
+    CalendarCheck, UserCheck, Swords
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { useModal } from '@/context/ModalContext';
+import { useBets } from '@/context/BetContext';
+
+function useDailyRewardsHidden() {
+    const [hidden, setHidden] = useState(false);
+    useEffect(() => {
+        fetch('/api/daily-checkin/config', { cache: 'no-store' })
+            .then(r => r.json())
+            .then(d => { if (d?.hidden === true) setHidden(true); })
+            .catch(() => {});
+    }, []);
+    return hidden;
+}
 
 type ChatRole = 'admin' | 'mod' | 'user';
 
@@ -27,12 +41,14 @@ interface BottomNavItem {
     label: string;
     icon: React.ElementType;
     path: string;
+    requiresAuth?: boolean;
 }
 
 // ─── Full-Page Menu Overlay ────────────────────────────────────────────────
 function FullPageMenu({ onClose }: { onClose: () => void }) {
     const router = useRouter();
     const { user, logout } = useAuth();
+    const dailyRewardsHidden = useDailyRewardsHidden();
 
     const sections = [
         {
@@ -40,7 +56,10 @@ function FullPageMenu({ onClose }: { onClose: () => void }) {
             items: [
                 { label: 'Casino', icon: Gamepad2, path: '/casino', color: 'text-brand-gold' },
                 { label: 'Sports', icon: Trophy, path: '/sports', color: 'text-teal-400' },
-                { label: 'Live Casino', icon: Tv2, path: '/live-dealers', color: 'text-purple-400' },
+                ...(user
+                    ? [{ label: 'Fantasy', icon: Swords, path: '/fantasy', color: 'text-emerald-400' }]
+                    : []),
+                { label: 'Live Casino', icon: Tv2, path: '/live-dealers', color: 'text-accent-purple' },
             ],
         },
         {
@@ -49,23 +68,25 @@ function FullPageMenu({ onClose }: { onClose: () => void }) {
                 { label: 'Profile', icon: User, path: '/profile', color: 'text-green-400' },
                 { label: 'VIP Club', icon: Crown, path: '/vip', color: 'text-yellow-400' },
                 { label: 'Promotions', icon: Gift, path: '/promotions', color: 'text-pink-400' },
-                { label: 'Refer & Earn', icon: Users, path: '/referral', color: 'text-orange-400' },
-                { label: 'Settings', icon: Settings, path: '/settings', color: 'text-blue-400' },
+                ...(!dailyRewardsHidden ? [{ label: 'Daily Rewards', icon: CalendarCheck, path: '/daily-rewards', color: 'text-brand-gold' }] : []),
+                { label: 'Refer & Earn', icon: Users, path: '/referral', color: 'text-warning' },
+                { label: 'My Referrals', icon: UserCheck, path: '/profile/referral', color: 'text-teal-400' },
+                { label: 'Settings', icon: Settings, path: '/settings', color: 'text-brand-gold' },
             ],
         },
         {
             title: 'Support',
             items: [
-                { label: 'Live Support', icon: Headphones, path: '/support', color: 'text-orange-400' },
-                { label: 'Help Center', icon: HelpCircle, path: '/support/help-center', color: 'text-blue-400' },
+                { label: 'Live Support', icon: Headphones, path: '/support', color: 'text-warning' },
+                { label: 'Help Center', icon: HelpCircle, path: '/support/help-center', color: 'text-brand-gold' },
                 { label: 'Fairness & Provably Fair', icon: Shield, path: '/fairness', color: 'text-green-400' },
             ],
         },
         {
             title: 'Legal',
             items: [
-                { label: 'Privacy Policy', icon: Lock, path: '/legal/privacy-policy', color: 'text-purple-400' },
-                { label: 'Terms of Service', icon: FileText, path: '/legal/terms', color: 'text-sky-400' },
+                { label: 'Privacy Policy', icon: Lock, path: '/legal/privacy-policy', color: 'text-accent-purple' },
+                { label: 'Terms of Service', icon: FileText, path: '/legal/terms', color: 'text-brand-gold' },
                 { label: 'Betting Rules', icon: BookOpen, path: '/legal/rules', color: 'text-brand-gold' },
             ],
         },
@@ -78,44 +99,44 @@ function FullPageMenu({ onClose }: { onClose: () => void }) {
 
     return (
         <div
-            className="fixed inset-x-0 top-0 z-[200] flex flex-col bg-[#0c0e12]/98 backdrop-blur-2xl animate-in slide-in-from-bottom-full duration-300"
+            className="fixed inset-x-0 top-0 z-[200] flex flex-col bg-bg-deep/95 backdrop-blur-xl animate-in slide-in-from-bottom-full duration-300"
             style={{ bottom: 'var(--mobile-nav-height)' }}
         >
             {/* Header */}
-            <div className="flex items-center justify-between px-5 pt-safe pt-5 pb-4">
-                <span className="text-lg font-black text-white uppercase tracking-tight">Menu</span>
+            <div className="flex items-center justify-between px-5 pt-safe pt-5 pb-4 border-b border-white/[0.04]">
+                <span className="text-lg font-extrabold text-white uppercase tracking-tight">Menu</span>
                 <button
                     onClick={onClose}
-                    className="flex items-center gap-1.5 text-white/40 hover:text-white transition-all bg-white/[0.04] rounded-full px-3.5 py-2 text-[11px] font-bold hover:bg-white/[0.08]"
+                    className="flex items-center gap-2 text-text-muted hover:text-white transition-colors bg-white/[0.04] rounded-full px-4 py-2 text-sm font-bold"
                 >
-                    <X size={14} />
-                    Close
+                    <X size={16} />
+                    Hide
                 </button>
             </div>
 
             {/* User card */}
             {user ? (
-                <div className="mx-4 mt-4 p-4 rounded-2xl bg-white/[0.03] border border-white/[0.05] flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-brand-gold/15 flex items-center justify-center text-brand-gold font-black text-base">
+                <div className="mx-4 mt-4 p-4 rounded-2xl bg-brand-gold/10 border border-brand-gold/20 flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-full bg-brand-gold/20 flex items-center justify-center text-brand-gold font-black text-lg">
                         {user.username?.[0]?.toUpperCase() || 'U'}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-white font-bold text-[13px] truncate">{user.username}</p>
-                        <p className="text-white/20 text-[11px]">Member</p>
+                        <p className="text-text-white font-bold text-sm truncate">{user.username}</p>
+                        <p className="text-text-muted text-xs">Member</p>
                     </div>
-                    <ChevronRight size={16} className="text-white/15 flex-shrink-0" />
+                    <ChevronRight size={18} className="text-text-muted flex-shrink-0" />
                 </div>
             ) : (
-                <div className="mx-4 mt-4 grid grid-cols-2 gap-2">
+                <div className="mx-4 mt-4 flex gap-2">
                     <button
                         onClick={() => { router.push('/'); onClose(); }}
-                        className="py-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.06] text-white/60 font-black text-[12px] uppercase hover:bg-white/[0.08] transition-all"
+                        className="flex-1 py-3 rounded-xl border border-brand-gold text-brand-gold font-black text-sm uppercase"
                     >
                         Log In
                     </button>
                     <button
                         onClick={() => { router.push('/'); onClose(); }}
-                        className="py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-black text-[12px] uppercase shadow-[0_4px_16px_rgba(59,193,23,0.2)] transition-all"
+                        className="flex-1 py-3 rounded-xl bg-brand-gold text-text-inverse font-black text-sm uppercase shadow-glow-gold"
                     >
                         Register
                     </button>
@@ -126,20 +147,21 @@ function FullPageMenu({ onClose }: { onClose: () => void }) {
             <div className="flex-1 overflow-y-auto px-4 pt-4 pb-32 space-y-5">
                 {sections.map((section) => (
                     <div key={section.title}>
-                        <p className="text-[9px] font-black text-white/15 uppercase tracking-[0.2em] mb-2 px-1">
+                        <p className="text-[10px] font-black text-text-muted/60 uppercase tracking-widest mb-2 px-1">
                             {section.title}
                         </p>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="rounded-2xl overflow-hidden divide-y divide-white/[0.04] bg-white/[0.03] border border-white/[0.04]">
                             {section.items.map((item) => (
                                 <button
                                     key={item.label}
                                     onClick={() => handleNav(item.path)}
-                                    className="flex flex-col items-center gap-2 p-4 rounded-2xl bg-white/[0.03] border border-white/[0.04] hover:bg-white/[0.06] hover:border-white/[0.08] transition-all active:scale-95"
+                                    className="w-full flex items-center gap-4 px-4 py-3.5 hover:bg-white/[0.05] transition-colors"
                                 >
-                                    <div className={`w-10 h-10 rounded-xl bg-white/[0.04] flex items-center justify-center ${item.color}`}>
-                                        <item.icon size={20} />
+                                    <div className={`w-9 h-9 rounded-xl bg-white/[0.04] flex items-center justify-center ${item.color}`}>
+                                        <item.icon size={18} />
                                     </div>
-                                    <span className="text-white/60 font-bold text-[10px] text-center leading-tight">{item.label}</span>
+                                    <span className="text-text-white font-bold text-sm">{item.label}</span>
+                                    <ChevronRight size={16} className="text-text-muted ml-auto" />
                                 </button>
                             ))}
                         </div>
@@ -149,12 +171,12 @@ function FullPageMenu({ onClose }: { onClose: () => void }) {
                 {/* Home shortcut */}
                 <button
                     onClick={() => handleNav('/')}
-                    className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-bg-elevated/40 border border-white/5 hover:bg-white/5 transition-colors"
+                    className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-bg-elevated/40 border border-white/[0.04] hover:bg-white/[0.05] transition-colors"
                 >
-                    <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-text-muted">
+                    <div className="w-9 h-9 rounded-xl bg-white/[0.04] flex items-center justify-center text-text-muted">
                         <Home size={18} />
                     </div>
-                    <span className="text-white font-bold text-sm">Home</span>
+                    <span className="text-text-white font-bold text-sm">Home</span>
                     <ChevronRight size={16} className="text-text-muted ml-auto" />
                 </button>
 
@@ -162,12 +184,12 @@ function FullPageMenu({ onClose }: { onClose: () => void }) {
                 {user && (
                     <button
                         onClick={() => { logout?.(); onClose(); }}
-                        className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors"
+                        className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-danger-alpha-10 border border-danger-alpha-25 hover:bg-danger-alpha-16 transition-colors"
                     >
-                        <div className="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center text-red-400">
+                        <div className="w-9 h-9 rounded-xl bg-danger-alpha-10 flex items-center justify-center text-danger">
                             <LogOut size={18} />
                         </div>
-                        <span className="text-red-400 font-bold text-sm">Log Out</span>
+                        <span className="text-danger font-bold text-sm">Log Out</span>
                     </button>
                 )}
             </div>
@@ -203,41 +225,41 @@ function MobileChatPanel({ onClose }: { onClose: () => void }) {
     };
 
     return (
-        <div className="fixed inset-0 z-[200] flex flex-col bg-[#111315] animate-in slide-in-from-bottom-full duration-300">
+        <div className="fixed inset-0 z-[200] flex flex-col bg-bg-deep animate-in slide-in-from-bottom-full duration-300">
             {/* Header */}
-            <div className="flex items-center justify-between px-5 pt-safe pt-5 pb-4 border-b border-white/5 shrink-0">
+            <div className="flex items-center justify-between px-5 pt-safe pt-5 pb-4 border-b border-white/[0.04] shrink-0">
                 <div className="flex items-center gap-3">
-                    <div className="bg-brand-gold/20 p-2 rounded-lg text-brand-gold relative">
+                    <div className="bg-brand-alpha-20 p-2 rounded-lg text-brand-gold relative">
                         <MessageCircle size={18} />
-                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-green-500 rounded-full border border-[#111315] animate-pulse" />
+                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-success-vivid rounded-full border border-bg-deep-2 animate-pulse" />
                     </div>
                     <div>
                         <p className="text-white font-black text-sm uppercase tracking-tight">Live Chat</p>
-                        <p className="text-green-500 text-[10px] font-bold flex items-center gap-1">
+                        <p className="text-text-white text-[10px] font-bold flex items-center gap-1">
                             <Users size={10} /> {onlineUsers.toLocaleString()} Online
                         </p>
                     </div>
                 </div>
                 <button
                     onClick={onClose}
-                    className="text-text-muted hover:text-white transition-colors bg-white/5 rounded-full p-2"
+                    className="text-text-muted hover:text-white transition-colors bg-white/[0.04] rounded-full p-2"
                 >
                     <X size={18} />
                 </button>
             </div>
 
             {/* Messages */}
-            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#141619]/50">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-bg-deep-4/50">
                 {messages.map((msg) => (
                     <div key={msg.id} className="flex flex-col gap-0.5">
                         <div className="flex items-baseline gap-2">
-                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${msg.role === 'admin' ? 'bg-red-500 text-white' : msg.role === 'mod' ? 'bg-green-500 text-white' : 'bg-white/10 text-text-muted'}`}>
+                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${msg.role === 'admin' ? 'bg-danger-primary text-badge-win-text' : msg.role === 'mod' ? 'bg-success-primary text-badge-win-text' : 'bg-white/[0.08] text-text-muted'}`}>
                                 {msg.role === 'admin' ? 'ADM' : msg.role === 'mod' ? 'MOD' : `LVL ${msg.level}`}
                             </span>
-                            <span className={`text-xs font-bold ${msg.role === 'admin' ? 'text-red-400' : msg.role === 'mod' ? 'text-green-400' : 'text-text-secondary'}`}>{msg.user}</span>
+                            <span className={`text-xs font-bold ${msg.role === 'admin' ? 'text-danger' : msg.role === 'mod' ? 'text-success' : 'text-text-secondary'}`}>{msg.user}</span>
                             <span className="text-[9px] text-text-disabled ml-auto">{msg.time}</span>
                         </div>
-                        <div className="bg-[#1A1D21] p-2.5 rounded-xl rounded-tl-none border border-white/5 text-[13px] text-text-primary leading-snug break-words">
+                        <div className="bg-bg-modal p-2.5 rounded-xl rounded-tl-none border border-white/[0.04] text-[13px] text-text-primary leading-snug break-words">
                             {msg.content}
                         </div>
                     </div>
@@ -245,10 +267,10 @@ function MobileChatPanel({ onClose }: { onClose: () => void }) {
             </div>
 
             {/* Input */}
-            <div className="p-3 bg-[#111315] border-t border-white/5 relative pb-[env(safe-area-inset-bottom)] shrink-0">
+            <div className="p-3 bg-bg-deep border-t border-white/[0.04] relative pb-[env(safe-area-inset-bottom)] shrink-0">
                 {!user && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-10 rounded-t-2xl">
-                        <button className="px-6 py-2.5 bg-brand-gold hover:bg-brand-gold-hover text-black font-black text-xs uppercase rounded-full shadow-glow-gold">
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center z-10 rounded-t-2xl">
+                        <button className="px-6 py-2.5 bg-brand-gold hover:bg-brand-gold-hover text-text-inverse font-black text-xs uppercase rounded-full shadow-glow-gold">
                             Login to Chat
                         </button>
                     </div>
@@ -259,7 +281,7 @@ function MobileChatPanel({ onClose }: { onClose: () => void }) {
                             type="text" value={input} onChange={e => setInput(e.target.value)}
                             placeholder="Type a message..."
                             disabled={!user}
-                            className="w-full bg-[#1A1D21] text-text-primary text-sm px-4 py-3 pr-10 rounded-xl outline-none border border-white/5 focus:border-brand-gold/50 transition-all placeholder:text-text-disabled"
+                            className="w-full bg-bg-modal text-text-primary text-sm px-4 py-3 pr-10 rounded-xl outline-none border border-white/[0.04] focus:border-brand-gold/50 transition-all placeholder:text-text-disabled"
                         />
                         <button type="button" className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-brand-gold transition-colors p-1" disabled={!user}>
                             <Smile size={16} />
@@ -267,7 +289,7 @@ function MobileChatPanel({ onClose }: { onClose: () => void }) {
                     </div>
                     <button
                         type="submit" disabled={!input.trim() || !user}
-                        className={`p-3 rounded-xl transition-all flex-shrink-0 ${input.trim() && user ? 'bg-brand-gold text-black shadow-glow-gold hover:bg-brand-gold-hover' : 'bg-white/5 text-text-disabled cursor-not-allowed'}`}
+                        className={`p-3 rounded-xl transition-all flex-shrink-0 ${input.trim() && user ? 'bg-brand-gold text-text-inverse shadow-glow-gold hover:bg-brand-gold-hover' : 'bg-white/[0.04] text-text-disabled cursor-not-allowed'}`}
                     >
                         <Send size={18} />
                     </button>
@@ -282,6 +304,10 @@ export default function MobileBottomNav() {
     const pathname = usePathname();
     const router = useRouter();
     const [menuOpen, setMenuOpen] = useState(false);
+    const { isAuthenticated } = useAuth();
+    const { openLogin } = useModal();
+    const { toggleBetslip, bets, isBetslipOpen } = useBets();
+    const dailyRewardsHidden = useDailyRewardsHidden();
 
     const handleMenuPress = () => {
         if (menuOpen) {
@@ -305,57 +331,97 @@ export default function MobileBottomNav() {
     const navItems: BottomNavItem[] = [
         { id: 'sports', label: 'Sports', icon: Trophy, path: '/sports' },
         { id: 'casino', label: 'Casino', icon: Gamepad2, path: '/casino' },
-        { id: 'live', label: 'Live', icon: Tv2, path: '/live-dealers' },
-        { id: 'support', label: 'Support', icon: Headphones, path: '/support' },
+        { id: 'promos', label: 'Promos', icon: Gift, path: '/promotions' },
+        { id: 'fantasy', label: 'Fantasy', icon: Crown, path: '/fantasy' },
+        { id: 'bets', label: 'Bets', icon: AlignJustify, path: '#betslip' },
     ];
 
     const MenuButtonIcon = menuOpen ? Home : Menu;
     const menuButtonLabel = menuOpen ? 'Home' : 'Menu';
 
+    const renderNavLink = (item: BottomNavItem) => {
+        const isBetsTab = item.id === 'bets';
+        const active = isBetsTab ? isBetslipOpen : isActive(item.path);
+        const Icon = item.icon;
+
+        const content = (
+            <div className={`flex flex-col items-center justify-center flex-1 gap-1 relative transition-all h-[64px] ${active ? 'text-brand-gold' : 'text-white/40'}`}>
+                {active && (
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px] bg-gradient-to-r from-brand-gold to-brand-gold-hover rounded-b-full shadow-[0_0_8px_rgba(255,106,0,0.02)]" />
+                )}
+                <div className="relative flex items-center justify-center">
+                    <Icon size={21} className={active ? 'drop-shadow-[0_0_10px_rgba(255,106,0,0.08)]' : ''} />
+                    {isBetsTab && bets.length > 0 && (
+                        <span className="absolute -top-1.5 -right-2 bg-brand-gold text-text-inverse text-[9px] font-black h-[14px] min-w-[14px] px-0.5 rounded-full flex items-center justify-center shadow-glow-gold">
+                            {bets.length}
+                        </span>
+                    )}
+                </div>
+                <span className={`text-[10px] font-bold uppercase tracking-wide leading-none ${active ? 'text-brand-gold' : ''}`}>
+                    {item.label}
+                </span>
+            </div>
+        );
+
+        if (isBetsTab) {
+            return (
+                <button
+                    key={item.id}
+                    onClick={() => {
+                        if (menuOpen) setMenuOpen(false);
+                        toggleBetslip();
+                    }}
+                    className="flex-1 flex"
+                >
+                    {content}
+                </button>
+            );
+        }
+
+        return (
+            <Link
+                key={item.id}
+                href={item.path!}
+                className="flex-1 flex"
+                onClick={(event) => {
+                    if (item.requiresAuth && !isAuthenticated) {
+                        event.preventDefault();
+                        setMenuOpen(false);
+                        openLogin();
+                        return;
+                    }
+                    if (menuOpen) setMenuOpen(false);
+                }}
+            >
+                {content}
+            </Link>
+        );
+    };
+
     return (
         <>
             {menuOpen && <FullPageMenu onClose={() => setMenuOpen(false)} />}
 
-            {/* Bottom nav bar — floating */}
+            {/* Bottom nav bar */}
             <nav
-                className="fixed bottom-3 left-3 right-3 bg-[#12141a]/90 backdrop-blur-2xl border border-white/[0.06] z-50 md:hidden flex items-stretch shadow-[0_8px_32px_rgba(0,0,0,0.6)] rounded-3xl"
-                style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+                className="fixed bottom-0 left-0 right-0 z-50 md:hidden flex items-stretch shadow-[0_-4px_32px_rgba(0,0,0,0.5)] border-t border-white/[0.04]"
+                style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)', background: 'rgba(9, 10, 16, 0.88)', backdropFilter: 'blur(20px) saturate(180%)', WebkitBackdropFilter: 'blur(20px) saturate(180%)' }}
             >
+                {/* Menu */}
                 <button onClick={handleMenuPress} className="flex flex-1">
-                    <div className={`flex flex-1 flex-col items-center justify-center gap-1 relative transition-all h-[56px] ${menuOpen ? 'text-brand-gold scale-110' : 'text-white/30'}`}>
-                        <MenuButtonIcon size={20} />
-                        <span className="text-[9px] font-bold uppercase tracking-wider leading-none">
+                    <div className={`flex flex-1 flex-col items-center justify-center gap-1 relative transition-all h-[64px] ${menuOpen ? 'text-brand-gold' : 'text-white/40'}`}>
+                        {menuOpen && (
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-[2px] bg-gradient-to-r from-brand-gold to-brand-gold-hover rounded-b-full shadow-[0_0_8px_rgba(255,106,0,0.02)]" />
+                        )}
+                        <MenuButtonIcon size={21} className={menuOpen ? 'drop-shadow-[0_0_10px_rgba(255,106,0,0.08)]' : ''} />
+                        <span className={`text-[10px] font-bold uppercase tracking-wide leading-none ${menuOpen ? 'text-brand-gold' : ''}`}>
                             {menuButtonLabel}
                         </span>
                     </div>
                 </button>
 
-                {navItems.map((item) => {
-                    const active = isActive(item.path);
-                    const Icon = item.icon;
-                    const content = (
-                        <div className={`flex flex-col items-center justify-center flex-1 gap-1 relative transition-all h-[56px] ${active ? 'text-brand-gold scale-110' : 'text-white/30'}`}>
-                            <Icon size={20} />
-                            <span className="text-[9px] font-bold uppercase tracking-wider leading-none">
-                                {item.label}
-                            </span>
-                        </div>
-                    );
-                    return (
-                        <Link
-                            key={item.id}
-                            href={item.path!}
-                            className="flex-1 flex"
-                            onClick={() => {
-                                if (menuOpen) {
-                                    setMenuOpen(false);
-                                }
-                            }}
-                        >
-                            {content}
-                        </Link>
-                    );
-                })}
+                {/* Nav items */}
+                {navItems.map(renderNavLink)}
             </nav>
         </>
     );

@@ -1,89 +1,310 @@
 @import "tailwindcss";
 
 :root {
-  /* 1. Core Background & Dark Layers */
-  --bg-base: #1A181C;
-  /* Pure Black (outer frame) — deeper for contrast */
-  --bg-section: #1E1C20;
-  /* Deep App Background / Main background */
-  --bg-card: #2A2628;
-  /* Card / Tile Background / Primary App Background */
-  --bg-elevated: #252228;
-  /* Secondary Background */
-  --bg-hover: #38343A;
-  /* Hover / Active Surface */
-  --divider: #3E3C40;
-  /* Divider / Border Subtle — softer */
+  /* ═══════════════════════════════════════════════
+     1. CORE BACKGROUND & DARK LAYERS
+     ═══════════════════════════════════════════════ */
+  --bg-base: #0C0D12;           /* Outermost page / outer frame – deep navy */
+  --bg-section: #0F1016;        /* Deep app background / main background */
+  --bg-card: #171921;           /* Card / tile background */
+  --bg-elevated: #1C1E28;       /* Secondary / elevated background */
+  --bg-hover: #262936;          /* Hover / active surface */
+  --divider: #2A2D3A;           /* Divider / subtle border */
 
-  /* 2. Gold / Orange Primary Brand Colors (MOST IMPORTANT) */
-  --action-primary: #E37D32;
-  /* Primary Gold (CTA) */
-  --action-hover: #EFA05B;
-  /* Bright Gold Accent / Hover / Glow */
-  --action-active: #AE5910;
-  /* Deep Bronze Shadow */
-  --gold-soft: #EFC083;
-  /* Soft Gold Background / Banner gradients */
-  --gold-muted: #A47C4A;
-  /* Muted Gold / Icons & Highlights */
-  --brown-accent: #5D4027;
-  /* Dark Brown Accent */
+  /* Deep stacked layers (used in games, overlays, modals) */
+  --bg-deep: #06070B;           /* Deepest layer – zeero games, dark overlays */
+  --bg-deep-2: #090A10;         /* Second deep layer */
+  --bg-deep-3: #0B0C14;         /* Third deep layer */
+  --bg-deep-4: #080912;         /* Fourth deep variant */
+  --bg-modal: #12141C;          /* Standard modal background */
+  --bg-modal-2: #141620;        /* Variant modal / panel */
+  --bg-modal-3: #161824;        /* Deeper modal variant */
+  --bg-modal-4: #111320;        /* Dark modal frame */
+  --bg-surface: #1A1D28;        /* Surface panels / sheets */
+  --bg-surface-2: #1F2230;      /* Raised / distinct surface */
+  --bg-surface-3: #1C1F2C;      /* Surface variant */
+  --bg-surface-4: #1E2132;      /* Surface variant 2 */
+  --bg-input: #13151E;          /* Input / form field background */
+  --bg-input-2: #151720;        /* Input variant */
+  --bg-well: #121A2A;           /* Blue-tinted well (info, media) */
+  --bg-zeero: #080A12;          /* Zeero originals dark base */
+  --bg-zeero-2: #0A1018;        /* Zeero deeper blue-black */
+  --bg-zeero-3: #070810;        /* Zeero panel background */
+  --bg-game-dark: #0A0C14;      /* Game betslip / dark base (betslip, desktop panel) */
 
-  /* 3. Text Hierarchy */
-  --text-primary: #F0E4DF;
-  /* Headings — brighter for readability */
-  --text-secondary: #C9C0B8;
-  /* Secondary Text / Body */
-  --text-muted: #918E8D;
-  /* Muted Text — slightly lighter */
-  --text-disabled: #5A585C;
-  /* Disabled Text */
-  --text-inverse: #1A1208;
-  /* Inverse Text (on gold) */
+  /* ═══════════════════════════════════════════════
+     2. BRAND / GOLD / AMBER (MOST IMPORTANT)
+     ═══════════════════════════════════════════════ */
+  --action-primary: #ff6a00;    /* Primary orange CTA */
+  --action-hover: #ff8533;      /* Bright orange hover */
+  --action-active: #cc5500;     /* Deep orange – pressed state */
+  --gold-soft: #ffb380;         /* Soft orange for banners / gradients */
+  --gold-muted: #cc7a33;        /* Muted orange – icons & highlights */
+  --brown-accent: #3D1A0A;      /* Dark brown-orange accent */
 
-  /* 4. Status Colors */
-  --success-primary: #4CAF50;
-  /* Success Green */
-  --live-indicator: #2ECC71;
-  /* Live Indicator Green */
-  --success-soft: #1F3326;
-  /* Soft Success BG */
+  /* Brand alpha tints (semi-transparent brand over dark surfaces) */
+  --brand-alpha-05: rgba(255, 106, 0, 0.05);
+  --brand-alpha-08: rgba(255, 106, 0, 0.08);
+  --brand-alpha-10: rgba(255, 106, 0, 0.10);
+  --brand-alpha-12: rgba(255, 106, 0, 0.12);
+  --brand-alpha-20: rgba(255, 106, 0, 0.20);
+  --brand-alpha-25: rgba(255, 106, 0, 0.25);
+  --brand-alpha-28: rgba(255, 106, 0, 0.28);
+  --brand-alpha-30: rgba(255, 106, 0, 0.30);
+  --brand-alpha-35: rgba(255, 106, 0, 0.35);
+  --brand-alpha-40: rgba(255, 106, 0, 0.40);
 
-  /* 5. Error / Loss / Warning */
-  --danger-primary: #E24C4C;
-  /* Danger Red */
-  --danger-soft: #2A1414;
-  /* Soft Danger BG */
-  --danger-muted: #B94A4A;
-  /* Muted Danger */
+  /* ═══════════════════════════════════════════════
+     3. TEXT HIERARCHY
+     ═══════════════════════════════════════════════ */
+  --text-primary: #E8ECF4;      /* Headings – cool white */
+  --text-secondary: #B0B8C9;    /* Body / secondary text */
+  --text-muted: #6B7280;        /* Muted / helper text */
+  --text-disabled: #3E4452;     /* Disabled state text */
+  --text-inverse: #0C0D12;      /* Text on gold backgrounds */
+  --text-white: #FFFFFF;        /* Pure white text */
+  --text-faint: #505868;        /* Very faint text */
+  --text-gray: #5B6478;         /* Gray text */
+  --text-gray-light: #8892A4;   /* Light gray text */
 
-  /* 6. Rare Accent Colors */
-  --accent-blue: #2D7DD2;
-  --accent-teal: #2FA4A9;
-  --accent-purple: #7B5CD6;
+  /* ═══════════════════════════════════════════════
+     4. STATUS – SUCCESS / LIVE
+     ═══════════════════════════════════════════════ */
+  --success-primary: #34D399;   /* Success emerald */
+  --success-bright: #10B981;    /* Bright success */
+  --success-vivid: #2DD4BF;     /* Vivid live teal-green */
+  --live-indicator: #10B981;    /* Live badge green */
+  --success-soft: #0D2818;      /* Soft success background */
 
-  /* Base Variables */
+  /* Success alpha tints */
+  --success-alpha-10: rgba(52, 211, 153, 0.10);
+  --success-alpha-12: rgba(52, 211, 153, 0.12);
+  --success-alpha-16: rgba(52, 211, 153, 0.16);
+  --success-alpha-20: rgba(52, 211, 153, 0.20);
+  --success-alpha-40: rgba(52, 211, 153, 0.40);
+
+  /* ═══════════════════════════════════════════════
+     5. STATUS – DANGER / ERROR / LOSS
+     ═══════════════════════════════════════════════ */
+  --danger-primary: #E24C4C;    /* Danger red */
+  --danger-bright: #ef4444;     /* Bright red */
+  --danger-vivid: #e74c3c;      /* Vivid red */
+  --danger-deep: #dc2626;       /* Deep danger */
+  --danger-soft: #2A1414;       /* Soft danger background */
+  --danger-muted: #B94A4A;      /* Muted danger */
+
+  /* Danger alpha tints */
+  --danger-alpha-08: rgba(226, 76, 76, 0.08);
+  --danger-alpha-10: rgba(226, 76, 76, 0.10);
+  --danger-alpha-16: rgba(226, 76, 76, 0.16);
+  --danger-alpha-25: rgba(226, 76, 76, 0.25);
+  --danger-alpha-40: rgba(226, 76, 76, 0.40);
+
+  /* ═══════════════════════════════════════════════
+     6. STATUS – WARNING / AMBER
+     ═══════════════════════════════════════════════ */
+  --warning-primary: #F59E0B;   /* Amber warning */
+  --warning-bright: #f0c040;    /* Bright amber */
+  --warning-deep: #e5a100;      /* Deep amber */
+  --warning-soft: #2A1F05;      /* Warning background */
+
+  /* Warning alpha tints */
+  --warning-alpha-08: rgba(245, 158, 11, 0.08);
+  --warning-alpha-12: rgba(245, 158, 11, 0.12);
+  --warning-alpha-15: rgba(245, 158, 11, 0.15);
+  --warning-alpha-25: rgba(245, 158, 11, 0.25);
+
+  /* ═══════════════════════════════════════════════
+     7. STATUS – INFO / BLUE
+     ═══════════════════════════════════════════════ */
+  --info-primary: #6366F1;      /* Info indigo */
+  --info-bright: #818CF8;       /* Bright info */
+  --info-soft: #0F0F20;         /* Info background */
+
+  /* Blue alpha tints */
+  --info-alpha-18: rgba(28, 114, 232, 0.18);
+  --info-alpha-22: rgba(28, 114, 232, 0.22);
+  --info-alpha-30: rgba(28, 114, 232, 0.30);
+
+  /* ═══════════════════════════════════════════════
+     8. ACCENT COLORS
+     ═══════════════════════════════════════════════ */
+  --accent-blue: #3B82F6;
+  --accent-teal: #14B8A6;
+  --accent-teal-bright: #2DD4BF;  /* Tether/USDT green-teal */
+  --accent-purple: #8B5CF6;
+  --accent-purple-soft: #12101F;  /* Purple background */
+  --accent-purple-alpha: rgba(139, 92, 246, 0.30);
+  --accent-cyan: #06B6D4;         /* New: cyan for contrast accents */
+
+  /* ═══════════════════════════════════════════════
+     9. WHITE OVERLAY SCALE (glassmorphism)
+     ═══════════════════════════════════════════════ */
+  --white-02: rgba(255, 255, 255, 0.02);
+  --white-04: rgba(255, 255, 255, 0.04);
+  --white-05: rgba(255, 255, 255, 0.05);
+  --white-06: rgba(255, 255, 255, 0.06);
+  --white-07: rgba(255, 255, 255, 0.07);
+  --white-08: rgba(255, 255, 255, 0.08);
+  --white-10: rgba(255, 255, 255, 0.10);
+  --white-12: rgba(255, 255, 255, 0.12);
+  --white-20: rgba(255, 255, 255, 0.20);
+  --white-50: rgba(255, 255, 255, 0.50);
+
+  /* Glass / blur surfaces */
+  --bg-glass: var(--white-05);
+  --bg-glass-sm: var(--white-04);
+  --bg-glass-hover: var(--white-08);
+  --bg-glass-active: var(--white-10);
+
+  /* ═══════════════════════════════════════════════
+     10. BLACK OVERLAY SCALE (overlays, backdrops)
+     ═══════════════════════════════════════════════ */
+  --black-20: rgba(0, 0, 0, 0.20);
+  --black-25: rgba(0, 0, 0, 0.25);
+  --black-30: rgba(0, 0, 0, 0.30);
+  --black-35: rgba(0, 0, 0, 0.35);
+  --black-40: rgba(0, 0, 0, 0.40);
+  --black-50: rgba(0, 0, 0, 0.50);
+  --black-60: rgba(0, 0, 0, 0.60);
+  --black-70: rgba(0, 0, 0, 0.70);
+  --black-80: rgba(0, 0, 0, 0.80);
+
+  --bg-overlay: var(--black-70);       /* Modal backdrops */
+  --bg-overlay-medium: var(--black-50); /* Medium overlay */
+  --bg-overlay-light: var(--black-40);  /* Light overlay */
+
+  /* ═══════════════════════════════════════════════
+     11. SEMANTIC COMPONENT TOKENS
+     ═══════════════════════════════════════════════ */
+
+  /* Navigation / Header */
+  --nav-bg: var(--bg-modal);
+  --nav-border: var(--divider);
+  --nav-item-active: var(--action-primary);
+  --nav-item-hover-bg: var(--bg-hover);
+  --nav-item-active-bg: var(--brand-alpha-12);
+  --nav-text: var(--text-primary);
+  --nav-text-muted: var(--text-muted);
+
+  /* Left Sidebar */
+  --sidebar-bg: var(--bg-section);
+  --sidebar-border: var(--divider);
+  --sidebar-item-hover: var(--bg-elevated);
+  --sidebar-item-active-bg: var(--brand-alpha-12);
+  --sidebar-item-active-text: var(--action-primary);
+  --sidebar-item-active-border: var(--action-primary);
+  --sidebar-section-header: var(--text-muted);
+
+  /* Cards */
+  --card-bg: var(--bg-card);
+  --card-bg-elevated: var(--bg-elevated);
+  --card-border: var(--divider);
+  --card-hover-bg: var(--bg-hover);
+  --card-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+
+  /* Inputs / Forms */
+  --input-bg: var(--bg-input);
+  --input-border: var(--divider);
+  --input-border-focus: var(--action-primary);
+  --input-text: var(--text-primary);
+  --input-placeholder: var(--text-muted);
+  --input-label: var(--text-secondary);
+
+  /* Buttons */
+  --btn-primary-bg: var(--action-primary);
+  --btn-primary-hover: var(--action-hover);
+  --btn-primary-active: var(--action-active);
+  --btn-primary-text: var(--text-inverse);
+  --btn-secondary-bg: transparent;
+  --btn-secondary-border: var(--divider);
+  --btn-secondary-text: var(--text-muted);
+  --btn-danger-bg: var(--danger-primary);
+  --btn-danger-hover: var(--danger-bright);
+  --btn-success-bg: var(--success-primary);
+
+  /* Odds / Bet Chips */
+  --odds-default-bg: var(--bg-elevated);
+  --odds-default-border: var(--divider);
+  --odds-default-text: var(--text-primary);
+  --odds-selected-bg: var(--action-primary);
+  --odds-selected-border: var(--action-hover);
+  --odds-selected-text: var(--text-inverse);
+  --odds-up-color: var(--success-primary);
+  --odds-up-bg: var(--success-alpha-16);
+  --odds-down-color: var(--danger-primary);
+  --odds-down-bg: var(--danger-alpha-16);
+  --odds-suspended-bg: var(--bg-hover);
+  --odds-suspended-text: var(--text-disabled);
+
+  /* Badges / Status Pills */
+  --badge-live-bg: var(--live-indicator);
+  --badge-live-text: #fff;
+  --badge-win-bg: var(--success-primary);
+  --badge-win-text: #fff;
+  --badge-loss-bg: var(--danger-primary);
+  --badge-loss-text: #fff;
+  --badge-pending-bg: var(--warning-primary);
+  --badge-pending-text: #000;
+  --badge-void-bg: var(--text-muted);
+  --badge-void-text: #fff;
+  --badge-sport-bg: var(--brand-alpha-12);
+  --badge-sport-text: var(--action-primary);
+
+  /* Modals / Sheets */
+  --modal-bg: var(--bg-modal);
+  --modal-surface: var(--bg-elevated);
+  --modal-border: var(--divider);
+  --modal-overlay: var(--bg-overlay);
+  --modal-header-bg: var(--bg-card);
+
+  /* Betslip */
+  --betslip-bg: var(--bg-section);
+  --betslip-item-bg: var(--bg-card);
+  --betslip-item-border: var(--divider);
+  --betslip-input-bg: var(--bg-elevated);
+  --betslip-potential-text: var(--action-primary);
+
+  /* Tables */
+  --table-header-bg: var(--bg-elevated);
+  --table-header-text: var(--text-muted);
+  --table-row-bg: var(--bg-card);
+  --table-row-hover: var(--bg-hover);
+  --table-border: var(--divider);
+
+  /* Score / Match */
+  --score-team-text: var(--text-primary);
+  --score-score-text: var(--warning-primary);
+  --score-live-dot: var(--live-indicator);
+  --match-card-bg: var(--bg-card);
+  --match-card-hover: var(--bg-hover);
+  --market-header-bg: var(--bg-elevated);
+  --market-header-text: var(--text-secondary);
+
+  /* Wallet / Finance */
+  --wallet-deposit-color: var(--success-primary);
+  --wallet-withdraw-color: var(--danger-primary);
+  --wallet-bonus-color: var(--warning-primary);
+  --wallet-balance-text: var(--action-primary);
+
+  /* ═══════════════════════════════════════════════
+     12. BASE ALIASES
+     ═══════════════════════════════════════════════ */
   --background: var(--bg-base);
   --foreground: var(--text-primary);
 
-  /* Glow shadows */
-  --shadow-glow-gold: 0 0 24px rgba(227, 125, 50, 0.3), 0 4px 16px rgba(227, 125, 50, 0.18);
-  --shadow-glow-danger: 0 0 16px rgba(226, 76, 76, 0.35);
-
-  /* Spacing tokens */
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 16px;
-  --space-lg: 24px;
-  --space-xl: 32px;
-  --space-2xl: 48px;
-
-  /* Radius tokens */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
-  --radius-full: 9999px;
+  /* ═══════════════════════════════════════════════
+     13. SHADOW / GLOW TOKENS
+     ═══════════════════════════════════════════════ */
+  --shadow-glow-gold: 0 0 24px rgba(255, 106, 0, 0.06), 0 4px 16px rgba(255, 106, 0, 0.03);
+  --shadow-glow-danger: 0 0 20px rgba(239, 68, 68, 0.30);
+  --shadow-glow-success: 0 0 16px rgba(52, 211, 153, 0.15);
+  --shadow-glow-blue: 0 0 20px rgba(99, 102, 241, 0.30);
+  --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-hard: 0 16px 48px rgba(0, 0, 0, 0.7);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 24px 80px rgba(0, 0, 0, 0.7);
+  --shadow-betslip: 0 -8px 48px rgba(0, 0, 0, 0.85);
 }
 
 /* ══════════════════════════════════════════════
@@ -93,23 +314,28 @@
    ══════════════════════════════════════════════ */
 [data-wallet="crypto"] {
   /* ── Core brand token override ── */
-  --action-primary: #9B59D9;
-  /* Purple CTA */
-  --action-hover: #B47EE8;
-  /* Bright Purple Hover */
-  --action-active: #6B3DA8;
-  /* Deep Purple Active */
-  --gold-soft: #C5A8F0;
-  /* Soft Purple Glow */
-  --gold-muted: #7E5BAE;
-  /* Muted Purple */
-  --brown-accent: #3B2563;
-  /* Dark Purple Accent */
-  --text-inverse: #FFFFFF;
-  /* White text on purple backgrounds */
+  --action-primary: #A78BFA;        /* Purple CTA */
+  --action-hover: #C4B5FD;          /* Bright Purple Hover */
+  --action-active: #7C3AED;         /* Deep Purple Active */
+  --gold-soft: #DDD6FE;             /* Soft Purple Glow */
+  --gold-muted: #8B7BBE;            /* Muted Purple */
+  --brown-accent: #2E1A5E;          /* Dark Purple Accent */
+  --text-inverse: #FFFFFF;          /* White text on purple */
+
+  /* Brand alpha tints → purple */
+  --brand-alpha-05: rgba(167, 139, 250, 0.05);
+  --brand-alpha-08: rgba(167, 139, 250, 0.08);
+  --brand-alpha-10: rgba(167, 139, 250, 0.10);
+  --brand-alpha-12: rgba(167, 139, 250, 0.12);
+  --brand-alpha-20: rgba(167, 139, 250, 0.20);
+  --brand-alpha-25: rgba(167, 139, 250, 0.25);
+  --brand-alpha-28: rgba(167, 139, 250, 0.28);
+  --brand-alpha-30: rgba(167, 139, 250, 0.30);
+  --brand-alpha-35: rgba(167, 139, 250, 0.35);
+  --brand-alpha-40: rgba(167, 139, 250, 0.40);
 
   /* Purple glows */
-  --shadow-glow-gold: 0 0 20px rgba(155, 89, 217, 0.45), 0 4px 12px rgba(155, 89, 217, 0.25);
+  --shadow-glow-gold: 0 0 24px rgba(167, 139, 250, 0.08), 0 4px 16px rgba(167, 139, 250, 0.04);
 }
 
 /* ── White text on purple/colored backgrounds ──
@@ -282,15 +508,42 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-poppins);
+  --font-sans: var(--font-dm-sans), var(--font-sora), system-ui, sans-serif;
+  --font-display: var(--font-sora), system-ui, sans-serif;
 
-  /* Extending Palette */
+  /* ── Background layers ── */
   --color-bg-base: var(--bg-base);
   --color-bg-section: var(--bg-section);
   --color-bg-card: var(--bg-card);
   --color-bg-elevated: var(--bg-elevated);
   --color-bg-hover: var(--bg-hover);
+  --color-bg-deep: var(--bg-deep);
+  --color-bg-deep-2: var(--bg-deep-2);
+  --color-bg-deep-3: var(--bg-deep-3);
+  --color-bg-deep-4: var(--bg-deep-4);
+  --color-bg-modal: var(--bg-modal);
+  --color-bg-modal-2: var(--bg-modal-2);
+  --color-bg-modal-3: var(--bg-modal-3);
+  --color-bg-modal-4: var(--bg-modal-4);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-surface-2: var(--bg-surface-2);
+  --color-bg-surface-3: var(--bg-surface-3);
+  --color-bg-surface-4: var(--bg-surface-4);
+  --color-bg-input: var(--bg-input);
+  --color-bg-input-2: var(--bg-input-2);
+  --color-bg-well: var(--bg-well);
+  --color-bg-zeero: var(--bg-zeero);
+  --color-bg-zeero-2: var(--bg-zeero-2);
+  --color-bg-zeero-3: var(--bg-zeero-3);
+  --color-bg-glass: var(--bg-glass);
+  --color-bg-glass-hover: var(--bg-glass-hover);
+  --color-bg-glass-active: var(--bg-glass-active);
+  --color-bg-overlay: var(--bg-overlay);
+  --color-bg-overlay-medium: var(--bg-overlay-medium);
+  --color-bg-overlay-light: var(--bg-overlay-light);
+  --color-bg-game-dark: var(--bg-game-dark);
 
+  /* ── Brand / Gold ── */
   --color-brand-gold: var(--action-primary);
   --color-brand-gold-hover: var(--action-hover);
   --color-brand-active: var(--action-active);
@@ -298,35 +551,150 @@
   --color-gold-muted: var(--gold-muted);
   --color-brown-accent: var(--brown-accent);
 
-  /* Keeping legacy names mapped to new colors for compatibility */
+  /* Legacy aliases */
   --color-brand-green: var(--action-primary);
   --color-brand-green-hover: var(--action-hover);
 
+  /* ── Text ── */
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
   --color-text-disabled: var(--text-disabled);
   --color-text-inverse: var(--text-inverse);
+  --color-text-white: var(--text-white);
+  --color-text-faint: var(--text-faint);
+  --color-text-gray: var(--text-gray);
+  --color-text-gray-light: var(--text-gray-light);
 
+  /* ── Status ── */
   --color-success: var(--success-primary);
+  --color-success-primary: var(--success-primary);
+  --color-success-bright: var(--success-bright);
+  --color-success-vivid: var(--success-vivid);
+  --color-success-soft: var(--success-soft);
   --color-live: var(--live-indicator);
   --color-danger: var(--danger-primary);
+  --color-danger-bright: var(--danger-bright);
+  --color-danger-vivid: var(--danger-vivid);
+  --color-danger-deep: var(--danger-deep);
   --color-danger-soft: var(--danger-soft);
+  --color-danger-muted: var(--danger-muted);
+  --color-warning: var(--warning-primary);
+  --color-warning-primary: var(--warning-primary);
+  --color-warning-bright: var(--warning-bright);
+  --color-warning-deep: var(--warning-deep);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-alpha-08: var(--warning-alpha-08);
+  --color-warning-alpha-12: var(--warning-alpha-12);
+  --color-danger: var(--danger-primary);
+  --color-danger-primary: var(--danger-primary);
+  --color-danger-alpha-08: var(--danger-alpha-08);
+  --color-success-alpha-12: var(--success-alpha-12);
+  --color-info: var(--info-primary);
+  --color-info-bright: var(--info-bright);
+  --color-info-soft: var(--info-soft);
 
+  /* ── Border ── */
   --color-border-subtle: var(--divider);
+  --color-card-border: var(--card-border);
+  --color-input-border: var(--input-border);
+  --color-modal-border: var(--modal-border);
+  --color-table-border: var(--table-border);
 
+  /* ── Accents ── */
   --color-accent-blue: var(--accent-blue);
   --color-accent-teal: var(--accent-teal);
+  --color-accent-teal-bright: var(--accent-teal-bright);
   --color-accent-purple: var(--accent-purple);
+  --color-accent-purple-soft: var(--accent-purple-soft);
 
-  /* Shadows & Glows (Enhanced for Borderless) */
-  --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0,0,0,0.2);
-  /* Softer, deeper shadow with secondary layer */
-  --shadow-hard: 0 16px 48px rgba(0, 0, 0, 0.65);
-  /* Hard shadow for elevated items */
-  --shadow-float: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 1px rgba(255,255,255,0.05);
-  /* Float shadow for modals & overlays */
+  /* ── Semantic Component Tokens ── */
+  --color-nav-bg: var(--nav-bg);
+  --color-nav-border: var(--nav-border);
+  --color-nav-item-active: var(--nav-item-active);
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-item-hover: var(--sidebar-item-hover);
+  --color-sidebar-item-active-text: var(--sidebar-item-active-text);
+  --color-card-bg: var(--card-bg);
+  --color-card-hover: var(--card-hover-bg);
+  --color-input-bg: var(--input-bg);
+  --color-input-text: var(--input-text);
+  --color-input-placeholder: var(--input-placeholder);
+  --color-btn-primary: var(--btn-primary-bg);
+  --color-btn-primary-hover: var(--btn-primary-hover);
+  --color-btn-primary-text: var(--btn-primary-text);
+  --color-odds-default: var(--odds-default-bg);
+  --color-odds-selected: var(--odds-selected-bg);
+  --color-odds-selected-text: var(--odds-selected-text);
+  --color-odds-up: var(--odds-up-color);
+  --color-odds-down: var(--odds-down-color);
+  --color-badge-live: var(--badge-live-bg);
+  --color-badge-win: var(--badge-win-bg);
+  --color-badge-loss: var(--badge-loss-bg);
+  --color-badge-pending: var(--badge-pending-bg);
+  --color-modal-bg: var(--modal-bg);
+  --color-modal-surface: var(--modal-surface);
+  --color-modal-overlay: var(--modal-overlay);
+  --color-betslip-bg: var(--betslip-bg);
+  --color-betslip-item: var(--betslip-item-bg);
+  --color-betslip-potential: var(--betslip-potential-text);
+  --color-table-header: var(--table-header-bg);
+  --color-table-row: var(--table-row-bg);
+  --color-market-header: var(--market-header-bg);
+  --color-wallet-deposit: var(--wallet-deposit-color);
+  --color-wallet-withdraw: var(--wallet-withdraw-color);
+  --color-wallet-bonus: var(--wallet-bonus-color);
+  --color-wallet-balance: var(--wallet-balance-text);
 
+  /* ── Shadows ── */
+  --shadow-soft: var(--shadow-soft);
+  --shadow-hard: var(--shadow-hard);
+  --shadow-card: var(--shadow-card);
+  --shadow-modal: var(--shadow-modal);
+  --shadow-betslip: var(--shadow-betslip);
+  --shadow-glow-gold: var(--shadow-glow-gold);
+  --shadow-glow-success: var(--shadow-glow-success);
+  --shadow-glow-danger: var(--shadow-glow-danger);
+
+  /* ── Additional bg tokens ── */
+  --color-bg-zeero-2: var(--bg-zeero-2);
+  --color-bg-zeero-3: var(--bg-zeero-3);
+  --color-bg-well: var(--bg-well);
+  --color-bg-deep-2: var(--bg-deep-2);
+  --color-bg-deep-3: var(--bg-deep-3);
+  --color-bg-deep-4: var(--bg-deep-4);
+  --color-bg-modal-2: var(--bg-modal-2);
+  --color-bg-modal-3: var(--bg-modal-3);
+  --color-bg-modal-4: var(--bg-modal-4);
+  --color-bg-input-2: var(--bg-input-2);
+  --color-bg-surface-4: var(--bg-surface-4);
+
+  /* ── Accent alpha/soft ── */
+  --color-accent-purple-alpha: var(--accent-purple-alpha);
+
+  /* ── Status soft/deep ── */
+  --color-danger-soft: var(--danger-soft);
+  --color-success-soft: var(--success-soft);
+  --color-warning-deep: var(--warning-deep);
+  --color-danger-alpha-16: var(--danger-alpha-16);
+
+  /* ── Info alpha ── */
+  --color-info-alpha-18: var(--info-alpha-18);
+  --color-info-alpha-22: var(--info-alpha-22);
+  --color-info-alpha-30: var(--info-alpha-30);
+  --color-info-bright: var(--info-bright);
+  --color-info-soft: var(--info-soft);
+
+  /* ── Success additional ── */
+  --color-success-alpha-12: var(--success-alpha-12);
+  --color-success-alpha-40: var(--success-alpha-40);
+  --color-success-primary: var(--success-primary);
+  --color-success-bright: var(--success-bright);
+  --color-success-vivid: var(--success-vivid);
+  --color-success-soft: var(--success-soft);
+
+  /* ── text-white alias ── */
+  --color-text-white: var(--text-white);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -356,7 +724,28 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: 'Adx-SemiBold', sans-serif;
+  font-family: var(--font-dm-sans), 'Adx-SemiBold', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Display font for headings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-sora), 'Adx-Bold', system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+/* ── Noise texture overlay for depth ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.018;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
 }
 
 .font-adx-bold {
@@ -374,56 +763,101 @@ body {
   background: linear-gradient(120deg, var(--brown-accent) 0%, var(--gold-soft) 50%, var(--action-primary) 100%);
 }
 
-.bg-gradient-dark {
-  background: linear-gradient(180deg, var(--bg-base) 0%, var(--bg-section) 100%);
-}
-
 .text-gradient-gold {
   background: linear-gradient(135deg, var(--action-primary) 0%, var(--action-hover) 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 /* Text Glows */
 .text-glow-gold {
-  text-shadow: 0 0 12px rgba(227, 125, 50, 0.45), 0 0 4px rgba(227, 125, 50, 0.2);
+  text-shadow: 0 0 10px var(--brand-alpha-08);
 }
+
+/* ── Glass surfaces ── */
+.glass-surface {
+  background: rgba(15, 16, 22, 0.75);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.glass-card {
+  background: rgba(23, 25, 33, 0.6);
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ── Section glow accents ── */
+.section-glow-gold::before {
+  content: '';
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 400px;
+  height: 120px;
+  background: radial-gradient(ellipse, var(--brand-alpha-08) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* ── Animated gradient border ── */
+.border-glow {
+  position: relative;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+
+.border-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(255, 106, 0, 0.2), transparent 40%, transparent 60%, rgba(139, 92, 246, 0.2));
+  z-index: -1;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  padding: 1px;
+}
+
 
 /* Shadow Glows */
 .shadow-glow-gold {
   box-shadow: var(--shadow-glow-gold);
 }
 
-/* Glassmorphism utility */
-.glass {
-  background: rgba(30, 28, 32, 0.65);
-  backdrop-filter: blur(16px) saturate(140%);
-  -webkit-backdrop-filter: blur(16px) saturate(140%);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+.shadow-glow-danger {
+  box-shadow: var(--shadow-glow-danger);
 }
 
+.shadow-glow-success {
+  box-shadow: var(--shadow-glow-success);
+}
+
+.shadow-betslip {
+  box-shadow: var(--shadow-betslip);
+}
+
+.shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
+
+.shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+
 .card-hover {
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s ease;
 }
 
 .card-hover:hover {
   background-color: var(--bg-hover);
-  transform: translateY(-3px);
-  box-shadow: var(--shadow-soft);
-}
-
-/* Premium card surface */
-.card-premium {
-  background: var(--bg-card);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  border-radius: var(--radius-lg);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.card-premium:hover {
-  border-color: rgba(227, 125, 50, 0.15);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(227, 125, 50, 0.08);
   transform: translateY(-2px);
+  box-shadow: var(--shadow-soft);
 }
 
 /* Auth Modal Utilities (Simple & Clean) */
@@ -505,26 +939,6 @@ body {
   animation: scroll 30s linear infinite;
 }
 
-/* ── Premium pulse-glow for CTAs ── */
-@keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 8px rgba(227, 125, 50, 0.2); }
-  50% { box-shadow: 0 0 20px rgba(227, 125, 50, 0.4), 0 0 40px rgba(227, 125, 50, 0.15); }
-}
-
-.animate-pulse-glow {
-  animation: pulseGlow 2.5s ease-in-out infinite;
-}
-
-/* ── Float animation for promotional elements ── */
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-6px); }
-}
-
-.animate-float {
-  animation: float 3s ease-in-out infinite;
-}
-
 /* ── Shimmer / Swimmer skeleton animation ── */
 @keyframes shimmer {
   0% {
@@ -570,4 +984,121 @@ body {
       transparent 80%);
   background-size: 200% 100%;
   animation: shimmer 1.6s ease-in-out infinite;
+}
+
+/* ── Betslip badge pop: snappy bounce on count increment ── */
+@keyframes badge-pop {
+  0%   { transform: scale(1); }
+  28%  { transform: scale(1.65); }
+  55%  { transform: scale(0.82); }
+  78%  { transform: scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+/* ── Continuous color wave: gold → amber → orange → gold ── */
+@keyframes badge-wave {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ── Persistent pulse: gently throbs scale + glow while bets exist ── */
+@keyframes badge-alive {
+  0%   { transform: scale(1);    box-shadow: 0 0 0px  0px rgba(255,106,0,0); }
+  40%  { transform: scale(1.18); box-shadow: 0 0 4px  2px rgba(255,106,0,0.13); }
+  70%  { transform: scale(1.08); box-shadow: 0 0 3px  1px rgba(251,191,36,0.08); }
+  100% { transform: scale(1);    box-shadow: 0 0 0px  0px rgba(255,106,0,0); }
+}
+
+.betslip-badge-pop {
+  /* One-shot pop on mount */
+  animation: badge-pop 0.18s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  background: linear-gradient(
+    90deg,
+    #f59e0b 0%,
+    #ff6a00 25%,
+    #fbbf24 50%,
+    #ef4444 75%,
+    #f59e0b 100%
+  );
+  background-size: 250% 100%;
+  color: #000;
+}
+
+/* Applied alongside betslip-badge-pop when count > 0 — persists until slip is empty */
+.betslip-badge-alive {
+  animation: badge-wave 1.4s ease-in-out infinite,
+             badge-alive 1.1s ease-in-out infinite;
+  background: linear-gradient(
+    90deg,
+    #f59e0b 0%,
+    #ff6a00 25%,
+    #fbbf24 50%,
+    #ef4444 75%,
+    #f59e0b 100%
+  );
+  background-size: 250% 100%;
+  color: #000;
+}
+
+/* ── Floating "+n" particle that drifts upward ── */
+@keyframes plus-float {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  55%  { opacity: 1; transform: translateY(-16px) scale(1.15); }
+  100% { opacity: 0; transform: translateY(-28px) scale(0.7); }
+}
+
+.betslip-plus-float {
+  animation: plus-float 0.5s ease-out forwards;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ── Casino Grid Layout ── */
+.grid-col-3 {
+  --grid-gap: 0px;
+  --grid-column: 3;
+  --aspect-ratio: 1;
+  --grid-side: 2;
+  --grid-cols: var(--grid-column);
+  --item-width: calc((100% - var(--grid-gap) * (var(--grid-cols) - 1)) / var(--grid-cols));
+  grid-template-columns: repeat(auto-fill, var(--item-width));
+  grid-auto-columns: var(--item-width);
+  padding: 1rem;
+}
+
+@media (min-width: 640px) {
+  .grid-col-3 {
+    --grid-column: 4;
+  }
+}
+
+@media (min-width: 768px) {
+  .grid-col-3 {
+    --grid-column: 5;
+  }
+}
+
+@media (min-width: 1024px) {
+  .grid-col-3 {
+    --grid-column: 7;
+  }
+}
+
+@media (min-width: 1280px) {
+  .grid-col-3 {
+    --grid-column: 8;
+  }
+}
+
+/* ── Smooth Scroll ── */
+.smooth-scroll {
+  --scrollbar-width: 0;
+  --snap-align: start;
+  transform: translateZ(0px);
+  scroll-padding-inline: var(--scroll-padding-inline);
+}
+
+.snap-mandatory {
+  --tw-scroll-snap-strictness: mandatory;
 }

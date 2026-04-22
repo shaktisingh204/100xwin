@@ -32,7 +32,6 @@ const ProviderList: React.FC<ProviderListProps> = ({
     useEffect(() => {
         const fetchProviders = async () => {
             try {
-                // Pass selectedCategory to fetch filtered providers and counts
                 const cat = selectedCategory === 'all' ? undefined : selectedCategory;
                 const data = await casinoService.getProviders(cat);
                 setProviders(Array.isArray(data) ? data as ProviderListItem[] : []);
@@ -43,80 +42,65 @@ const ProviderList: React.FC<ProviderListProps> = ({
         fetchProviders();
     }, [selectedCategory]);
 
-    const providersWithGames = useMemo(
-        () => providers.filter((provider) => provider.count > 0),
-        [providers],
-    );
+    const providersWithGames = useMemo(() => providers.filter(p => p.count > 0), [providers]);
 
     const visibleProviders = useMemo(() => {
-        if (!previewLimit || previewLimit <= 0 || providersWithGames.length <= previewLimit) {
-            return providersWithGames;
-        }
-
-        const previewProviders = providersWithGames.slice(0, previewLimit);
-        if (selectedProvider === 'all') {
-            return previewProviders;
-        }
-
-        const selectedProviderRecord = providersWithGames.find((provider) => provider.provider === selectedProvider);
-        if (!selectedProviderRecord || previewProviders.some((provider) => provider.provider === selectedProvider)) {
-            return previewProviders;
-        }
-
-        return [
-            ...previewProviders.slice(0, Math.max(previewLimit - 1, 0)),
-            selectedProviderRecord,
-        ];
+        if (!previewLimit || previewLimit <= 0 || providersWithGames.length <= previewLimit) return providersWithGames;
+        const preview = providersWithGames.slice(0, previewLimit);
+        if (selectedProvider === 'all') return preview;
+        const selected = providersWithGames.find(p => p.provider === selectedProvider);
+        if (!selected || preview.some(p => p.provider === selectedProvider)) return preview;
+        return [...preview.slice(0, Math.max(previewLimit - 1, 0)), selected];
     }, [previewLimit, providersWithGames, selectedProvider]);
 
-    const hiddenProvidersCount = Math.max(providersWithGames.length - visibleProviders.length, 0);
-    const resetLabel = previewLimit ? 'All Games' : 'All Providers';
+    const hiddenCount = Math.max(providersWithGames.length - visibleProviders.length, 0);
 
     return (
-        <div className="mb-4">
-            <h4 className="text-sm font-bold text-text-muted mb-3 flex items-center gap-2">
-                <span className="w-1 h-4 bg-brand-gold rounded-full"></span>
-                Top Providers
-            </h4>
-            <div className="flex gap-2 md:gap-3 overflow-x-auto custom-scrollbar pb-2 pt-4">
-                <div
-                    key="all"
+        <div className="mb-5">
+            <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">Providers</span>
+                {viewAllHref && hiddenCount > 0 && (
+                    <Link href={viewAllHref} className="text-[10px] font-bold text-brand-gold hover:text-brand-gold-hover transition-colors">
+                        All +{hiddenCount}
+                    </Link>
+                )}
+            </div>
+
+            <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                {/* All pill */}
+                <button
                     onClick={() => onSelectProvider('all')}
-                    className={`min-w-[100px] md:min-w-[120px] h-[40px] md:h-[50px] bg-bg-elevated rounded-lg flex items-center justify-center p-2 md:p-3 transition-all cursor-pointer group shadow-sm hover:shadow-glow-gold hover:-translate-y-0.5 ${selectedProvider === 'all' ? 'bg-bg-hover shadow-glow-gold ring-1 ring-brand-gold/50' : 'text-text-muted hover:text-text-primary'}`}
+                    className={`flex-shrink-0 h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${
+                        selectedProvider === 'all'
+                            ? 'bg-brand-gold/15 border-brand-gold/40 text-brand-gold'
+                            : 'bg-bg-elevated border-white/[0.04] text-text-muted hover:border-brand-gold/30 hover:text-text-primary'
+                    }`}
                 >
-                    <span className={`font-bold text-[10px] md:text-xs uppercase tracking-wider ${selectedProvider === 'all' ? 'text-brand-gold' : ''}`}>{resetLabel}</span>
-                </div>
-                {visibleProviders.map((provider) => (
-                    <div
+                    All Games
+                </button>
+
+                {visibleProviders.map(provider => (
+                    <button
                         key={provider.id}
                         onClick={() => onSelectProvider(provider.provider)}
-                        className={`relative min-w-[100px] md:min-w-[120px] h-[40px] md:h-[50px] bg-bg-elevated rounded-lg flex items-center justify-center p-2 md:p-3 transition-all cursor-pointer group shadow-sm hover:shadow-glow-gold hover:-translate-y-0.5 ${selectedProvider === provider.provider ? 'bg-bg-hover shadow-glow-gold ring-1 ring-brand-gold/50 grayscale-0' : 'grayscale hover:grayscale-0'}`}
+                        className={`relative flex-shrink-0 h-8 px-3 rounded-lg flex items-center gap-1.5 transition-all border ${
+                            selectedProvider === provider.provider
+                                ? 'bg-bg-elevated border-brand-gold/40 shadow-glow-gold'
+                                : 'bg-bg-elevated border-white/[0.04] grayscale hover:grayscale-0 hover:border-white/[0.06]'
+                        }`}
                     >
                         <ProviderLogo
                             provider={provider}
                             alt={provider.name}
-                            className={`h-[30px] w-auto max-w-full object-contain ${selectedProvider === provider.provider ? 'grayscale-0' : 'grayscale'} group-hover:grayscale-0 transition-all`}
-                            fallbackClassName="font-bold text-xs uppercase tracking-wider text-text-muted group-hover:text-text-primary"
+                            className={`h-5 w-auto max-w-[72px] object-contain transition-all ${selectedProvider === provider.provider ? '' : 'grayscale'}`}
+                            fallbackClassName="text-[10px] font-bold text-text-muted"
                             fallbackText={provider.name}
                         />
                         {provider.count > 0 && (
-                            <span className="absolute -top-3 -right-2 bg-brand-gold text-text-inverse text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-md z-10">
-                                {provider.count}
-                            </span>
+                            <span className="text-[9px] font-bold text-text-muted">{provider.count}</span>
                         )}
-                    </div>
+                    </button>
                 ))}
-                {viewAllHref && hiddenProvidersCount > 0 && (
-                    <Link
-                        href={viewAllHref}
-                        className="relative min-w-[100px] md:min-w-[120px] h-[40px] md:h-[50px] rounded-lg border border-brand-gold/30 bg-brand-gold/10 flex items-center justify-center p-2 md:p-3 transition-all shadow-sm hover:shadow-glow-gold hover:-translate-y-0.5"
-                    >
-                        <span className="font-bold text-[10px] md:text-xs uppercase tracking-wider text-brand-gold">All</span>
-                        <span className="absolute -top-3 -right-2 bg-brand-gold text-text-inverse text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-md z-10">
-                            +{hiddenProvidersCount}
-                        </span>
-                    </Link>
-                )}
             </div>
         </div>
     );

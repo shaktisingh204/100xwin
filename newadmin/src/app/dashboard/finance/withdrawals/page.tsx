@@ -1,21 +1,42 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { getTransactions, approveWithdrawal, rejectWithdrawal } from '@/actions/finance';
+import React, { useEffect, useState, useCallback, Suspense } from 'react';
+import { getTransactionsFiltered, processWithdrawal, approveWithdrawal, completeWithdrawal, rejectWithdrawal, revertWithdrawalToProcessed } from '@/actions/finance';
 import {
     Clock, CheckCircle, XCircle, RefreshCcw, ChevronLeft, ChevronRight,
     Loader2, Search, Landmark, Smartphone, Bitcoin,
-    Copy, Check, Eye, User, Receipt,
+    Copy, Check, Eye, User, Receipt, Download, Calendar, DollarSign, SlidersHorizontal, X, Filter, Undo2,
 } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { formatCurrencyAmount, formatCurrencyParts, getTransactionDisplayCurrency, isCryptoTransaction } from '@/utils/transactionCurrency';
+import { UserPopup } from '@/components/shared/UserPopup';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const fmtINR = (n: number) =>
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+type WithdrawalDetails = {
+    method?: string;
+    holderName?: string;
+    acctName?: string;
+    receive_name?: string;
+    upiId?: string;
+    acctNo?: string;
+    receive_account?: string;
+    receiveAccount?: string;
+    accountNo?: string;
+    ifsc?: string;
+    ifscCode?: string;
+    acctCode?: string;
+    bankName?: string;
+    bank?: string;
+    coinLabel?: string;
+    network?: string;
+    address?: string;
+    coin?: string;
+    currency?: string;
+};
 
 const fmtAmt = (n: number, currency?: string) => {
-    if (currency === 'USD' || currency === 'CRYPTO') return `$${n.toFixed(2)}`;
-    return fmtINR(n);
+    return formatCurrencyAmount(n, currency === 'CRYPTO' ? 'USD' : currency || 'INR');
 };
 
 function CopyBtn({ text }: { text: string }) {
@@ -32,7 +53,7 @@ function CopyBtn({ text }: { text: string }) {
 }
 
 // ─── Method normaliser ──────────────────────────────────────────────────────
-function resolveMethod(details: any, paymentMethod?: string | null): string {
+function resolveMethod(details: WithdrawalDetails | null, paymentMethod?: string | null): string {
     if (details?.method) return (details.method as string).toUpperCase();
     const pm = (paymentMethod || '').toLowerCase();
     if (pm.includes('upi') || pm.includes('gateway')) return 'UPI';
@@ -43,7 +64,7 @@ function resolveMethod(details: any, paymentMethod?: string | null): string {
 
 // ─── Payment Details Panel ───────────────────────────────────────────────────
 
-function PaymentDetails({ details, paymentMethod }: { details: any; paymentMethod?: string | null }) {
+function PaymentDetails({ details, paymentMethod }: { details: WithdrawalDetails | null; paymentMethod?: string | null }) {
     if (!details || typeof details !== 'object') {
         if (paymentMethod) {
             return <span className="text-xs text-slate-400">{paymentMethod}</span>;
@@ -54,10 +75,10 @@ function PaymentDetails({ details, paymentMethod }: { details: any; paymentMetho
     const method = resolveMethod(details, paymentMethod);
 
     const holderName = details.holderName || details.acctName || details.receive_name || '—';
-    const upiId = details.upiId || details.acctNo || details.receive_account || null;
-    const accountNo = details.accountNo || details.acctNo || null;
-    const ifsc = details.ifsc || details.acctCode || null;
-    const bankName = details.bankName || null;
+    const upiId = details.upiId || details.receive_account || details.receiveAccount || details.acctNo || null;
+    const accountNo = details.accountNo || details.receive_account || details.receiveAccount || details.acctNo || null;
+    const ifsc = details.ifsc || details.ifscCode || details.acctCode || null;
+    const bankName = details.bankName || details.bank || null;
 
     if (method === 'UPI') {
         return (
@@ -135,7 +156,7 @@ type WithdrawalTx = {
     transactionId: string | null;
     utr: string | null;
     remarks: string | null;
-    paymentDetails: any;
+    paymentDetails: WithdrawalDetails | null;
     user: { username: string | null; email: string | null; phoneNumber: string | null };
 };
 
@@ -190,7 +211,13 @@ function DetailDrawer({ tx, onClose }: { tx: WithdrawalTx; onClose: () => void }
                         </div>
                         <div>
                             <p className="text-slate-500">Status</p>
-                            <p className={`font-bold ${tx.status === 'PENDING' ? 'text-amber-400' : tx.status === 'APPROVED' ? 'text-emerald-400' : 'text-red-400'}`}>
+                            <p className={`font-bold ${
+                                tx.status === 'PENDING' ? 'text-amber-400'
+                                : tx.status === 'PROCESSED' || tx.status === 'PROCESSING' ? 'text-blue-400'
+                                : tx.status === 'APPROVED' ? 'text-purple-400'
+                                : tx.status === 'COMPLETED' ? 'text-emerald-400'
+                                : 'text-red-400'
+                            }`}>
                                 {tx.status}
                             </p>
                         </div>
@@ -217,7 +244,151 @@ function DetailDrawer({ tx, onClose }: { tx: WithdrawalTx; onClose: () => void }
 
 // ─── Approve Modal ───────────────────────────────────────────────────────────
 
+type GatewayChoice = 'upi2' | 'upi3' | 'upi4' | 'upi5' | 'nexpay' | 'manual';
+
+const GATEWAY_OPTIONS: { key: GatewayChoice; label: string; desc: string; enabled: boolean }[] = [
+    { key: 'upi2', label: 'UPI Gateway 2', desc: 'Auto-payout via Payment2 API. Completed on webhook.', enabled: true },
+    { key: 'upi3', label: 'UPI Gateway 3 (iPayment)', desc: 'Auto-payout via iPayment API. Completed on webhook.', enabled: true },
+    { key: 'upi4', label: 'UPI Gateway 4 (Silkpay)', desc: 'Auto-payout via Silkpay API. Completed on webhook.', enabled: true },
+    { key: 'upi5', label: 'UPI Gateway 5 (RezorPay)', desc: 'Auto-payout via RezorPay API. Completed on webhook.', enabled: true },
+    { key: 'nexpay', label: 'NexPay (Bank Transfer)', desc: 'Auto-payout via NexPay IMPS/NEFT. Completed on webhook.', enabled: true },
+    { key: 'manual', label: 'Manual / External', desc: 'Marks as Approved. You can mark it Completed in the next step.', enabled: true },
+];
+
 function ApproveModal({
+    tx,
+    onConfirm,
+    onClose,
+    loading,
+}: {
+    tx: WithdrawalTx;
+    onConfirm: (txnId: string, senderUpiId: string | undefined, gateway: GatewayChoice) => void;
+    onClose: () => void;
+    loading: boolean;
+}) {
+    const [txnId, setTxnId] = useState('');
+    const [upiAccounts, setUpiAccounts] = useState<any[]>([]);
+    const [selectedUpi, setSelectedUpi] = useState<string>('');
+    const [gateway, setGateway] = useState<GatewayChoice>('upi2');
+
+    useEffect(() => {
+        import('@/actions/expenses').then(m => m.getUpiAccounts()).then(data => {
+            setUpiAccounts(data.filter((d:any) => d.isActive));
+        });
+    }, []);
+
+    const d = tx.paymentDetails || {};
+    const isCrypto = (d.method || '').toUpperCase() === 'CRYPTO';
+    const currency = d.currency || (isCrypto ? 'USD' : 'INR');
+
+    return (
+        <div className="fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
+            <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl border border-slate-700 bg-slate-800 p-4 shadow-2xl sm:p-6">
+                <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
+                    <CheckCircle size={20} className="text-emerald-400" /> Approve Withdrawal
+                </h3>
+
+                {/* Summary */}
+                <div className="mt-3 mb-4 bg-slate-900/60 rounded-xl p-3 text-sm space-y-1">
+                    <p className="text-slate-400">User: <span className="text-white font-medium">{tx.user?.username || '—'}</span></p>
+                    <p className="text-slate-400">Amount: <span className="text-red-400 font-bold">{fmtAmt(tx.amount, currency)}</span></p>
+                    <div className="pt-1">
+                        <PaymentDetails details={tx.paymentDetails} paymentMethod={tx.paymentMethod} />
+                    </div>
+                </div>
+
+                {/* Gateway picker */}
+                <div className="mb-4">
+                    <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                        Payout Gateway
+                    </label>
+                    <div className="space-y-2">
+                        {GATEWAY_OPTIONS.map(opt => (
+                            <label
+                                key={opt.key}
+                                className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                                    gateway === opt.key
+                                        ? 'border-emerald-500/60 bg-emerald-500/10'
+                                        : 'border-slate-700 bg-slate-900/40 hover:border-slate-600'
+                                } ${!opt.enabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+                            >
+                                <input
+                                    type="radio"
+                                    name="gateway"
+                                    value={opt.key}
+                                    checked={gateway === opt.key}
+                                    disabled={!opt.enabled}
+                                    onChange={() => setGateway(opt.key)}
+                                    className="mt-1 accent-emerald-500"
+                                />
+                                <div className="flex-1">
+                                    <p className="text-sm font-semibold text-white">{opt.label}</p>
+                                    <p className="text-[11px] text-slate-400 leading-snug mt-0.5">{opt.desc}</p>
+                                </div>
+                            </label>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Transaction ID field */}
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+                    Transaction ID / UTR / Reference <span className="text-slate-600 normal-case font-normal">(optional)</span>
+                </label>
+                <div className="relative">
+                    <Receipt size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                        type="text"
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg pl-9 pr-4 py-2.5 text-white text-sm font-mono focus:border-emerald-500 focus:outline-none placeholder-slate-600"
+                        placeholder="e.g. UTR123456789 or TXID_abc…"
+                        value={txnId}
+                        onChange={e => setTxnId(e.target.value)}
+                        autoFocus
+                    />
+                </div>
+                <p className="text-[10px] text-slate-600 mt-1.5">This will be shown to the user in their transaction history and sent as a notification.</p>
+
+                {/* Ledger Integration Picker */}
+                <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl space-y-1">
+                    <label className="block text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1">
+                        Corporate Ledger (Deduct From) *
+                    </label>
+                    <select
+                        value={selectedUpi}
+                        onChange={e => setSelectedUpi(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-emerald-500 focus:outline-none"
+                    >
+                        <option value="">-- Do not log / External --</option>
+                        {upiAccounts.map(u => (
+                            <option key={u.upiId} value={u.upiId}>{u.name} ({u.upiId})</option>
+                        ))}
+                    </select>
+                    <p className="text-[9px] text-slate-500 mt-1 leading-tight">If selected, the withdrawal amount will be automatically deducted from this gateway&apos;s balance in the Expenses Module.</p>
+                </div>
+
+                <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 py-2 border border-slate-700 text-slate-400 rounded-lg hover:bg-slate-700 transition-colors text-sm"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={() => onConfirm(txnId.trim(), selectedUpi, gateway)}
+                        disabled={loading}
+                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                        {loading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+                        {gateway === 'manual' ? 'Approve Withdrawal' : `Send via ${GATEWAY_OPTIONS.find(o => o.key === gateway)?.label || gateway}`}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Complete Modal (APPROVED → COMPLETED) ──────────────────────────────────
+
+function CompleteModal({
     tx,
     onConfirm,
     onClose,
@@ -237,8 +408,9 @@ function ApproveModal({
         <div className="fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
             <div className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl border border-slate-700 bg-slate-800 p-4 shadow-2xl sm:p-6">
                 <h3 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
-                    <CheckCircle size={20} className="text-emerald-400" /> Approve Withdrawal
+                    <CheckCircle size={20} className="text-emerald-400" /> Complete Withdrawal
                 </h3>
+                <p className="text-slate-400 text-sm mb-4">Confirm that the payment has been sent and received.</p>
 
                 {/* Summary */}
                 <div className="mt-3 mb-4 bg-slate-900/60 rounded-xl p-3 text-sm space-y-1">
@@ -264,7 +436,6 @@ function ApproveModal({
                         autoFocus
                     />
                 </div>
-                <p className="text-[10px] text-slate-600 mt-1.5">This will be shown to the user in their transaction history and sent as a notification.</p>
 
                 <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                     <button
@@ -279,7 +450,7 @@ function ApproveModal({
                         className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                         {loading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-                        Confirm Approve
+                        Mark Completed
                     </button>
                 </div>
             </div>
@@ -289,13 +460,21 @@ function ApproveModal({
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
-export default function WithdrawalsPage() {
+function WithdrawalsContent() {
+    const searchParams = useSearchParams();
     const [withdrawals, setWithdrawals] = useState<WithdrawalTx[]>([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = useState(searchParams.get('search') || '');
     const [statusFilter, setStatusFilter] = useState('PENDING');
+    const [methodFilter, setMethodFilter] = useState('ALL');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
+    const [amountMin, setAmountMin] = useState('');
+    const [amountMax, setAmountMax] = useState('');
+    const [showAdvanced, setShowAdvanced] = useState(false);
     const [page, setPage] = useState(1);
     const [pagination, setPagination] = useState({ totalPages: 1, total: 0 });
+    const [summary, setSummary] = useState({ uniqueDepositors: 0, todayAmount: 0, todayCount: 0 });
     const [actionLoading, setActionLoading] = useState<number | null>(null);
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -303,37 +482,80 @@ export default function WithdrawalsPage() {
     const [showRejectModal, setShowRejectModal] = useState<number | null>(null);
     const [rejectReason, setRejectReason] = useState('');
     const [viewTx, setViewTx] = useState<WithdrawalTx | null>(null);
-    // Approve modal state
+    // Approve & Complete modal state
     const [showApproveModal, setShowApproveModal] = useState<WithdrawalTx | null>(null);
+    const [showCompleteModal, setShowCompleteModal] = useState<WithdrawalTx | null>(null);
 
     const showToast = (msg: string, type: 'success' | 'error') => {
         setToast({ msg, type });
         setTimeout(() => setToast(null), 4000);
     };
 
+    const handleExportCSV = () => {
+        // Trigger a browser download from the streaming API route. No server-action
+        // payload limit — returns the FULL filtered result regardless of row count.
+        const params = new URLSearchParams();
+        params.set('type', 'WITHDRAWAL');
+        if (search) params.set('search', search);
+        if (statusFilter && statusFilter !== 'ALL') params.set('status', statusFilter);
+        if (methodFilter && methodFilter !== 'ALL') params.set('methodFilter', methodFilter);
+        if (dateFrom) params.set('dateFrom', dateFrom);
+        if (dateTo) params.set('dateTo', dateTo);
+        if (amountMin) params.set('amountMin', amountMin);
+        if (amountMax) params.set('amountMax', amountMax);
+        window.location.href = `/api/export/transactions?${params.toString()}`;
+    };
+
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const data = await getTransactions(page, 15, search, statusFilter !== 'ALL' ? statusFilter : '', 'WITHDRAWAL');
+            const data = await getTransactionsFiltered({
+                page, limit: 15, search,
+                status: statusFilter !== 'ALL' ? statusFilter : '',
+                type: 'WITHDRAWAL',
+                methodFilter,
+                dateFrom, dateTo, amountMin, amountMax,
+            });
             setWithdrawals(data.transactions as WithdrawalTx[]);
             setPagination(data.pagination);
+            setSummary(data.summary || { uniqueDepositors: 0, todayAmount: 0, todayCount: 0 });
         } catch (e) {
             console.error(e);
         } finally {
             setLoading(false);
         }
-    }, [page, search, statusFilter]);
+    }, [page, search, statusFilter, methodFilter, dateFrom, dateTo, amountMin, amountMax]);
 
     useEffect(() => {
         const t = setTimeout(fetchData, 300);
         return () => clearTimeout(t);
     }, [fetchData]);
 
-    const handleApprove = async (id: number, txnId: string) => {
+    const handleProcess = async (id: number) => {
         setActionLoading(id);
-        const res = await approveWithdrawal(id, 1, 'Approved by admin', txnId || undefined);
+        const res = await processWithdrawal(id, 1, 'Processed by admin');
         if (res.success) {
-            showToast('Withdrawal approved — user notified.', 'success');
+            showToast('Withdrawal marked as Processed.', 'success');
+            fetchData();
+            setSelectedIds(ids => ids.filter(i => i !== id));
+        } else {
+            showToast(res.error || 'Failed to process', 'error');
+        }
+        setActionLoading(null);
+    };
+
+    const handleApprove = async (id: number, txnId: string, senderUpiId: string | undefined, gateway: GatewayChoice = 'manual') => {
+        setActionLoading(id);
+        const gatewayLabel = GATEWAY_OPTIONS.find(o => o.key === gateway)?.label || gateway;
+        const remarks = gateway === 'manual' ? 'Approved by admin' : `Sent to ${gatewayLabel}`;
+        const res = await approveWithdrawal(id, 1, remarks, txnId || undefined, senderUpiId, gateway);
+        if (res.success) {
+            showToast(
+                gateway === 'manual'
+                    ? 'Withdrawal approved — user notified.'
+                    : `Withdrawal sent to ${gatewayLabel}.`,
+                'success'
+            );
             fetchData();
             setSelectedIds(ids => ids.filter(i => i !== id));
         } else {
@@ -341,6 +563,32 @@ export default function WithdrawalsPage() {
         }
         setActionLoading(null);
         setShowApproveModal(null);
+    };
+
+    const handleComplete = async (id: number, txnId?: string) => {
+        setActionLoading(id);
+        const res = await completeWithdrawal(id, 1, 'Completed by admin', txnId || undefined);
+        if (res.success) {
+            showToast('Withdrawal marked as Completed — user notified.', 'success');
+            fetchData();
+        } else {
+            showToast(res.error || 'Failed to complete', 'error');
+        }
+        setActionLoading(null);
+        setShowCompleteModal(null);
+    };
+
+    const handleRevertToProcessed = async (id: number) => {
+        if (!confirm('Move this withdrawal back to the Processed list so it can be retried? Use this when the NexPay bank transfer actually failed.')) return;
+        setActionLoading(id);
+        const res = await revertWithdrawalToProcessed(id, 1);
+        if (res.success) {
+            showToast('Withdrawal moved back to Processed.', 'success');
+            fetchData();
+        } else {
+            showToast(res.error || 'Failed to revert withdrawal', 'error');
+        }
+        setActionLoading(null);
     };
 
     const handleReject = async (id: number, reason: string) => {
@@ -358,15 +606,15 @@ export default function WithdrawalsPage() {
         setRejectReason('');
     };
 
-    const handleBulkApprove = async () => {
+    const handleBulkProcess = async () => {
         if (!selectedIds.length) return;
         setBulkLoading(true);
         let ok = 0;
         for (const id of selectedIds) {
-            const res = await approveWithdrawal(id, 1, 'Bulk approved by admin');
+            const res = await processWithdrawal(id, 1, 'Bulk processed by admin');
             if (res.success) ok++;
         }
-        showToast(`Approved ${ok} of ${selectedIds.length} withdrawals.`, ok === selectedIds.length ? 'success' : 'error');
+        showToast(`Processed ${ok} of ${selectedIds.length} withdrawals.`, ok === selectedIds.length ? 'success' : 'error');
         setSelectedIds([]);
         fetchData();
         setBulkLoading(false);
@@ -378,9 +626,19 @@ export default function WithdrawalsPage() {
         setSelectedIds(prev => prev.length === withdrawals.length ? [] : withdrawals.map(w => w.id));
 
     const pendingList = withdrawals.filter(w => w.status === 'PENDING');
-    const totalPendingAmt = pendingList.reduce((s, w) => s + w.amount, 0);
+    const totalPendingAmounts = pendingList.reduce(
+        (totals, withdrawal) => {
+            if (isCryptoTransaction(withdrawal)) {
+                totals.crypto += withdrawal.amount;
+            } else {
+                totals.fiat += withdrawal.amount;
+            }
+            return totals;
+        },
+        { fiat: 0, crypto: 0 },
+    );
 
-    const methodBadge = (details: any, paymentMethod?: string | null) => {
+    const methodBadge = (details: WithdrawalDetails | null, paymentMethod?: string | null) => {
         const m = resolveMethod(details, paymentMethod);
         if (m === 'UPI') return (
             <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-400 bg-green-500/10 border border-green-500/20 px-1.5 py-0.5 rounded-full">
@@ -403,11 +661,22 @@ export default function WithdrawalsPage() {
     const statusBadge = (status: string) => {
         const map: Record<string, string> = {
             PENDING: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-            APPROVED: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+            PROCESSED: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+            APPROVED: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+            COMPLETED: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+            PROCESSING: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
             REJECTED: 'bg-red-500/10 text-red-400 border-red-500/20',
         };
         const cls = map[status] || 'bg-slate-700 text-slate-400 border-slate-600';
-        const Icon = status === 'APPROVED' ? CheckCircle : status === 'REJECTED' ? XCircle : Clock;
+        const Icon = status === 'COMPLETED'
+            ? CheckCircle
+            : status === 'APPROVED'
+                ? CheckCircle
+                : status === 'REJECTED'
+                    ? XCircle
+                    : status === 'PROCESSED' || status === 'PROCESSING'
+                        ? RefreshCcw
+                        : Clock;
         return (
             <span className={`inline-flex items-center gap-1 text-[10px] font-bold border px-1.5 py-0.5 rounded-full ${cls}`}>
                 <Icon size={9} /> {status}
@@ -428,13 +697,23 @@ export default function WithdrawalsPage() {
             {/* Detail Drawer */}
             {viewTx && <DetailDrawer tx={viewTx} onClose={() => setViewTx(null)} />}
 
-            {/* Approve Modal */}
+            {/* Approve Modal (PROCESSED → APPROVED) */}
             {showApproveModal && (
                 <ApproveModal
                     tx={showApproveModal}
-                    onConfirm={(txnId) => handleApprove(showApproveModal.id, txnId)}
+                    onConfirm={(txnId, senderUpiId, gateway) => handleApprove(showApproveModal.id, txnId, senderUpiId, gateway)}
                     onClose={() => setShowApproveModal(null)}
                     loading={actionLoading === showApproveModal.id}
+                />
+            )}
+
+            {/* Complete Modal (APPROVED → COMPLETED) */}
+            {showCompleteModal && (
+                <CompleteModal
+                    tx={showCompleteModal}
+                    onConfirm={(txnId) => handleComplete(showCompleteModal.id, txnId)}
+                    onClose={() => setShowCompleteModal(null)}
+                    loading={actionLoading === showCompleteModal.id}
                 />
             )}
 
@@ -484,12 +763,17 @@ export default function WithdrawalsPage() {
                     {statusFilter === 'PENDING' && pendingList.length > 0 && (
                         <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-2 text-center">
                             <p className="text-[10px] text-slate-400 uppercase tracking-wide">Pending Total</p>
-                            <p className="text-lg font-bold text-amber-400">{fmtINR(totalPendingAmt)}</p>
+                            <p className="text-lg font-bold text-amber-400">{formatCurrencyParts(totalPendingAmounts)}</p>
                         </div>
                     )}
                     <div className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center">
                         <p className="text-[10px] text-slate-400 uppercase tracking-wide">Count</p>
                         <p className="text-lg font-bold text-white">{pagination.total}</p>
+                    </div>
+                    <div className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center">
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Today Withdraw</p>
+                        <p className="text-lg font-bold text-white">{summary.todayCount}</p>
+                        <p className="text-[11px] text-slate-500">requests today</p>
                     </div>
                     <button
                         onClick={fetchData}
@@ -502,34 +786,116 @@ export default function WithdrawalsPage() {
             </div>
 
             {/* ── Filters ── */}
-            <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                    <input
-                        type="text"
-                        placeholder="Search by username or email..."
-                        className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-amber-500 text-sm"
-                        value={search}
-                        onChange={e => { setSearch(e.target.value); setPage(1); }}
-                    />
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                    {['PENDING', 'APPROVED', 'REJECTED', 'ALL'].map(s => (
+            <div className="space-y-3">
+                {/* Primary row */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Search by username, email, phone, UTR, TxnID, UPI ID, bank acc, IFSC, holder name, crypto addr…"
+                            className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-amber-500 text-sm"
+                            value={search}
+                            onChange={e => { setSearch(e.target.value); setPage(1); }}
+                        />
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                        {['PENDING', 'PROCESSED', 'APPROVED', 'COMPLETED', 'REJECTED', 'ALL'].map(s => (
+                            <button
+                                key={s}
+                                onClick={() => { setStatusFilter(s); setPage(1); }}
+                                className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border ${statusFilter === s
+                                    ? s === 'PENDING' ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+                                        : s === 'PROCESSED' ? 'bg-blue-500/15 border-blue-500/40 text-blue-400'
+                                            : s === 'APPROVED' ? 'bg-purple-500/15 border-purple-500/40 text-purple-400'
+                                                : s === 'COMPLETED' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                                                    : s === 'REJECTED' ? 'bg-red-500/15 border-red-500/40 text-red-400'
+                                                        : 'bg-slate-600 border-slate-500 text-white'
+                                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                                    }`}
+                            >
+                                {s}
+                            </button>
+                        ))}
                         <button
-                            key={s}
-                            onClick={() => { setStatusFilter(s); setPage(1); }}
-                            className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border ${statusFilter === s
-                                ? s === 'PENDING' ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
-                                    : s === 'APPROVED' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
-                                        : s === 'REJECTED' ? 'bg-red-500/15 border-red-500/40 text-red-400'
-                                            : 'bg-slate-600 border-slate-500 text-white'
-                                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-                                }`}
+                            onClick={() => setShowAdvanced(v => !v)}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-colors ${showAdvanced ? 'bg-amber-600/20 border-amber-500/40 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
                         >
-                            {s}
+                            <SlidersHorizontal size={12} /> Filters
+                            {(dateFrom || dateTo || amountMin || amountMax || methodFilter !== 'ALL') && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />}
                         </button>
-                    ))}
+                        <button
+                            onClick={handleExportCSV}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-amber-600/20 bg-amber-600/10 text-xs font-bold text-amber-400 hover:bg-amber-600/20 transition-colors"
+                        >
+                            <Download size={12} /> Export CSV
+                        </button>
+                        {(dateFrom || dateTo || amountMin || amountMax || methodFilter !== 'ALL' || search) && (
+                            <button onClick={() => { setSearch(''); setMethodFilter('ALL'); setDateFrom(''); setDateTo(''); setAmountMin(''); setAmountMax(''); setPage(1); }} className="flex items-center gap-1 px-2.5 py-2 rounded-xl border border-slate-700 bg-slate-800 text-slate-400 hover:text-red-400 text-xs transition-colors">
+                                <X size={11} /> Clear
+                            </button>
+                        )}
+                    </div>
                 </div>
+
+                {/* Match count tag */}
+                {!loading && (
+                    <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            (search || dateFrom || dateTo || amountMin || amountMax || methodFilter !== 'ALL')
+                                ? 'bg-amber-500/15 border border-amber-500/30 text-amber-300'
+                                : 'bg-slate-700/60 border border-slate-700 text-slate-400'
+                        }`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current inline-block" />
+                            {pagination.total.toLocaleString('en-IN')} matching withdrawal{pagination.total !== 1 ? 's' : ''}
+                        </span>
+                        {(search || dateFrom || dateTo || amountMin || amountMax || methodFilter !== 'ALL') && (
+                            <span className="text-xs text-slate-600">searched across UTR, UPI ID, bank acc, IFSC, holder name, email, phone, crypto addr…</span>
+                        )}
+                    </div>
+                )}
+
+                {/* Advanced filters row */}
+                {showAdvanced && (
+                    <div className="bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3 flex flex-wrap gap-4">
+                        {/* Payment Method */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] text-slate-500 uppercase tracking-wider font-bold flex items-center gap-1"><Filter size={9} /> Method</label>
+                            <div className="flex gap-1">
+                                {['ALL', 'UPI', 'BANK', 'CRYPTO', 'MANUAL'].map(m => (
+                                    <button key={m} onClick={() => { setMethodFilter(m); setPage(1); }}
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors border ${methodFilter === m ? 'bg-amber-600/20 border-amber-500/40 text-amber-300' : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'}`}>
+                                        {m}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        {/* Date From */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] text-slate-500 uppercase tracking-wider font-bold flex items-center gap-1"><Calendar size={9} /> From</label>
+                            <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }}
+                                className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500 [color-scheme:dark]" />
+                        </div>
+                        {/* Date To */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] text-slate-500 uppercase tracking-wider font-bold flex items-center gap-1"><Calendar size={9} /> To</label>
+                            <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }}
+                                className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500 [color-scheme:dark]" />
+                        </div>
+                        {/* Amount Min */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] text-slate-500 uppercase tracking-wider font-bold flex items-center gap-1"><DollarSign size={9} /> Min ₹</label>
+                            <input type="number" min="0" placeholder="0" value={amountMin} onChange={e => { setAmountMin(e.target.value); setPage(1); }}
+                                className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500" />
+                        </div>
+                        {/* Amount Max */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] text-slate-500 uppercase tracking-wider font-bold flex items-center gap-1"><DollarSign size={9} /> Max ₹</label>
+                            <input type="number" min="0" placeholder="∞" value={amountMax} onChange={e => { setAmountMax(e.target.value); setPage(1); }}
+                                className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500" />
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* ── Table ── */}
@@ -576,8 +942,7 @@ export default function WithdrawalsPage() {
                                 </tr>
                             ) : (
                                 withdrawals.map(tx => {
-                                    const isCrypto = (tx.paymentDetails?.method || '').toUpperCase() === 'CRYPTO';
-                                    const currency = tx.paymentDetails?.currency || (isCrypto ? 'USD' : 'INR');
+                                    const currency = getTransactionDisplayCurrency(tx);
                                     const isPending = tx.status === 'PENDING';
                                     return (
                                         <tr
@@ -597,8 +962,17 @@ export default function WithdrawalsPage() {
                                                 </td>
                                             )}
                                             <td className="px-4 py-4">
-                                                <p className="text-white font-medium">{tx.user?.username || '—'}</p>
-                                                <p className="text-[11px] text-slate-500">{tx.user?.email}</p>
+                                                {tx.user?.username ? (
+                                                    <UserPopup 
+                                                        userId={tx.user.username} 
+                                                    // Note: We're passing username as userId since withdrawal tx response 
+                                                    // might not include user ID. UserPopup handles optional userId.
+                                                        username={tx.user.username}
+                                                    />
+                                                ) : (
+                                                    <p className="text-white font-medium">—</p>
+                                                )}
+                                                <p className="text-[11px] text-slate-500 mt-1">{tx.user?.email}</p>
                                                 {tx.user?.phoneNumber && (
                                                     <p className="text-[11px] text-slate-500">{tx.user.phoneNumber}</p>
                                                 )}
@@ -643,12 +1017,27 @@ export default function WithdrawalsPage() {
                                                     >
                                                         <Eye size={13} />
                                                     </button>
-                                                    {/* Approve — opens modal */}
+                                                    {/* PENDING → Process */}
                                                     {isPending && (
+                                                        <button
+                                                            onClick={() => handleProcess(tx.id)}
+                                                            disabled={actionLoading === tx.id}
+                                                            className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                                                            title="Process"
+                                                        >
+                                                            {actionLoading === tx.id
+                                                                ? <Loader2 size={11} className="animate-spin" />
+                                                                : <RefreshCcw size={11} />
+                                                            }
+                                                            Process
+                                                        </button>
+                                                    )}
+                                                    {/* PROCESSED → Approve (opens modal) */}
+                                                    {tx.status === 'PROCESSED' && (
                                                         <button
                                                             onClick={() => setShowApproveModal(tx)}
                                                             disabled={actionLoading === tx.id}
-                                                            className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                                                            className="flex items-center gap-1 px-2.5 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
                                                             title="Approve"
                                                         >
                                                             {actionLoading === tx.id
@@ -658,8 +1047,38 @@ export default function WithdrawalsPage() {
                                                             Approve
                                                         </button>
                                                     )}
-                                                    {/* Reject */}
-                                                    {isPending && (
+                                                    {/* APPROVED → Complete (opens modal) */}
+                                                    {tx.status === 'APPROVED' && (
+                                                        <button
+                                                            onClick={() => setShowCompleteModal(tx)}
+                                                            disabled={actionLoading === tx.id}
+                                                            className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                                                            title="Complete"
+                                                        >
+                                                            {actionLoading === tx.id
+                                                                ? <Loader2 size={11} className="animate-spin" />
+                                                                : <CheckCircle size={11} />
+                                                            }
+                                                            Complete
+                                                        </button>
+                                                    )}
+                                                    {/* COMPLETED (NexPay) → Move back to Processed (for failed transfers) */}
+                                                    {tx.status === 'COMPLETED' && /sent to nexpay/i.test(tx.remarks || '') && (
+                                                        <button
+                                                            onClick={() => handleRevertToProcessed(tx.id)}
+                                                            disabled={actionLoading === tx.id}
+                                                            className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                                                            title="Move back to Processed (NexPay transfer failed)"
+                                                        >
+                                                            {actionLoading === tx.id
+                                                                ? <Loader2 size={11} className="animate-spin" />
+                                                                : <Undo2 size={11} />
+                                                            }
+                                                            Move to Processed
+                                                        </button>
+                                                    )}
+                                                    {/* Reject — allowed from PENDING or PROCESSED */}
+                                                    {(isPending || tx.status === 'PROCESSED') && (
                                                         <button
                                                             onClick={() => setShowRejectModal(tx.id)}
                                                             disabled={actionLoading === tx.id}
@@ -714,12 +1133,12 @@ export default function WithdrawalsPage() {
                     <span className="text-white font-bold text-sm">{selectedIds.length} Selected</span>
                     <div className="hidden h-4 w-px bg-slate-700 sm:block" />
                     <button
-                        onClick={handleBulkApprove}
+                        onClick={handleBulkProcess}
                         disabled={bulkLoading}
-                        className="flex items-center justify-center gap-2 rounded-full bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                        className="flex items-center justify-center gap-2 rounded-full bg-blue-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50"
                     >
-                        {bulkLoading ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-                        Approve All
+                        {bulkLoading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCcw size={13} />}
+                        Process All
                     </button>
                     <button
                         onClick={() => setSelectedIds([])}
@@ -730,5 +1149,13 @@ export default function WithdrawalsPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function WithdrawalsPage() {
+    return (
+        <Suspense fallback={<div className="py-20 flex justify-center"><Loader2 className="animate-spin text-emerald-500" size={32} /></div>}>
+            <WithdrawalsContent />
+        </Suspense>
     );
 }

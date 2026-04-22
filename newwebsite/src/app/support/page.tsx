@@ -7,7 +7,7 @@ import {
     Clock, Shield, Zap, BookOpen, Search, Send, X, CheckCircle,
     PhoneCall, FileText, HelpCircle, AlertCircle, Globe,
     ArrowLeft, Plus, Ticket, Lock, Loader2, ChevronRight,
-    ExternalLink, Home
+    ExternalLink, Home, Image, Youtube, Video, Link2
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import {
@@ -15,6 +15,7 @@ import {
     joinSupportRoom, sendSocketMessage, onNewMessage
 } from '@/services/support';
 import api from '@/services/api';
+import ChatwootWidget from '@/components/shared/ChatwootWidget';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -30,58 +31,32 @@ interface ContactSettings {
     emailEnabled: boolean;
 }
 
-// ─── FAQ Data ────────────────────────────────────────────────────────────────
+// ─── FAQ Types & Category Config ─────────────────────────────────────────────
 
-const FAQS = [
-    {
-        category: 'Account',
-        icon: Shield,
-        color: 'text-blue-400',
-        bg: 'bg-blue-400/10',
-        questions: [
-            { q: 'How do I verify my account?', a: 'Go to your Profile page and click "Verify Identity". Upload a valid government-issued ID and a selfie. Verification usually takes 1–24 hours.' },
-            { q: 'I forgot my password. How do I reset it?', a: "Click \"Forgot Password\" on the login screen. Enter your registered email and we'll send a reset link within a few minutes. Check your spam folder if you don't see it." },
-            { q: 'Can I have multiple accounts?', a: 'No. Each user is only allowed one account. Creating multiple accounts may result in all accounts being permanently suspended.' },
-        ]
-    },
-    {
-        category: 'Deposits & Withdrawals',
-        icon: Zap,
-        color: 'text-brand-gold',
-        bg: 'bg-brand-gold/10',
-        questions: [
-            { q: 'What payment methods are supported?', a: 'We support UPI, Net Banking, popular cryptocurrencies (BTC, ETH, USDT), and select e-wallets. Available methods may vary by region.' },
-            { q: 'How long do withdrawals take?', a: 'Crypto withdrawals are usually processed within 1 hour. Fiat withdrawals (UPI / Bank Transfer) typically take 1–3 business days depending on your bank.' },
-            { q: 'Is there a minimum deposit amount?', a: 'The minimum deposit amount is ₹100 for fiat and $10 equivalent for crypto. There is no maximum deposit limit.' },
-            { q: 'Why was my withdrawal rejected?', a: "Withdrawals may be rejected if your account is unverified, if there is a pending bonus wagering requirement, or if your withdrawal details don't match your verified identity." },
-        ]
-    },
-    {
-        category: 'Bonuses & Promotions',
-        icon: BookOpen,
-        color: 'text-pink-400',
-        bg: 'bg-pink-400/10',
-        questions: [
-            { q: 'How do I claim a bonus?', a: "Visit the Promotions page and click \"Claim\" on any active offer. Some bonuses are credited automatically upon qualifying deposit. Check the T&Cs for each offer." },
-            { q: 'What is a wagering requirement?', a: 'A wagering requirement (e.g., 10x) means you must bet the bonus amount that many times before it can be withdrawn. For example, a ₹500 bonus with 10x wagering = ₹5,000 in bets.' },
-        ]
-    },
-    {
-        category: 'Sports Betting',
-        icon: Globe,
-        color: 'text-teal-400',
-        bg: 'bg-teal-400/10',
-        questions: [
-            { q: 'How do I place a bet?', a: 'Navigate to Sports, select your event, click an odds button to add it to your betslip on the right sidebar, enter your stake, and click "Place Bet".' },
-            { q: 'What happens if a match is abandoned?', a: "If a match is abandoned or postponed before completion, all bets are typically voided and stakes returned. Check our Terms & Conditions for sport-specific rules." },
-        ]
-    },
-];
+interface FaqMediaItem {
+    type: 'image' | 'video' | 'youtube' | 'link';
+    url: string;
+    caption?: string;
+}
 
-// Flat list of all Q&As for search
-const ALL_QUESTIONS = FAQS.flatMap(section =>
-    section.questions.map(q => ({ ...q, category: section.category, color: section.color, bg: section.bg, icon: section.icon }))
-);
+interface FaqEntry {
+    _id: string;
+    question: string;
+    answer: string;
+    category: string;
+    media?: FaqMediaItem[];
+    order: number;
+}
+
+const CATEGORY_META: Record<string, { icon: React.ComponentType<{ size: number }>; color: string; bg: string; label: string }> = {
+    account: { icon: Shield, color: 'text-brand-gold', bg: 'bg-brand-gold/10', label: 'Account & Security' },
+    payments: { icon: Zap, color: 'text-brand-gold', bg: 'bg-brand-gold/10', label: 'Deposits & Withdrawals' },
+    bonuses: { icon: BookOpen, color: 'text-pink-400', bg: 'bg-pink-400/10', label: 'Bonuses & Promotions' },
+    sports: { icon: Globe, color: 'text-teal-400', bg: 'bg-teal-400/10', label: 'Sports Betting' },
+    casino: { icon: Zap, color: 'text-purple-400', bg: 'bg-purple-400/10', label: 'Casino' },
+    technical: { icon: FileText, color: 'text-orange-400', bg: 'bg-orange-400/10', label: 'Technical' },
+    general: { icon: HelpCircle, color: 'text-slate-400', bg: 'bg-slate-400/10', label: 'General' },
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -110,18 +85,91 @@ function highlight(text: string, query: string) {
     );
 }
 
+// ─── YouTube ID helper ──────────────────────────────────────────────────────
+
+function getYoutubeId(url: string) {
+    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|shorts\/))([^&?\s]+)/);
+    return match?.[1] || null;
+}
+
+// ─── FAQ Media Renderer ─────────────────────────────────────────────────────
+
+function FaqMediaRenderer({ media }: { media: FaqMediaItem[] }) {
+    if (!media?.length) return null;
+    return (
+        <div className="mt-3 space-y-3">
+            {media.map((item, i) => {
+                switch (item.type) {
+                    case 'image':
+                        return (
+                            <div key={i} className="rounded-xl overflow-hidden border border-white/[0.04]">
+                                <img src={item.url} alt={item.caption || ''} className="w-full max-h-72 object-cover" loading="lazy" />
+                                {item.caption && <p className="text-xs text-text-muted px-3 py-2 bg-bg-zeero">{item.caption}</p>}
+                            </div>
+                        );
+                    case 'youtube': {
+                        const ytId = getYoutubeId(item.url);
+                        return ytId ? (
+                            <div key={i} className="rounded-xl overflow-hidden border border-white/[0.04]">
+                                <div className="aspect-video">
+                                    <iframe
+                                        src={`https://www.youtube.com/embed/${ytId}`}
+                                        className="w-full h-full"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen
+                                        loading="lazy"
+                                    />
+                                </div>
+                                {item.caption && <p className="text-xs text-text-muted px-3 py-2 bg-bg-zeero">{item.caption}</p>}
+                            </div>
+                        ) : null;
+                    }
+                    case 'video':
+                        return (
+                            <div key={i} className="rounded-xl overflow-hidden border border-white/[0.04]">
+                                <video src={item.url} controls className="w-full max-h-72" preload="metadata" />
+                                {item.caption && <p className="text-xs text-text-muted px-3 py-2 bg-bg-zeero">{item.caption}</p>}
+                            </div>
+                        );
+                    case 'link':
+                        return (
+                            <a key={i} href={item.url} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-3 p-3 bg-bg-zeero border border-white/[0.04] rounded-xl text-sm hover:border-brand-gold/30 transition-all group">
+                                <div className="p-2 rounded-lg bg-brand-gold/10 text-brand-gold group-hover:bg-brand-gold/20 transition-colors">
+                                    <Link2 size={16} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-white font-medium truncate">{item.caption || item.url}</p>
+                                    {item.caption && <p className="text-text-disabled text-xs truncate">{item.url}</p>}
+                                </div>
+                                <ExternalLink size={14} className="text-text-muted flex-shrink-0" />
+                            </a>
+                        );
+                    default:
+                        return null;
+                }
+            })}
+        </div>
+    );
+}
+
 // ─── FAQ Item ─────────────────────────────────────────────────────────────────
 
-function FaqItem({ q, a, searchQuery = '' }: { q: string; a: string; searchQuery?: string }) {
+function FaqItem({ faq, searchQuery = '' }: { faq: FaqEntry; searchQuery?: string }) {
     const [open, setOpen] = useState(!!searchQuery);
     useEffect(() => { if (searchQuery) setOpen(true); }, [searchQuery]);
     return (
-        <div className={`border border-white/5 rounded-xl overflow-hidden transition-all duration-200 ${open ? 'bg-[#1A1D21]' : 'bg-[#141618] hover:bg-[#1A1D21]'}`}>
+        <div className={`border border-white/[0.04] rounded-xl overflow-hidden transition-all duration-200 ${open ? 'bg-bg-modal' : 'bg-bg-zeero hover:bg-bg-modal'}`}>
             <button onClick={() => setOpen(!open)} className="w-full flex items-center justify-between gap-3 px-5 py-4 text-left">
-                <span className="text-white font-semibold text-sm leading-snug">{highlight(q, searchQuery)}</span>
+                <span className="text-white font-semibold text-sm leading-snug">{highlight(faq.question, searchQuery)}</span>
                 <ChevronDown size={18} className={`text-text-muted flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180 text-brand-gold' : ''}`} />
             </button>
-            {open && <div className="px-5 pb-4 text-text-muted text-sm leading-relaxed border-t border-white/5 pt-3">{highlight(a, searchQuery)}</div>}
+            {open && (
+                <div className="px-5 pb-4 border-t border-white/[0.04] pt-3">
+                    <div className="text-text-muted text-sm leading-relaxed whitespace-pre-wrap">{highlight(faq.answer, searchQuery)}</div>
+                    {faq.media && faq.media.length > 0 && <FaqMediaRenderer media={faq.media} />}
+                </div>
+            )}
         </div>
     );
 }
@@ -143,7 +191,7 @@ function ContactCards({ contacts, onOpenTicket }: ContactCardsProps) {
             <a key="wa" href={waUrl} target="_blank" rel="noopener noreferrer"
                 className="flex flex-col gap-4 p-5 rounded-2xl border border-green-500/20 bg-green-500/5 hover:scale-[1.01] transition-all">
                 <div className="flex items-start justify-between">
-                    <div className="p-3 rounded-xl bg-white/5 text-green-400">
+                    <div className="p-3 rounded-xl bg-white/[0.04] text-green-400">
                         <svg viewBox="0 0 24 24" className="w-[22px] h-[22px] fill-current" xmlns="http://www.w3.org/2000/svg">
                             <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
                         </svg>
@@ -154,7 +202,7 @@ function ContactCards({ contacts, onOpenTicket }: ContactCardsProps) {
                     <p className="text-white font-bold text-base">WhatsApp {contacts.whatsappLabel}</p>
                     <p className="text-text-muted text-sm mt-0.5">Chat with us instantly on WhatsApp</p>
                 </div>
-                <div className="w-full py-2.5 rounded-xl font-bold text-sm border border-green-500/20 text-green-400 hover:bg-white/5 transition-colors flex items-center justify-center gap-2">
+                <div className="w-full py-2.5 rounded-xl font-bold text-sm border border-green-500/20 text-green-400 hover:bg-white/[0.05] transition-colors flex items-center justify-center gap-2">
                     <ExternalLink size={14} /> Open WhatsApp
                 </div>
             </a>
@@ -166,16 +214,16 @@ function ContactCards({ contacts, onOpenTicket }: ContactCardsProps) {
         const tgUrl = contacts.telegramLink || `https://t.me/${contacts.telegramHandle?.replace('@', '')}`;
         cards.push(
             <a key="tg" href={tgUrl} target="_blank" rel="noopener noreferrer"
-                className="flex flex-col gap-4 p-5 rounded-2xl border border-sky-400/20 bg-sky-400/5 hover:scale-[1.01] transition-all">
+                className="flex flex-col gap-4 p-5 rounded-2xl border border-brand-gold/20 bg-sky-400/5 hover:scale-[1.01] transition-all">
                 <div className="flex items-start justify-between">
-                    <div className="p-3 rounded-xl bg-white/5 text-sky-400"><PhoneCall size={22} /></div>
+                    <div className="p-3 rounded-xl bg-white/[0.04] text-brand-gold"><PhoneCall size={22} /></div>
                     <span className="text-[10px] font-black text-white px-2 py-1 rounded-full bg-sky-500">Fast</span>
                 </div>
                 <div>
                     <p className="text-white font-bold text-base">Telegram</p>
                     <p className="text-text-muted text-sm mt-0.5">{contacts.telegramHandle || 'Our support channel'}</p>
                 </div>
-                <div className="w-full py-2.5 rounded-xl font-bold text-sm border border-sky-400/20 text-sky-400 hover:bg-white/5 transition-colors flex items-center justify-center gap-2">
+                <div className="w-full py-2.5 rounded-xl font-bold text-sm border border-brand-gold/20 text-brand-gold hover:bg-white/[0.05] transition-colors flex items-center justify-center gap-2">
                     <ExternalLink size={14} /> Open Telegram
                 </div>
             </a>
@@ -186,16 +234,16 @@ function ContactCards({ contacts, onOpenTicket }: ContactCardsProps) {
     if (contacts?.emailEnabled && contacts.emailAddress) {
         cards.push(
             <a key="email" href={`mailto:${contacts.emailAddress}`}
-                className="flex flex-col gap-4 p-5 rounded-2xl border border-blue-400/20 bg-blue-400/5 hover:scale-[1.01] transition-all">
+                className="flex flex-col gap-4 p-5 rounded-2xl border border-brand-gold/20 bg-blue-400/5 hover:scale-[1.01] transition-all">
                 <div className="flex items-start justify-between">
-                    <div className="p-3 rounded-xl bg-white/5 text-blue-400"><Mail size={22} /></div>
-                    <span className="text-[10px] font-black text-white px-2 py-1 rounded-full bg-blue-500">&lt; 24h reply</span>
+                    <div className="p-3 rounded-xl bg-white/[0.04] text-brand-gold"><Mail size={22} /></div>
+                    <span className="text-[10px] font-black text-white px-2 py-1 rounded-full bg-brand-gold">&lt; 24h reply</span>
                 </div>
                 <div>
                     <p className="text-white font-bold text-base">Email Support</p>
                     <p className="text-text-muted text-sm mt-0.5">{contacts.emailAddress}</p>
                 </div>
-                <div className="w-full py-2.5 rounded-xl font-bold text-sm border border-blue-400/20 text-blue-400 hover:bg-white/5 transition-colors flex items-center justify-center gap-2">
+                <div className="w-full py-2.5 rounded-xl font-bold text-sm border border-brand-gold/20 text-brand-gold hover:bg-white/[0.05] transition-colors flex items-center justify-center gap-2">
                     <ExternalLink size={14} /> Send Email
                 </div>
             </a>
@@ -207,14 +255,14 @@ function ContactCards({ contacts, onOpenTicket }: ContactCardsProps) {
         <button key="ticket" onClick={onOpenTicket}
             className="flex flex-col gap-4 p-5 rounded-2xl border border-brand-gold/20 bg-brand-gold/5 hover:scale-[1.01] transition-all text-left">
             <div className="flex items-start justify-between">
-                <div className="p-3 rounded-xl bg-white/5 text-brand-gold"><MessageCircle size={22} /></div>
-                <span className="text-[10px] font-black text-white px-2 py-1 rounded-full bg-brand-gold text-black">24/7</span>
+                <div className="p-3 rounded-xl bg-white/[0.04] text-brand-gold"><MessageCircle size={22} /></div>
+                <span className="text-[10px] font-black text-white px-2 py-1 rounded-full bg-brand-gold text-text-inverse">24/7</span>
             </div>
             <div>
                 <p className="text-white font-bold text-base">Live Support Ticket</p>
                 <p className="text-text-muted text-sm mt-0.5">Open a ticket — we reply within minutes</p>
             </div>
-            <div className="w-full py-2.5 rounded-xl font-bold text-sm border border-brand-gold/20 text-brand-gold hover:bg-white/5 transition-colors flex items-center justify-center gap-2">
+            <div className="w-full py-2.5 rounded-xl font-bold text-sm border border-brand-gold/20 text-brand-gold hover:bg-white/[0.05] transition-colors flex items-center justify-center gap-2">
                 <Plus size={14} /> Open Ticket
             </div>
         </button>
@@ -231,6 +279,7 @@ function LiveChat({ ticket, userId, onBack }: { ticket: SupportTicket; userId: n
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const pendingRef = useRef<Set<number>>(new Set());
     const { category, subject } = parseSubject(ticket.subject);
 
     useEffect(() => {
@@ -241,7 +290,22 @@ function LiveChat({ ticket, userId, onBack }: { ticket: SupportTicket; userId: n
         });
         const unsub = onNewMessage((msg) => {
             if (msg.ticketId === ticket.id) {
-                setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
+                setMessages(prev => {
+                    // If this is a real message replacing a pending one, swap it
+                    if (pendingRef.current.size > 0) {
+                        const pendingId = Array.from(pendingRef.current).find(pid => {
+                            const pendingMsg = prev.find(m => m.id === pid);
+                            return pendingMsg && pendingMsg.message === msg.message && pendingMsg.sender === msg.sender;
+                        });
+                        if (pendingId !== undefined) {
+                            pendingRef.current.delete(pendingId);
+                            return prev.map(m => m.id === pendingId ? msg : m);
+                        }
+                    }
+                    // Otherwise add if not duplicate
+                    if (prev.some(m => m.id === msg.id)) return prev;
+                    return [...prev, msg];
+                });
                 scrollToBottom();
             }
         });
@@ -256,17 +320,22 @@ function LiveChat({ ticket, userId, onBack }: { ticket: SupportTicket; userId: n
         const text = input.trim();
         setInput('');
         setSending(true);
-        const tempMsg: SupportMessage = { id: Date.now(), ticketId: ticket.id, sender: 'USER', message: text, createdAt: new Date().toISOString() };
+        // Optimistic update with temp negative id
+        const tempId = -Date.now();
+        const tempMsg: SupportMessage = { id: tempId, ticketId: ticket.id, sender: 'USER', message: text, createdAt: new Date().toISOString() };
+        pendingRef.current.add(tempId);
         setMessages(prev => [...prev, tempMsg]);
         scrollToBottom();
-        try { sendSocketMessage(ticket.id, text); } finally { setSending(false); }
+        // Send via socket — gateway saves + broadcasts to both rooms
+        sendSocketMessage(ticket.id, text);
+        setSending(false);
     };
 
     const isClosed = ticket.status === 'CLOSED';
 
     return (
-        <div className="flex flex-col bg-[#111315] rounded-2xl border border-white/5 overflow-hidden" style={{ minHeight: '520px' }}>
-            <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/5 bg-[#141618] shrink-0">
+        <div className="flex flex-col bg-bg-deep rounded-2xl border border-white/[0.04] overflow-hidden" style={{ minHeight: '520px' }}>
+            <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.04] bg-bg-zeero shrink-0">
                 <button onClick={onBack} className="text-text-muted hover:text-white transition-colors p-1"><ArrowLeft size={18} /></button>
                 <div className="flex-1 min-w-0">
                     <p className="text-white font-bold text-sm truncate">{subject}</p>
@@ -290,7 +359,7 @@ function LiveChat({ ticket, userId, onBack }: { ticket: SupportTicket; userId: n
                         <div key={msg.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
                             <div className={`max-w-[80%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1`}>
                                 {!isUser && <span className="text-[10px] text-text-disabled px-1 font-bold uppercase">Support</span>}
-                                <div className={`px-4 py-2.5 rounded-2xl text-sm leading-snug ${isUser ? 'bg-brand-gold text-black rounded-br-sm font-medium' : 'bg-[#1A1D21] text-white border border-white/5 rounded-bl-sm'}`}>
+                                <div className={`px-4 py-2.5 rounded-2xl text-sm leading-snug ${isUser ? 'bg-brand-gold text-text-inverse rounded-br-sm font-medium' : 'bg-bg-modal text-white border border-white/[0.04] rounded-bl-sm'}`}>
                                     {msg.message}
                                 </div>
                                 <span className="text-[9px] text-text-disabled px-1">{timeAgo(msg.createdAt)}</span>
@@ -300,15 +369,15 @@ function LiveChat({ ticket, userId, onBack }: { ticket: SupportTicket; userId: n
                 })}
                 <div ref={scrollRef} />
             </div>
-            <div className="shrink-0 p-3 border-t border-white/5">
+            <div className="shrink-0 p-3 border-t border-white/[0.04]">
                 {isClosed ? (
                     <div className="flex items-center justify-center gap-2 py-2 text-text-muted text-sm"><Lock size={14} />This ticket is closed</div>
                 ) : (
                     <form onSubmit={handleSend} className="flex gap-2">
                         <input type="text" value={input} onChange={e => setInput(e.target.value)} placeholder="Type your message..."
-                            className="flex-1 bg-[#1A1D21] border border-white/10 focus:border-brand-gold/50 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-text-disabled outline-none transition-all" />
+                            className="flex-1 bg-bg-modal border border-white/[0.06] focus:border-brand-gold/50 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-text-disabled outline-none transition-all" />
                         <button type="submit" disabled={!input.trim() || sending}
-                            className={`p-2.5 rounded-xl transition-all flex-shrink-0 ${input.trim() && !sending ? 'bg-brand-gold text-black' : 'bg-white/5 text-text-disabled cursor-not-allowed'}`}>
+                            className={`p-2.5 rounded-xl transition-all flex-shrink-0 ${input.trim() && !sending ? 'bg-brand-gold text-text-inverse' : 'bg-white/[0.04] text-text-disabled cursor-not-allowed'}`}>
                             {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
                         </button>
                     </form>
@@ -338,11 +407,11 @@ function NewTicketForm({ onCreated }: { onCreated: (ticket: SupportTicket) => vo
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            {error && <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm"><AlertCircle size={15} />{error}</div>}
+            {error && <div className="flex items-center gap-2 p-3 bg-danger-alpha-10 border border-danger/20 rounded-xl text-danger text-sm"><AlertCircle size={15} />{error}</div>}
             <div>
                 <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1.5 block">Category</label>
                 <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
-                    className="w-full bg-[#141618] border border-white/10 focus:border-brand-gold/50 rounded-xl px-4 py-3 text-sm text-white outline-none transition-all appearance-none">
+                    className="w-full bg-bg-zeero border border-white/[0.06] focus:border-brand-gold/50 rounded-xl px-4 py-3 text-sm text-white outline-none transition-all appearance-none">
                     <option value="">General</option>
                     <option value="Account">Account & Verification</option>
                     <option value="Deposit">Deposits</option>
@@ -356,15 +425,15 @@ function NewTicketForm({ onCreated }: { onCreated: (ticket: SupportTicket) => vo
             <div>
                 <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1.5 block">Subject</label>
                 <input type="text" value={form.subject} onChange={e => setForm(p => ({ ...p, subject: e.target.value }))} placeholder="Brief description of your issue" required
-                    className="w-full bg-[#141618] border border-white/10 focus:border-brand-gold/50 rounded-xl px-4 py-3 text-sm text-white placeholder:text-text-disabled outline-none transition-all" />
+                    className="w-full bg-bg-zeero border border-white/[0.06] focus:border-brand-gold/50 rounded-xl px-4 py-3 text-sm text-white placeholder:text-text-disabled outline-none transition-all" />
             </div>
             <div>
                 <label className="text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1.5 block">Message</label>
                 <textarea value={form.message} onChange={e => setForm(p => ({ ...p, message: e.target.value }))} placeholder="Describe your issue in detail..." rows={4} required
-                    className="w-full bg-[#141618] border border-white/10 focus:border-brand-gold/50 rounded-xl px-4 py-3 text-sm text-white placeholder:text-text-disabled outline-none transition-all resize-none" />
+                    className="w-full bg-bg-zeero border border-white/[0.06] focus:border-brand-gold/50 rounded-xl px-4 py-3 text-sm text-white placeholder:text-text-disabled outline-none transition-all resize-none" />
             </div>
             <button type="submit" disabled={submitting}
-                className="w-full py-3 bg-brand-gold hover:bg-brand-gold-hover text-black font-black text-sm uppercase rounded-xl flex items-center justify-center gap-2 shadow-glow-gold transition-all disabled:opacity-70">
+                className="w-full py-3 bg-brand-gold hover:bg-brand-gold-hover text-text-inverse font-black text-sm uppercase rounded-xl flex items-center justify-center gap-2 shadow-glow-gold transition-all disabled:opacity-70">
                 {submitting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                 {submitting ? 'Submitting...' : 'Submit Ticket'}
             </button>
@@ -387,7 +456,7 @@ function MyTickets({ onOpen }: { onOpen: (ticket: SupportTicket) => void }) {
                 const lastMsg = ticket.messages?.[0];
                 return (
                     <button key={ticket.id} onClick={() => onOpen(ticket)}
-                        className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-[#141618] border border-white/5 hover:bg-[#1A1D21] hover:border-brand-gold/20 transition-all text-left">
+                        className="w-full flex items-center gap-4 px-4 py-3.5 rounded-xl bg-bg-zeero border border-white/[0.04] hover:bg-bg-modal hover:border-brand-gold/20 transition-all text-left">
                         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${ticket.status === 'OPEN' ? 'bg-green-400' : 'bg-text-muted'}`} />
                         <div className="flex-1 min-w-0">
                             <p className="text-white font-bold text-sm truncate">{subject}</p>
@@ -397,7 +466,7 @@ function MyTickets({ onOpen }: { onOpen: (ticket: SupportTicket) => void }) {
                             </div>
                         </div>
                         <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${ticket.status === 'OPEN' ? 'bg-green-500/15 text-green-400' : 'bg-white/5 text-text-muted'}`}>{ticket.status}</span>
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${ticket.status === 'OPEN' ? 'bg-green-500/15 text-green-400' : 'bg-white/[0.04] text-text-muted'}`}>{ticket.status}</span>
                             <span className="text-[9px] text-text-disabled">{timeAgo(ticket.updatedAt)}</span>
                         </div>
                         <ChevronRight size={14} className="text-text-muted flex-shrink-0" />
@@ -410,20 +479,20 @@ function MyTickets({ onOpen }: { onOpen: (ticket: SupportTicket) => void }) {
 
 // ─── Search Result Item (dropdown row) ───────────────────────────────────────
 
-function SearchResultItem({ q, a, category, color, bg, icon: Icon, searchQuery, isLast }: {
-    q: string; a: string; category: string; color: string; bg: string;
-    icon: React.ComponentType<{ size: number }>;
-    searchQuery: string; isLast: boolean;
+function SearchResultItem({ faq, searchQuery, isLast }: {
+    faq: FaqEntry; searchQuery: string; isLast: boolean;
 }) {
     const [open, setOpen] = useState(false);
+    const meta = CATEGORY_META[faq.category] || CATEGORY_META.general;
+    const Icon = meta.icon;
     return (
         <div className={`px-4 py-3 hover:bg-white/[0.03] transition-colors cursor-pointer ${!isLast ? 'border-b border-white/[0.04]' : ''}`} onClick={() => setOpen(o => !o)}>
-            <div className={`inline-flex items-center gap-1.5 ${color} text-[9px] font-black uppercase tracking-widest mb-1.5`}>
-                <div className={`p-0.5 rounded ${bg}`}><Icon size={9} /></div>
-                {category}
+            <div className={`inline-flex items-center gap-1.5 ${meta.color} text-[9px] font-black uppercase tracking-widest mb-1.5`}>
+                <div className={`p-0.5 rounded ${meta.bg}`}><Icon size={9} /></div>
+                {meta.label}
             </div>
-            <p className="text-white text-sm font-semibold leading-snug">{highlight(q, searchQuery)}</p>
-            {open && <p className="text-text-muted text-xs mt-2 leading-relaxed">{highlight(a, searchQuery)}</p>}
+            <p className="text-white text-sm font-semibold leading-snug">{highlight(faq.question, searchQuery)}</p>
+            {open && <p className="text-text-muted text-xs mt-2 leading-relaxed">{highlight(faq.answer, searchQuery)}</p>}
             <p className="text-text-disabled text-[10px] mt-1">{open ? 'Click to collapse' : 'Click to read answer'}</p>
         </div>
     );
@@ -441,16 +510,23 @@ export default function SupportPage() {
     const [contacts, setContacts] = useState<ContactSettings | null>(null);
 
     // FAQ state
+    const [faqs, setFaqs] = useState<FaqEntry[]>([]);
+    const [faqLoading, setFaqLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [searchOpen, setSearchOpen] = useState(false);
     const [faqTab, setFaqTab] = useState<FaqTab>('all');
     const searchRef = useRef<HTMLDivElement>(null);
 
-    // Load contact settings
+    // Load contact settings + FAQs
     useEffect(() => {
-        api.get('/contact-settings')
-            .then(res => setContacts(res.data))
-            .catch(() => { });
+        api.get('/contact-settings').then(res => setContacts(res.data)).catch(() => { });
+        supportApi.getFaqs()
+            .then((res: any) => {
+                const data = Array.isArray(res) ? res : res?.data || [];
+                setFaqs(data);
+            })
+            .catch(() => setFaqs([]))
+            .finally(() => setFaqLoading(false));
     }, []);
 
     // Close dropdown on outside click or Escape
@@ -474,27 +550,43 @@ export default function SupportPage() {
 
     // FAQ: search results (used in dropdown)
     const searchResults = search.trim()
-        ? ALL_QUESTIONS.filter(q => q.q.toLowerCase().includes(search.toLowerCase()) || q.a.toLowerCase().includes(search.toLowerCase()))
+        ? faqs.filter(f => f.question.toLowerCase().includes(search.toLowerCase()) || f.answer.toLowerCase().includes(search.toLowerCase()))
         : [];
 
+    // FAQ: unique categories from dynamic data
+    const faqCategories = Array.from(new Set(faqs.map(f => f.category)));
+
     // FAQ: filtered by category tab
-    const filteredFaqs = faqTab === 'all' ? FAQS : FAQS.filter(s => s.category === faqTab);
+    const filteredFaqs = faqTab === 'all' ? faqs : faqs.filter(f => f.category === faqTab);
+
+    // Group filtered FAQs by category for rendering
+    const groupedFaqs = faqCategories
+        .filter(cat => faqTab === 'all' || cat === faqTab)
+        .map(cat => ({
+            category: cat,
+            meta: CATEGORY_META[cat] || CATEGORY_META.general,
+            items: filteredFaqs.filter(f => f.category === cat),
+        }))
+        .filter(g => g.items.length > 0);
 
     const faqTabs: { id: FaqTab; label: string }[] = [
         { id: 'all', label: 'All' },
-        ...FAQS.map(s => ({ id: s.category as FaqTab, label: s.category })),
+        ...faqCategories.map(cat => ({
+            id: cat as FaqTab,
+            label: (CATEGORY_META[cat] || CATEGORY_META.general).label,
+        })),
     ];
 
     return (
-        <div className="min-h-[calc(100vh-64px)] bg-[#0E0F11] text-white pb-24">
+        <div className="min-h-[calc(100vh-64px)] bg-bg-zeero-3 text-white pb-24">
 
             {/* ── Hero ── */}
-            <div className="relative bg-gradient-to-b from-brand-gold/10 via-[#111315] to-[#0E0F11] border-b border-white/5">
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(227,125,50,0.12),transparent_60%)]" />
+            <div className="relative bg-gradient-to-b from-brand-gold/10 via-[#0F1016] to-[#0C0D12] border-b border-white/[0.04]">
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(255,106,0,0.025),transparent_60%)]" />
                 <div className="relative max-w-3xl mx-auto px-4 pt-10 pb-8 text-center">
                     {/* Back to website — PC only */}
                     <div className="hidden md:flex absolute top-6 left-4">
-                        <Link href="/" className="flex items-center gap-2 text-text-muted hover:text-white transition-colors text-sm font-medium bg-white/5 hover:bg-white/10 border border-white/5 px-4 py-2 rounded-full">
+                        <Link href="/" className="flex items-center gap-2 text-text-muted hover:text-white transition-colors text-sm font-medium bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] px-4 py-2 rounded-full">
                             <Home size={14} />
                             Back to Home
                         </Link>
@@ -517,13 +609,13 @@ export default function SupportPage() {
                             onChange={e => { setSearch(e.target.value); setSearchOpen(true); }}
                             onFocus={() => { if (search) setSearchOpen(true); }}
                             placeholder="Search FAQs..."
-                            className="w-full bg-[#1A1D21] border border-white/10 focus:border-brand-gold/50 rounded-2xl pl-11 pr-10 py-3.5 text-sm text-white placeholder:text-text-disabled outline-none transition-all shadow-lg"
+                            className="w-full bg-bg-modal border border-white/[0.06] focus:border-brand-gold/50 rounded-2xl pl-11 pr-10 py-3.5 text-sm text-white placeholder:text-text-disabled outline-none transition-all shadow-lg"
                         />
                         {search && <button onClick={() => { setSearch(''); setSearchOpen(false); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-white transition-colors z-10"><X size={16} /></button>}
 
                         {/* Floating search results dropdown */}
                         {searchOpen && search.trim() && (
-                            <div className="absolute top-full left-0 right-0 mt-2 bg-[#1A1D21] border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden max-h-[420px] overflow-y-auto">
+                            <div className="absolute top-full left-0 right-0 mt-2 bg-bg-modal border border-white/[0.06] rounded-2xl shadow-xl z-50 overflow-hidden max-h-[420px] overflow-y-auto">
                                 {searchResults.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-8 text-text-muted text-sm">
                                         <HelpCircle size={28} className="mb-2 opacity-30" />
@@ -531,16 +623,16 @@ export default function SupportPage() {
                                     </div>
                                 ) : (
                                     <>
-                                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5">
+                                        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/[0.04]">
                                             <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">
                                                 {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
                                             </span>
                                             <button onClick={() => setSearchOpen(false)} className="text-text-muted hover:text-white transition-colors"><X size={13} /></button>
                                         </div>
-                                        {searchResults.map(({ q, a, category, color, bg, icon: SIcon }, idx) => (
+                                        {searchResults.map((faq, idx) => (
                                             <SearchResultItem
-                                                key={q}
-                                                q={q} a={a} category={category} color={color} bg={bg} icon={SIcon}
+                                                key={faq._id}
+                                                faq={faq}
                                                 searchQuery={search}
                                                 isLast={idx === searchResults.length - 1}
                                             />
@@ -580,8 +672,8 @@ export default function SupportPage() {
 
                 {/* Ticket Panel */}
                 <section>
-                    <div className="bg-[#111315] border border-white/5 rounded-2xl overflow-hidden">
-                        <div className="flex items-center gap-3 px-6 py-4 border-b border-white/5 bg-gradient-to-r from-brand-gold/10 to-transparent">
+                    <div className="bg-bg-deep border border-white/[0.04] rounded-2xl overflow-hidden">
+                        <div className="flex items-center gap-3 px-6 py-4 border-b border-white/[0.04] bg-gradient-to-r from-brand-gold/10 to-transparent">
                             <div className="p-2 rounded-xl bg-brand-gold/10 text-brand-gold">
                                 {view === 'chat' ? <MessageCircle size={18} /> : view === 'new-ticket' ? <Plus size={18} /> : <Ticket size={18} />}
                             </div>
@@ -599,7 +691,7 @@ export default function SupportPage() {
                                 </button>
                             )}
                             {view === 'home' && isAuthenticated && (
-                                <button onClick={() => setView('new-ticket')} className="flex items-center gap-1.5 text-xs font-bold bg-brand-gold text-black px-3 py-1.5 rounded-lg">
+                                <button onClick={() => setView('new-ticket')} className="flex items-center gap-1.5 text-xs font-bold bg-brand-gold text-text-inverse px-3 py-1.5 rounded-lg">
                                     <Plus size={13} /> New Ticket
                                 </button>
                             )}
@@ -611,7 +703,7 @@ export default function SupportPage() {
                                     <p className="text-white font-black text-lg">Login to access support</p>
                                     <p className="text-text-muted text-sm max-w-xs">Create an account or log in to open support tickets and chat with our team.</p>
                                     <button onClick={() => window.dispatchEvent(new CustomEvent('openLogin'))}
-                                        className="mt-2 px-8 py-3 bg-brand-gold text-black font-black text-sm uppercase rounded-xl shadow-glow-gold">
+                                        className="mt-2 px-8 py-3 bg-brand-gold text-text-inverse font-black text-sm uppercase rounded-xl shadow-glow-gold">
                                         Log In
                                     </button>
                                 </div>
@@ -633,32 +725,38 @@ export default function SupportPage() {
                     </h2>
 
                     {/* Tab Bar */}
-                    <div className="flex gap-2 flex-wrap mb-6">
-                        {faqTabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setFaqTab(tab.id)}
-                                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${faqTab === tab.id ? 'bg-brand-gold text-black' : 'bg-white/5 text-text-muted hover:text-white'}`}
-                            >
-                                {tab.label}
-                            </button>
-                        ))}
-                    </div>
+                    {faqCategories.length > 1 && (
+                        <div className="flex gap-2 flex-wrap mb-6">
+                            {faqTabs.map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setFaqTab(tab.id)}
+                                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${faqTab === tab.id ? 'bg-brand-gold text-text-inverse' : 'bg-white/[0.04] text-text-muted hover:text-white'}`}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
 
-                    {filteredFaqs.length === 0 ? (
-                        <div className="text-center py-16 text-text-muted"><HelpCircle size={40} className="mx-auto mb-3 opacity-30" /><p>No FAQs found.</p></div>
+                    {faqLoading ? (
+                        <div className="flex items-center justify-center py-16">
+                            <Loader2 size={24} className="animate-spin text-brand-gold" />
+                        </div>
+                    ) : groupedFaqs.length === 0 ? (
+                        <div className="text-center py-16 text-text-muted"><HelpCircle size={40} className="mx-auto mb-3 opacity-30" /><p>No FAQs available yet.</p></div>
                     ) : (
                         <div className="space-y-8">
-                            {filteredFaqs.map(section => {
-                                const SectionIcon = section.icon;
+                            {groupedFaqs.map(group => {
+                                const SectionIcon = group.meta.icon;
                                 return (
-                                    <div key={section.category}>
-                                        <div className={`inline-flex items-center gap-2 ${section.color} text-xs font-black uppercase tracking-widest mb-3`}>
-                                            <div className={`p-1.5 rounded-lg ${section.bg}`}><SectionIcon size={13} /></div>
-                                            {section.category}
+                                    <div key={group.category}>
+                                        <div className={`inline-flex items-center gap-2 ${group.meta.color} text-xs font-black uppercase tracking-widest mb-3`}>
+                                            <div className={`p-1.5 rounded-lg ${group.meta.bg}`}><SectionIcon size={13} /></div>
+                                            {group.meta.label}
                                         </div>
                                         <div className="space-y-2">
-                                            {section.questions.map(({ q, a }) => <FaqItem key={q} q={q} a={a} />)}
+                                            {group.items.map(faq => <FaqItem key={faq._id} faq={faq} />)}
                                         </div>
                                     </div>
                                 );
@@ -667,6 +765,7 @@ export default function SupportPage() {
                     )}
                 </section>
             </div>
+            <ChatwootWidget />
         </div>
     );
 }

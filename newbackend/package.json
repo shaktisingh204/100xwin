@@ -22,7 +22,18 @@
     "migrate": "npx prisma migrate deploy",
     "db:push": "npx prisma db push",
     "backfill:bonus-wallets": "ts-node src/scripts/backfill-bonus-wallets.ts",
-    "repair:bonus-user468": "ts-node src/scripts/repair-orphaned-bonus-user468.ts"
+    "backfill:bonus-minimums": "ts-node src/scripts/backfill-bonus-minimums.ts",
+    "backfill:missed-deposit-bonuses": "ts-node src/scripts/backfill-missed-deposit-bonuses.ts",
+    "repair:bonus-user468": "ts-node src/scripts/repair-orphaned-bonus-user468.ts",
+    "repair:sports-bonus-transactions": "ts-node src/scripts/repair-sports-bonus-transactions.ts",
+    "repair:sportradar-settlements": "ts-node src/scripts/revert-sportradar-settlements.ts",
+    "repair:sportradar-settlements:force": "ts-node src/scripts/revert-sportradar-settlements.ts --apply --allow-negative",
+    "repair:bonus-convert-recovery": "ts-node src/scripts/repair-bonus-convert-recovery.ts",
+    "repair:stabilize-wallets": "ts-node src/scripts/stabilize-repaired-wallets.ts",
+    "repair:wallet-history": "ts-node src/scripts/repair-wallet-history.ts",
+    "repair:wallet-history:force": "ts-node src/scripts/repair-wallet-history.ts --apply --allow-negative",
+    "repair:wallets-to-cutoff": "ts-node src/scripts/rebuild-wallets-to-cutoff.ts",
+    "repair:wallets-to-cutoff:force": "ts-node src/scripts/rebuild-wallets-to-cutoff.ts --apply --allow-negative"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
@@ -49,6 +60,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.3",
     "csv-parse": "^6.1.0",
+    "form-data": "^4.0.5",
     "ioredis": "^5.9.2",
     "mongoose": "^9.2.1",
     "nodemailer": "^8.0.2",

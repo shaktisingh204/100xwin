@@ -22,6 +22,14 @@ interface Promotion {
     promoCode?: string;
     minDeposit?: number;
     bonusPercentage?: number;
+    maxBonus?: number;
+    wageringMultiplier?: number;
+    validityDays?: number;
+    currency?: string;
+    targetAudience?: string;
+    claimLimit?: number;
+    claimCount?: number;
+    startDate?: string;
     expiryDate?: string;
     buttonText?: string;
     buttonLink?: string;
@@ -38,7 +46,9 @@ interface Promotion {
 const EMPTY_FORM: Omit<Promotion, '_id'> = {
     title: '', subtitle: '', description: '', termsAndConditions: '',
     category: 'ALL', promoCode: '', minDeposit: 0, bonusPercentage: 0,
-    expiryDate: '', buttonText: 'CLAIM NOW', buttonLink: '/register',
+    maxBonus: 0, wageringMultiplier: 0, validityDays: 30, currency: 'BOTH',
+    targetAudience: 'ALL', claimLimit: 0, claimCount: 0,
+    startDate: '', expiryDate: '', buttonText: 'CLAIM NOW', buttonLink: '/register',
     bgImage: '', charImage: '', gradient: 'linear-gradient(135deg, #E37D32, #AE5910)',
     badgeLabel: '', isActive: true, isFeatured: false, showInApp: false, order: 0,
 };
@@ -183,6 +193,11 @@ export default function PromotionsAdminPage() {
             description: p.description || '', termsAndConditions: p.termsAndConditions || '',
             category: p.category || 'ALL', promoCode: p.promoCode || '',
             minDeposit: p.minDeposit || 0, bonusPercentage: p.bonusPercentage || 0,
+            maxBonus: p.maxBonus || 0, wageringMultiplier: p.wageringMultiplier || 0,
+            validityDays: p.validityDays || 30, currency: p.currency || 'BOTH',
+            targetAudience: p.targetAudience || 'ALL', claimLimit: p.claimLimit || 0,
+            claimCount: p.claimCount || 0,
+            startDate: p.startDate ? p.startDate.split('T')[0] : '',
             expiryDate: p.expiryDate ? p.expiryDate.split('T')[0] : '',
             buttonText: p.buttonText || 'CLAIM NOW', buttonLink: p.buttonLink || '/register',
             bgImage: p.bgImage || '', charImage: p.charImage || '',
@@ -199,6 +214,7 @@ export default function PromotionsAdminPage() {
         setSaving(true);
         const payload = {
             ...form,
+            startDate: form.startDate ? new Date(form.startDate).toISOString() : null,
             expiryDate: form.expiryDate ? new Date(form.expiryDate).toISOString() : null,
         };
         const res = editingId
@@ -404,7 +420,14 @@ export default function PromotionsAdminPage() {
                                             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none" />
                                     </div>
                                     <div>
-                                        <label className="block text-xs text-slate-400 font-bold mb-1">Min Deposit (₹)</label>
+                                        <label className="block text-xs text-slate-400 font-bold mb-1">Max Bonus Amount</label>
+                                        <input type="number" min={0} value={form.maxBonus}
+                                            onChange={e => setForm({ ...form, maxBonus: +e.target.value })}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none"
+                                            placeholder="0 = unlimited" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-slate-400 font-bold mb-1">Min Deposit</label>
                                         <input type="number" min={0} value={form.minDeposit}
                                             onChange={e => setForm({ ...form, minDeposit: +e.target.value })}
                                             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none" />
@@ -413,6 +436,69 @@ export default function PromotionsAdminPage() {
                                         <label className="block text-xs text-slate-400 font-bold mb-1">Promo Code</label>
                                         <input value={form.promoCode} onChange={e => setForm({ ...form, promoCode: e.target.value.toUpperCase() })}
                                             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-white focus:border-indigo-500 outline-none" />
+                                    </div>
+                                </div>
+                            </section>
+
+                            {/* ─── Wagering & Rules ─── */}
+                            <section>
+                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Wagering & Rules</h3>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <div>
+                                        <label className="block text-xs text-slate-400 font-bold mb-1">Wagering Req. (x)</label>
+                                        <input type="number" min={0} step={0.5} value={form.wageringMultiplier}
+                                            onChange={e => setForm({ ...form, wageringMultiplier: +e.target.value })}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none"
+                                            placeholder="e.g. 5" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-slate-400 font-bold mb-1">Validity (days)</label>
+                                        <input type="number" min={1} value={form.validityDays}
+                                            onChange={e => setForm({ ...form, validityDays: +e.target.value })}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-slate-400 font-bold mb-1">Claim Limit</label>
+                                        <input type="number" min={0} value={form.claimLimit}
+                                            onChange={e => setForm({ ...form, claimLimit: +e.target.value })}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none"
+                                            placeholder="0 = unlimited" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-slate-400 font-bold mb-1">Claims Used</label>
+                                        <input type="number" min={0} value={form.claimCount} disabled
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-500 outline-none cursor-not-allowed" />
+                                    </div>
+                                </div>
+                            </section>
+
+                            {/* ─── Targeting & Schedule ─── */}
+                            <section>
+                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Targeting & Schedule</h3>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <div>
+                                        <label className="block text-xs text-slate-400 font-bold mb-1">Currency</label>
+                                        <select value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none">
+                                            <option value="BOTH">Fiat & Crypto</option>
+                                            <option value="INR">INR Only</option>
+                                            <option value="CRYPTO">Crypto Only</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-slate-400 font-bold mb-1">Target Audience</label>
+                                        <select value={form.targetAudience} onChange={e => setForm({ ...form, targetAudience: e.target.value })}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none">
+                                            <option value="ALL">All Users</option>
+                                            <option value="NEW_USERS">New Users Only</option>
+                                            <option value="VIP">VIP Members Only</option>
+                                            <option value="RETURNING">Returning Users</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-slate-400 font-bold mb-1">Start Date</label>
+                                        <input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none" />
                                     </div>
                                     <div>
                                         <label className="block text-xs text-slate-400 font-bold mb-1">Expiry Date</label>

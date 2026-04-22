@@ -201,3 +201,50 @@ export async function deleteAnnouncement(id: string) {
         return { success: false, error: 'Failed to delete announcement' };
     }
 }
+
+// ─── FAQ ───────────────────────────────────────────────────────────────────
+
+import { Faq } from '@/models/MongoModels';
+
+export async function getFaqs() {
+    try {
+        await connectMongo();
+        const items = await Faq.find().sort({ category: 1, order: 1 }).lean();
+        return { success: true, data: JSON.parse(JSON.stringify(items)) };
+    } catch (error) {
+        return { success: false, error: 'Failed to fetch FAQs' };
+    }
+}
+
+export async function createFaq(data: any) {
+    try {
+        await connectMongo();
+        await Faq.create(data);
+        revalidatePath('/dashboard/cms/faq');
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: 'Failed to create FAQ' };
+    }
+}
+
+export async function updateFaq(id: string, data: any) {
+    try {
+        await connectMongo();
+        await Faq.findByIdAndUpdate(id, data);
+        revalidatePath('/dashboard/cms/faq');
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: 'Failed to update FAQ' };
+    }
+}
+
+export async function deleteFaq(id: string) {
+    try {
+        await connectMongo();
+        await Faq.findByIdAndDelete(id);
+        revalidatePath('/dashboard/cms/faq');
+        return { success: true };
+    } catch (error) {
+        return { success: false, error: 'Failed to delete FAQ' };
+    }
+}

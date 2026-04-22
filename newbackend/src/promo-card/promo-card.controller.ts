@@ -20,6 +20,7 @@ export class PromoCardController {
         return this.promoCardService.findAll(onlyActive);
     }
 
+    @Public()
     @Get(':id')
     findOne(@Param('id') id: string) {
         return this.promoCardService.findOne(id);

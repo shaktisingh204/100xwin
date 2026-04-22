@@ -17,7 +17,7 @@ export class HuiduApiService implements OnModuleInit {
     public readonly AGENCY_UID = 'ab72cfab44395f7063c6f0c0f05b2325';
     public readonly AES_KEY = 'cf847d09b90ae11051a5f09769a96578';
     public readonly PLAYER_PREFIX = 'h9f5c4';
-    public readonly BASE_URL = 'https://jsgame.live'; // Given API Game Domain
+    public readonly BASE_URL = 'https://huidu.bet'; // Given API Game Domain
 
     constructor(
         private readonly httpService: HttpService,
@@ -30,17 +30,8 @@ export class HuiduApiService implements OnModuleInit {
     async onModuleInit() {
         this.logger.log('Loading adxwinimages.json...');
         try {
-            const possiblePaths = [
-                path.join(process.cwd(), '../odd69.com/public/adxwinimages.json'),
-                path.join(process.cwd(), '../newwebsite/public/adxwinimages.json'),
-                path.join('/var/www/odd69/odd69.com/public/adxwinimages.json'),
-                path.join('/var/www/odd69/newwebsite/public/adxwinimages.json'),
-                path.join(process.cwd(), 'adxwinimages.json')
-            ];
-            
-            const mapPath = possiblePaths.find(p => fs.existsSync(p));
-
-            if (mapPath) {
+            const mapPath = path.join(process.cwd(), '../newwebsite/public/adxwinimages.json');
+            if (fs.existsSync(mapPath)) {
                 const data = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
                 data.forEach((item: any) => {
                     if (item.fileName && item.relativePath) {
@@ -62,16 +53,15 @@ export class HuiduApiService implements OnModuleInit {
                         }
                     }
                 });
-                this.logger.log(`Loaded ${Object.keys(this.gameIconMap).length} mapped keys from ${mapPath}.`);
+                this.logger.log(`Loaded ${Object.keys(this.gameIconMap).length} mapped keys from adxwinimages.json.`);
             } else {
-                this.logger.warn(`adxwinimages.json not found in any standard paths checked: ${possiblePaths.join(', ')}`);
+                this.logger.warn(`adxwinimages.json not found at ${mapPath}`);
             }
         } catch (e) {
             this.logger.error('Failed to load adxwinimages.json', e.message);
         }
 
-        this.logger.log('Executing Initial HUIDU Sync on Startup...');
-        this.syncHuiduData().catch(e => this.logger.error('Startup sync execution failed:', e));
+        this.logger.log('HUIDU Initial Sync on Startup is disabled. Will run at 12 PM daily.');
     }
 
     @Cron('0 12 * * *') // Runs every 24 hours at 12 PM

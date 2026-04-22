@@ -29,5 +29,4 @@ export class Match {
 }
 
 export const MatchSchema = SchemaFactory.createForClass(Match);
-MatchSchema.index({ matchId: 1 });
 MatchSchema.index({ status: 1, matchDate: 1 });

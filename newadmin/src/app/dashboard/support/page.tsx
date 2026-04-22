@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from 'react';
-import { getAllTickets, getTicket, addMessage, closeTicket, reopenTicket, getStats } from '@/actions/support';
+import { getAllTickets, getTicket, closeTicket, reopenTicket, getStats } from '@/actions/support';
 import { SupportTicket, SupportMessage } from '../../../services/support.service';
 import socket from '../../../services/socket';
 import {
@@ -52,6 +52,7 @@ export default function SupportPage() {
     const [statusFilter, setStatusFilter] = useState<'ALL' | 'OPEN' | 'CLOSED'>('ALL');
     const [search, setSearch] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const pendingRef = useRef<Set<number>>(new Set());
 
     // ── Load ──────────────────────────────────────────────────────────────────
     useEffect(() => {
@@ -59,17 +60,34 @@ export default function SupportPage() {
         socket.emit('adminJoinSupport');
 
         socket.on('newMessage', (msg: SupportMessage & { userId?: number }) => {
+            // Add message to current chat if viewing this ticket
             if (selectedTicket && msg.ticketId === selectedTicket.id) {
                 setMessages(prev => {
-                    const exists = prev.some(m => m.id === msg.id);
-                    return exists ? prev : [...prev, msg];
+                    // Replace optimistic pending message if match found
+                    if (pendingRef.current.size > 0) {
+                        const pendingId = Array.from(pendingRef.current).find(pid => {
+                            const pendingMsg = prev.find(m => m.id === pid);
+                            return pendingMsg && pendingMsg.message === msg.message && pendingMsg.sender === msg.sender;
+                        });
+                        if (pendingId !== undefined) {
+                            pendingRef.current.delete(pendingId);
+                            return prev.map(m => m.id === pendingId ? msg : m);
+                        }
+                    }
+                    // Skip if already present
+                    if (prev.some(m => m.id === msg.id)) return prev;
+                    return [...prev, msg];
                 });
                 scrollToBottom();
             }
             // Bump ticket to top in list
             setTickets(prev => {
                 const idx = prev.findIndex(t => t.id === msg.ticketId);
-                if (idx === -1) return prev;
+                if (idx === -1) {
+                    // New ticket we haven't seen — reload list
+                    loadAll();
+                    return prev;
+                }
                 const updated = [...prev];
                 updated[idx] = { ...updated[idx], updatedAt: new Date().toISOString() };
                 return [updated[idx], ...updated.filter((_, i) => i !== idx)];
@@ -100,19 +118,21 @@ export default function SupportPage() {
         }
     };
 
-    const handleSendMessage = async (e: React.FormEvent) => {
+    const handleSendMessage = (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedTicket || !newMessage.trim()) return;
         const text = newMessage.trim();
 
-        // Optimistic update
-        const tempMsg: any = { id: Date.now(), ticketId: selectedTicket.id, message: text, sender: 'ADMIN', createdAt: new Date().toISOString() };
+        // Optimistic update with negative temp id
+        const tempId = -Date.now();
+        const tempMsg: any = { id: tempId, ticketId: selectedTicket.id, message: text, sender: 'ADMIN', createdAt: new Date().toISOString() };
+        pendingRef.current.add(tempId);
         setMessages(prev => [...prev, tempMsg]);
         setNewMessage('');
         scrollToBottom();
 
-        await addMessage(selectedTicket.id, text, 'ADMIN');
-        if (socket) socket.emit('sendMessage', { ticketId: selectedTicket.id, message: text, sender: 'ADMIN' });
+        // Send via socket — gateway saves + broadcasts to both rooms
+        socket.emit('sendMessage', { ticketId: selectedTicket.id, message: text, sender: 'ADMIN' });
     };
 
     const handleCloseTicket = async () => {
@@ -152,13 +172,13 @@ export default function SupportPage() {
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <div className="flex min-h-[calc(100dvh-8rem)] flex-col gap-4">
+        <div className="flex h-[calc(100dvh-6rem)] flex-col gap-4">
             {/* Stats */}
             <StatsBar stats={stats} />
 
             <div className="flex-1 flex flex-col md:flex-row gap-4 overflow-hidden min-h-0">
                 {/* Left: Ticket List */}
-                <div className={`${selectedTicket ? 'hidden md:flex' : 'flex'} w-full min-h-[320px] shrink-0 flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-800 md:w-[340px] md:min-h-0`}>
+                <div className={`${selectedTicket ? 'hidden md:flex' : 'flex'} w-full shrink-0 flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-800 md:w-[340px]`}>
                     {/* Toolbar */}
                     <div className="p-3 border-b border-slate-700 space-y-2">
                         <div className="flex items-center justify-between">
@@ -242,7 +262,7 @@ export default function SupportPage() {
                 </div>
 
                 {/* Right: Chat Area */}
-                <div className={`${selectedTicket ? 'flex' : 'hidden md:flex'} min-h-[420px] flex-1 flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-800 md:min-h-0`}>
+                <div className={`${selectedTicket ? 'flex' : 'hidden md:flex'} flex-1 flex-col overflow-hidden rounded-xl border border-slate-700 bg-slate-800`}>
                     {selectedTicket ? (
                         <>
                             {/* Chat Header */}

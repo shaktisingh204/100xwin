@@ -42,6 +42,11 @@ export const supportApi = {
         const res = await api.post('/support/message', { ticketId, message });
         return res.data as SupportMessage;
     },
+
+    getFaqs: async () => {
+        const res = await api.get('/faq');
+        return res.data;
+    },
 };
 
 // ─── Socket ─────────────────────────────────────────────────────────────────
@@ -54,10 +59,12 @@ export function getSupportSocket(): Socket | null {
         if (!endpoint) {
             return null;
         }
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
         _socket = io(endpoint.url, {
             path: endpoint.path,
             withCredentials: true,
             transports: ['websocket'],
+            auth: token ? { token } : undefined,
         });
     }
     return _socket;

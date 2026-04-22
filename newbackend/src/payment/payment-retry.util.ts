@@ -2,11 +2,13 @@ import { PrismaService } from '../prisma.service';
 
 export const GATEWAY_ONE_ID = 'UPI1';
 export const GATEWAY_TWO_ID = 'UPI2';
+export const GATEWAY_THREE_ID = 'UPI3';
 export const GATEWAY_ONE_LABEL = 'UPI Gateway 1';
 export const GATEWAY_TWO_LABEL = 'UPI Gateway 2';
+export const GATEWAY_THREE_LABEL = 'UPI Gateway 3';
 export const MAX_GATEWAY_RETRIES = 0;
 
-const GATEWAY_LABELS = [GATEWAY_ONE_LABEL, GATEWAY_TWO_LABEL];
+const GATEWAY_LABELS = [GATEWAY_ONE_LABEL, GATEWAY_TWO_LABEL, GATEWAY_THREE_LABEL];
 
 type RetryAwareTransaction = {
   id: number;
@@ -67,6 +69,7 @@ const getRetryGroupId = (txn: RetryAwareTransaction) => {
 const getGatewayIdFromPaymentMethod = (paymentMethod?: string | null) => {
   if (paymentMethod === GATEWAY_ONE_LABEL) return GATEWAY_ONE_ID;
   if (paymentMethod === GATEWAY_TWO_LABEL) return GATEWAY_TWO_ID;
+  if (paymentMethod === GATEWAY_THREE_LABEL) return GATEWAY_THREE_ID;
   return null;
 };
 
@@ -74,27 +77,59 @@ export async function getGatewayRetryState(
   prisma: PrismaService,
   userId: number,
 ): Promise<GatewayRetryState> {
+
+  const CLEAR_STATE: GatewayRetryState = {
+    hasPendingGatewayPayment: false,
+    forceManual: false,
+    maxGatewayRetries: MAX_GATEWAY_RETRIES,
+    gatewayRetryCount: 0,
+    retryGroupId: null,
+    suggestedGatewayId: null,
+    pendingTransaction: null,
+    message: '',
+  };
+
+  // Only consider gateway PENDING txns from the last 24 hours (stale = irrelevant)
+  const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
   const latestPendingGatewayTxn = await prisma.transaction.findFirst({
     where: {
       userId,
       type: 'DEPOSIT',
       status: 'PENDING',
       paymentMethod: { in: GATEWAY_LABELS },
+      createdAt: { gte: cutoffTime },
     },
     orderBy: { createdAt: 'desc' },
   });
 
   if (!latestPendingGatewayTxn) {
-    return {
-      hasPendingGatewayPayment: false,
-      forceManual: false,
-      maxGatewayRetries: MAX_GATEWAY_RETRIES,
-      gatewayRetryCount: 0,
-      retryGroupId: null,
-      suggestedGatewayId: null,
-      pendingTransaction: null,
-      message: '',
-    };
+    return CLEAR_STATE;
+  }
+
+  // ── Auto-resolve: if user submitted a manual deposit AFTER this gateway txn,
+  // it means they already handled it via manual UPI — treat gateway as clear.
+  const newerManualDeposit = await prisma.transaction.findFirst({
+    where: {
+      userId,
+      type: 'DEPOSIT',
+      // Any non-gateway, non-crypto payment (manual, account payment names, etc.)
+      paymentMethod: { notIn: [...GATEWAY_LABELS, 'nowpayments', 'crypto'] },
+      createdAt: { gt: latestPendingGatewayTxn.createdAt },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (newerManualDeposit) {
+    // User already paid manually after the stale gateway attempt — auto-cancel the gateway txn
+    await prisma.transaction.update({
+      where: { id: latestPendingGatewayTxn.id },
+      data: {
+        status: 'REJECTED',
+        remarks: `Auto-cancelled: superseded by manual deposit (txnId: ${newerManualDeposit.id}, utr: ${newerManualDeposit.utr || 'N/A'})`,
+      },
+    }).catch(() => { /* non-fatal */ });
+    return CLEAR_STATE;
   }
 
   const retryGroupId = getRetryGroupId(latestPendingGatewayTxn);
@@ -121,8 +156,10 @@ export async function getGatewayRetryState(
     pendingGatewayId === GATEWAY_ONE_ID
       ? GATEWAY_TWO_ID
       : pendingGatewayId === GATEWAY_TWO_ID
-        ? GATEWAY_ONE_ID
-        : null;
+        ? GATEWAY_THREE_ID
+        : pendingGatewayId === GATEWAY_THREE_ID
+          ? GATEWAY_ONE_ID
+          : null;
 
   return {
     hasPendingGatewayPayment: true,

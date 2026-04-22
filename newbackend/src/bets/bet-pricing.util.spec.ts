@@ -29,4 +29,19 @@ describe('bet pricing util', () => {
       }),
     ).toBe(292.04);
   });
+
+  it('treats toss and winner-style markets as decimal odds even under fancy gtypes', () => {
+    expect(getRateFromSize(500000)).toBe(5001);
+
+    expect(
+      calculatePotentialWinAmount({
+        stake: 500,
+        odds: 1.96,
+        rate: getRateFromSize(500000),
+        marketType: 'fancy',
+        marketName: 'Will Win the Toss',
+        selectionName: 'RC Bengaluru',
+      }),
+    ).toBe(980);
+  });
 });

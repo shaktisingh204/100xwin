@@ -1,6 +1,6 @@
-import { Injectable, ConflictException, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { CreateVipApplicationDto, ReviewVipApplicationDto } from './dto/vip.dto';
+import { CreateVipApplicationDto, ReviewVipApplicationDto, UpdateVipTierDto } from './dto/vip.dto';
 
 @Injectable()
 export class VipService {
@@ -12,7 +12,6 @@ export class VipService {
         dto: CreateVipApplicationDto,
         meta: { ipAddress?: string; userAgent?: string },
     ) {
-        // Check if user already has an application
         const existing = await this.prisma.vipApplication.findUnique({
             where: { userId },
         });
@@ -26,7 +25,7 @@ export class VipService {
             if (existing.status === 'APPROVED') {
                 throw new ConflictException('You are already a VIP member.');
             }
-            // REJECTED — allow re-apply by updating the record
+            // REJECTED — allow re-apply
             return this.prisma.vipApplication.update({
                 where: { userId },
                 data: {
@@ -38,6 +37,7 @@ export class VipService {
                     reviewedBy: null,
                     reviewNotes: null,
                     reviewedAt: null,
+                    assignedTier: null,
                     ipAddress: meta.ipAddress ?? null,
                     userAgent: meta.userAgent ?? null,
                 },
@@ -71,11 +71,45 @@ export class VipService {
                 monthlyVolume: true,
                 reviewNotes: true,
                 reviewedAt: true,
+                assignedTier: true,
                 createdAt: true,
                 updatedAt: true,
             },
         });
         return app ?? null;
+    }
+
+    // ─── USER: Get VIP status (tier + benefits) ─────────────────────────────
+    async getMyVipStatus(userId: number) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            select: {
+                vipTier: true,
+                totalDeposited: true,
+                totalWagered: true,
+                createdAt: true,
+            },
+        });
+        if (!user) throw new NotFoundException('User not found');
+
+        // Load tier settings from SystemConfig
+        const tierSettings = await this.getVipTierSettings();
+        const currentTierConfig = tierSettings.find(t => t.key === user.vipTier) || null;
+
+        // Find next tier
+        const tierOrder = ['NONE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND'];
+        const currentIdx = tierOrder.indexOf(user.vipTier);
+        const nextTierKey = currentIdx < tierOrder.length - 1 ? tierOrder[currentIdx + 1] : null;
+        const nextTierConfig = nextTierKey ? tierSettings.find(t => t.key === nextTierKey) || null : null;
+
+        return {
+            tier: user.vipTier,
+            tierConfig: currentTierConfig,
+            nextTier: nextTierConfig,
+            totalDeposited: user.totalDeposited,
+            totalWagered: user.totalWagered,
+            memberSince: user.createdAt,
+        };
     }
 
     // ─── ADMIN: List all applications ───────────────────────────────────────
@@ -98,6 +132,10 @@ export class VipService {
                             phoneNumber: true,
                             createdAt: true,
                             balance: true,
+                            totalDeposited: true,
+                            totalWagered: true,
+                            vipTier: true,
+                            kycStatus: true,
                         },
                     },
                 },
@@ -120,6 +158,9 @@ export class VipService {
                         email: true,
                         phoneNumber: true,
                         balance: true,
+                        totalDeposited: true,
+                        totalWagered: true,
+                        vipTier: true,
                         createdAt: true,
                         kycStatus: true,
                     },
@@ -139,6 +180,51 @@ export class VipService {
             throw new BadRequestException('Application is already approved.');
         }
 
+        const tier = dto.assignedTier || 'SILVER';
+
+        // If approving, also update the user's vipTier
+        if (dto.status === 'APPROVED') {
+            await this.prisma.$transaction([
+                this.prisma.vipApplication.update({
+                    where: { id },
+                    data: {
+                        status: 'APPROVED',
+                        reviewedBy: adminId,
+                        reviewNotes: dto.reviewNotes ?? null,
+                        reviewedAt: new Date(),
+                        assignedTier: tier as any,
+                    },
+                }),
+                this.prisma.user.update({
+                    where: { id: app.userId },
+                    data: { vipTier: tier as any },
+                }),
+            ]);
+            return { success: true, message: `Application approved with ${tier} tier.` };
+        }
+
+        // If rejecting, reset user tier to NONE
+        if (dto.status === 'REJECTED') {
+            await this.prisma.$transaction([
+                this.prisma.vipApplication.update({
+                    where: { id },
+                    data: {
+                        status: 'REJECTED',
+                        reviewedBy: adminId,
+                        reviewNotes: dto.reviewNotes ?? null,
+                        reviewedAt: new Date(),
+                        assignedTier: null,
+                    },
+                }),
+                this.prisma.user.update({
+                    where: { id: app.userId },
+                    data: { vipTier: 'NONE' },
+                }),
+            ]);
+            return { success: true, message: 'Application rejected.' };
+        }
+
+        // Under review — just update status
         return this.prisma.vipApplication.update({
             where: { id },
             data: {
@@ -148,6 +234,59 @@ export class VipService {
                 reviewedAt: new Date(),
             },
         });
+    }
+
+    // ─── ADMIN: List VIP members ────────────────────────────────────────────
+    async listVipMembers(page = 1, limit = 20, tier?: string, search?: string) {
+        const skip = (page - 1) * limit;
+        const where: any = { vipTier: { not: 'NONE' } };
+
+        if (tier && tier !== 'ALL') {
+            where.vipTier = tier;
+        }
+        if (search) {
+            where.OR = [
+                { username: { contains: search, mode: 'insensitive' } },
+                { email: { contains: search, mode: 'insensitive' } },
+            ];
+        }
+
+        const [members, total] = await this.prisma.$transaction([
+            this.prisma.user.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: { totalDeposited: 'desc' },
+                select: {
+                    id: true,
+                    username: true,
+                    email: true,
+                    phoneNumber: true,
+                    vipTier: true,
+                    balance: true,
+                    totalDeposited: true,
+                    totalWagered: true,
+                    kycStatus: true,
+                    createdAt: true,
+                },
+            }),
+            this.prisma.user.count({ where }),
+        ]);
+
+        return { members, total, page, limit, pages: Math.ceil(total / limit) };
+    }
+
+    // ─── ADMIN: Update user's VIP tier ──────────────────────────────────────
+    async updateUserTier(userId: number, dto: UpdateVipTierDto, adminId: number) {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (!user) throw new NotFoundException('User not found');
+
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: { vipTier: dto.tier as any },
+        });
+
+        return { success: true, message: `User ${user.username} tier updated to ${dto.tier}.` };
     }
 
     // ─── ADMIN: Dashboard stats ──────────────────────────────────────────────
@@ -162,6 +301,38 @@ export class VipService {
                 this.prisma.vipApplication.count({ where: { status: 'TRANSFER_REQUESTED' } }),
             ]);
 
-        return { total, pending, underReview, approved, rejected, transfer };
+        // Tier distribution
+        const [silver, gold, platinum, diamond] = await this.prisma.$transaction([
+            this.prisma.user.count({ where: { vipTier: 'SILVER' } }),
+            this.prisma.user.count({ where: { vipTier: 'GOLD' } }),
+            this.prisma.user.count({ where: { vipTier: 'PLATINUM' } }),
+            this.prisma.user.count({ where: { vipTier: 'DIAMOND' } }),
+        ]);
+
+        return {
+            total, pending, underReview, approved, rejected, transfer,
+            tierDistribution: { silver, gold, platinum, diamond, total: silver + gold + platinum + diamond },
+        };
+    }
+
+    // ─── VIP Tier Settings (from SystemConfig) ──────────────────────────────
+    async getVipTierSettings() {
+        const record = await this.prisma.systemConfig.findUnique({
+            where: { key: 'VIP_TIER_SETTINGS' },
+        });
+        if (!record?.value) return DEFAULT_VIP_TIER_SETTINGS;
+        try {
+            return JSON.parse(record.value);
+        } catch {
+            return DEFAULT_VIP_TIER_SETTINGS;
+        }
     }
 }
+
+// Default tier configs
+const DEFAULT_VIP_TIER_SETTINGS = [
+    { key: 'SILVER',   name: 'Silver',   color: '#94A3B8', lossbackPct: 5,  reloadBonusPct: 2,  priorityWithdrawal: false, dedicatedHost: false, freeWithdrawals: false, minDeposit: 50000 },
+    { key: 'GOLD',     name: 'Gold',     color: '#F59E0B', lossbackPct: 10, reloadBonusPct: 5,  priorityWithdrawal: true,  dedicatedHost: false, freeWithdrawals: true,  minDeposit: 200000 },
+    { key: 'PLATINUM', name: 'Platinum', color: '#8B5CF6', lossbackPct: 15, reloadBonusPct: 8,  priorityWithdrawal: true,  dedicatedHost: true,  freeWithdrawals: true,  minDeposit: 500000 },
+    { key: 'DIAMOND',  name: 'Diamond',  color: '#3B82F6', lossbackPct: 20, reloadBonusPct: 12, priorityWithdrawal: true,  dedicatedHost: true,  freeWithdrawals: true,  minDeposit: 1000000 },
+];

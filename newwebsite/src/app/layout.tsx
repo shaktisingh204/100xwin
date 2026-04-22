@@ -1,15 +1,35 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Sora, DM_Sans, Mulish } from 'next/font/google';
 import './globals.css';
 import ClientLayout from '@/components/layout/ClientLayout';
 import Script from 'next/script';
+import MaintenanceState from '@/components/maintenance/MaintenanceState';
+import { extractMaintenanceConfig, getMaintenanceMessage, isScopeBlocked } from '@/lib/maintenance';
+import { getTrackerConfig, type PublicSettings } from '@/lib/siteConfig';
+import { cfImage } from '@/utils/cfImages';
 
-const inter = Inter({ subsets: ['latin'] });
+const sora = Sora({
+  subsets: ['latin'],
+  variable: '--font-sora',
+  display: 'swap',
+  weight: ['300', '400', '500', '600', '700', '800'],
+});
 
-export const metadata: Metadata = {
-  title: 'Zeero - Premium Sports Betting & Casino',
-  description: 'Experience the thrill of victory with Zeero.',
-};
+const dmSans = DM_Sans({
+  subsets: ['latin'],
+  variable: '--font-dm-sans',
+  display: 'swap',
+  weight: ['400', '500', '600', '700'],
+});
+
+const mulish = Mulish({
+  subsets: ['latin'],
+  variable: '--font-mulish',
+  display: 'swap',
+  weight: ['400', '500', '600', '700', '800', '900'],
+});
+
+export const revalidate = 60;
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -19,19 +39,55 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
-/** Fetch tracker/analytics config from the backend at server-render time.
- *  The result is cached per request (ISR-safe). */
-async function getTrackerConfig(): Promise<Record<string, string>> {
+const getStringSetting = (settings: PublicSettings, key: string) =>
+  typeof settings[key] === 'string' ? (settings[key] as string) : '';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const cfg = await getTrackerConfig();
+  const faviconUrl = getStringSetting(cfg, 'FAVICON_URL').trim();
+
+  // Parse SEO meta data from admin-configured SITE_META
+  let siteMeta: Record<string, string> = {};
   try {
-    const apiUrl = process.env.API_URL || 'https://zeero.bet/api';
-    const res = await fetch(`${apiUrl}/settings/public`, {
-      next: { revalidate: 60 }, // re-fetch at most once per minute
-    });
-    if (!res.ok) return {};
-    return await res.json();
-  } catch {
-    return {};
-  }
+    const raw = getStringSetting(cfg, 'SITE_META');
+    if (raw) siteMeta = JSON.parse(raw);
+  } catch {}
+
+  const siteTitle = siteMeta.siteTitle || 'Zeero - Premium Sports Betting & Casino';
+  const siteDescription = siteMeta.siteDescription || 'Experience the thrill of victory with Zeero.';
+  const ogTitle = siteMeta.ogTitle || siteTitle;
+  const ogDescription = siteMeta.ogDescription || siteDescription;
+  const ogImage = siteMeta.ogImage || '';
+  const canonicalUrl = siteMeta.canonicalUrl || '';
+  const robots = siteMeta.robots || 'index, follow';
+  const metaKeywords = siteMeta.metaKeywords || '';
+  const twitterCard = (siteMeta.twitterCard as 'summary' | 'summary_large_image') || 'summary_large_image';
+
+  return {
+    title: siteTitle,
+    description: siteDescription,
+    ...(metaKeywords && { keywords: metaKeywords }),
+    ...(robots && { robots }),
+    ...(canonicalUrl && { alternates: { canonical: canonicalUrl } }),
+    icons: faviconUrl ? {
+      icon: [{ url: faviconUrl, type: "image/png", sizes: "any" }],
+      apple: [{ url: faviconUrl }],
+      shortcut: [{ url: faviconUrl }]
+    } : undefined,
+    openGraph: {
+      title: ogTitle,
+      description: ogDescription,
+      type: 'website',
+      ...(ogImage && { images: [{ url: ogImage, width: 1200, height: 630 }] }),
+      ...(canonicalUrl && { url: canonicalUrl }),
+    },
+    twitter: {
+      card: twitterCard,
+      title: ogTitle,
+      description: ogDescription,
+      ...(ogImage && { images: [ogImage] }),
+    },
+  };
 }
 
 export default async function RootLayout({
@@ -40,16 +96,68 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const cfg = await getTrackerConfig();
+  const maintenanceConfig = extractMaintenanceConfig(cfg);
 
-  const ga4Id = cfg.GA4_MEASUREMENT_ID?.trim();
-  const metaPixelId = cfg.META_PIXEL_ID?.trim();
-  const tiktokPixelId = cfg.TIKTOK_PIXEL_ID?.trim();
-  const headScripts = cfg.CUSTOM_HEAD_SCRIPTS?.trim();
-  const bodyScripts = cfg.CUSTOM_BODY_SCRIPTS?.trim();
+  const ga4Id = getStringSetting(cfg, 'GA4_MEASUREMENT_ID').trim();
+  const metaPixelId = getStringSetting(cfg, 'META_PIXEL_ID').trim();
+  const tiktokPixelId = getStringSetting(cfg, 'TIKTOK_PIXEL_ID').trim();
+  const headScripts = getStringSetting(cfg, 'CUSTOM_HEAD_SCRIPTS').trim();
+  const bodyScripts = getStringSetting(cfg, 'CUSTOM_BODY_SCRIPTS').trim();
+  const platformBlocked = isScopeBlocked(maintenanceConfig, 'platform');
+  const platformMessage = getMaintenanceMessage(
+    maintenanceConfig,
+    'platform',
+    'The platform is currently under maintenance. Please check back shortly.',
+  );
+  const maintenanceAllowedUsersStr = getStringSetting(cfg, 'MAINTENANCE_ALLOWED_USERS') || '';
+  const maintenanceAllowedUsers = maintenanceAllowedUsersStr.split(',').filter(Boolean);
+
+  // Pull the header logo URL from the same SSR-cached config so we can emit
+  // a <link rel="preload"> hint. This lets the browser start downloading the
+  // logo image at TTFB+5ms in parallel with the JS bundle, so by the time
+  // <Header> hydrates and renders its <img>, the bytes are already cached.
+  //
+  // Field RUM data had this logo as a top-5 LCP element (~3.5s) because
+  // Header fetches /settings/public client-side and then renders the logo —
+  // the image download didn't start until ~3s into the page load.
+  let headerLogoUrl = '';
+  try {
+    const rawHeaderLogo = getStringSetting(cfg, 'HEADER_LOGO');
+    if (rawHeaderLogo) {
+      const parsed = JSON.parse(rawHeaderLogo);
+      if (typeof parsed?.imageUrl === 'string' && parsed.imageUrl.trim()) {
+        headerLogoUrl = parsed.imageUrl.trim();
+      }
+    }
+  } catch {
+    /* ignore parse errors — falls back to no preload */
+  }
 
   return (
     <html lang="en">
       <head>
+        {/* Preload the admin-configured header logo so it hits the network
+            immediately, in parallel with the JS bundle download. We preload
+            the exact sized variant the Header renders (320w via CF Images
+            flex variants) so the preload and actual request reference the
+            same URL and the browser reuses the bytes without a second
+            fetch. Dropping this hint saves ~300–500ms of LCP when the logo
+            is the largest above-the-fold element.
+            imageSrcSet + imageSizes let the browser pick the right size
+            variant from the preload hint itself. */}
+        {headerLogoUrl && (
+          // biome-ignore lint/a11y/useButtonType: <link> has no type prop
+          <link
+            rel="preload"
+            as="image"
+            href={cfImage(headerLogoUrl, { width: 320, fit: 'contain' })}
+            imageSrcSet={`${cfImage(headerLogoUrl, { width: 160, fit: 'contain' })} 160w, ${cfImage(headerLogoUrl, { width: 320, fit: 'contain' })} 320w, ${cfImage(headerLogoUrl, { width: 480, fit: 'contain' })} 480w`}
+            imageSizes="(max-width: 768px) 110px, 160px"
+            fetchPriority="high"
+          />
+        )}
+      </head>
+      <body className={`${sora.variable} ${dmSans.variable} ${mulish.variable}`}>
         {/* ── Google Analytics 4 ───────────────────────────────── */}
         {ga4Id && (
           <>
@@ -106,7 +214,7 @@ export default async function RootLayout({
           </Script>
         )}
 
-        {/* ── Custom <head> scripts (verbatim) ─────────────────── */}
+        {/* ── Custom head/body scripts (verbatim) ─────────────────── */}
         {headScripts && (
           <div
             // biome-ignore lint/security/noDangerouslySetInnerHtml: admin-controlled only
@@ -114,9 +222,27 @@ export default async function RootLayout({
             suppressHydrationWarning
           />
         )}
-      </head>
-      <body className={inter.className}>
-        {/* ── Custom <body> scripts (verbatim, e.g. noscript pixel fallbacks) */}
+        
+        {/* ── OneSignal Web SDK ─────────────────────────────────── */}
+        <Script
+          src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
+          defer
+          strategy="afterInteractive"
+        />
+        <Script id="onesignal-init" strategy="afterInteractive">
+          {`
+            window.OneSignalDeferred = window.OneSignalDeferred || [];
+            OneSignalDeferred.push(async function(OneSignal) {
+              await OneSignal.init({
+                appId: "e15ae046-8207-4d8b-9588-5a37c6128dc3",
+                safari_web_id: "web.onesignal.auto.44daf2d6-544c-403f-a3b6-3ab51abe3e37",
+                notifyButton: { enable: false },
+                welcomeNotification: { disable: true },
+              });
+            });
+          `}
+        </Script>
+
         {bodyScripts && (
           <div
             // biome-ignore lint/security/noDangerouslySetInnerHtml: admin-controlled only
@@ -124,7 +250,10 @@ export default async function RootLayout({
             suppressHydrationWarning
           />
         )}
-        <ClientLayout>{children}</ClientLayout>
+        
+        <ClientLayout maintenanceConfig={{ platformBlocked, platformMessage, allowedUsers: maintenanceAllowedUsers }}>
+            {children}
+        </ClientLayout>
       </body>
     </html>
   );

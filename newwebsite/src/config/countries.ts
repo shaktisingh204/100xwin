@@ -96,7 +96,7 @@ export const countries: Country[] = [
     { name: 'Honduras', code: 'HN', flag: '🇭🇳', currency: 'HNL', paymentMethods: defaultPaymentMethods },
     { name: 'Hungary', code: 'HU', flag: '🇭🇺', currency: 'HUF', paymentMethods: defaultPaymentMethods },
     { name: 'Iceland', code: 'IS', flag: '🇮🇸', currency: 'ISK', paymentMethods: defaultPaymentMethods },
-    { name: 'India', code: 'IN', flag: '🇮🇳', currency: 'INR', paymentMethods: [{ id: 'UPI1', label: 'UPI Gateway 1', icon: 'UPI', badge: 'Recommended' }, { id: 'UPI2', label: 'UPI Gateway 2', icon: 'UPI' }, { id: 'UPI0', label: 'UPI Gateway 3', icon: 'UPI' }] },
+    { name: 'India', code: 'IN', flag: '🇮🇳', currency: 'INR', paymentMethods: [{ id: 'CASHFREE', label: 'Cashfree Gateway', icon: '💳', badge: 'Fast' }, { id: 'UPI1', label: 'UPI Gateway 1', icon: 'UPI', badge: 'Recommended' }, { id: 'UPI2', label: 'UPI Gateway 2', icon: 'UPI' }, { id: 'UPI3', label: 'UPI Gateway 3', icon: 'UPI' }, { id: 'UPI4', label: 'UPI Gateway 4', icon: 'UPI' }, { id: 'UPI5', label: 'UPI Gateway 5', icon: 'UPI', badge: 'New' }, { id: 'UPI6', label: 'UPI Gateway 6', icon: 'UPI' }, { id: 'UPI9', label: 'UPI Gateway 9', icon: 'UPI', badge: 'New' }, { id: 'UPI0', label: 'UPI Gateway 0', icon: 'UPI' }] },
     { name: 'Indonesia', code: 'ID', flag: '🇮🇩', currency: 'IDR', paymentMethods: [{ id: 'OVO', label: 'OVO', icon: '🟣' }, { id: 'DANA', label: 'DANA', icon: '🔵' }, ...defaultPaymentMethods] },
     { name: 'Iran', code: 'IR', flag: '🇮🇷', currency: 'IRR', paymentMethods: defaultPaymentMethods },
     { name: 'Iraq', code: 'IQ', flag: '🇮🇶', currency: 'IQD', paymentMethods: defaultPaymentMethods },

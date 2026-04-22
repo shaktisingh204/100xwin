@@ -16,28 +16,28 @@ interface Announcement {
 
 const TYPE_STYLES: Record<AnnouncementType, { bar: string; icon: any; text: string; dismiss: string }> = {
     INFO: {
-        bar: 'bg-blue-500/8 border-blue-500/15',
+        bar: 'bg-info-soft border-info-primary/40',
         icon: Info,
-        text: 'text-blue-200',
-        dismiss: 'hover:bg-blue-500/10 text-blue-300/60',
+        text: 'text-brand-gold',
+        dismiss: 'hover:bg-info-primary/20 text-brand-gold',
     },
     WARNING: {
-        bar: 'bg-amber-500/8 border-amber-500/15',
+        bar: 'bg-warning-soft border-warning/40',
         icon: AlertTriangle,
-        text: 'text-amber-200',
-        dismiss: 'hover:bg-amber-500/10 text-amber-300/60',
+        text: 'text-warning-bright',
+        dismiss: 'hover:bg-warning/20 text-warning',
     },
     SUCCESS: {
-        bar: 'bg-emerald-500/8 border-emerald-500/15',
+        bar: 'bg-success-soft border-success/40',
         icon: CheckCircle,
-        text: 'text-emerald-200',
-        dismiss: 'hover:bg-emerald-500/10 text-emerald-300/60',
+        text: 'text-success-bright',
+        dismiss: 'hover:bg-success/20 text-success-bright',
     },
     PROMO: {
-        bar: 'bg-brand-gold/8 border-brand-gold/15',
+        bar: 'bg-gradient-to-r from-warning-soft to-brown-accent/80 border-warning/40',
         icon: Zap,
-        text: 'text-brand-gold',
-        dismiss: 'hover:bg-brand-gold/10 text-brand-gold/60',
+        text: 'text-warning-bright',
+        dismiss: 'hover:bg-warning/20 text-warning',
     },
 };
 
@@ -104,47 +104,45 @@ export default function AnnouncementBanner() {
     const next = () => setCurrentIndex(i => (i + 1) % visible.length);
 
     return (
-        <div className="w-full z-[60] relative flex-shrink-0 px-3 py-2">
-            <div className={`max-w-screen-xl mx-auto rounded-2xl border ${cfg.bar} backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.3)]`}>
-                <div className="px-4 py-2.5 flex items-center gap-3">
-                    {/* Icon */}
-                    <div className="flex-shrink-0">
-                        <Icon size={14} className={cfg.text} />
-                    </div>
-
-                    {/* Content */}
-                    <div className={`flex-1 min-w-0 text-[11px] ${cfg.text}`}>
-                        <span className="font-black mr-1.5">{current.title}</span>
-                        <span className="opacity-70">{current.message}</span>
-                    </div>
-
-                    {/* Multi-banner navigation */}
-                    {visible.length > 1 && (
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                            <button onClick={prev}
-                                className={`p-1 rounded-lg transition-colors ${cfg.dismiss}`}
-                                title="Previous">
-                                <ChevronLeft size={12} />
-                            </button>
-                            <span className={`text-[9px] font-bold ${cfg.text} opacity-40`}>
-                                {currentIndex + 1}/{visible.length}
-                            </span>
-                            <button onClick={next}
-                                className={`p-1 rounded-lg transition-colors ${cfg.dismiss}`}
-                                title="Next">
-                                <ChevronRight size={12} />
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Dismiss */}
-                    <button
-                        onClick={() => visible.length === 1 ? dismissAll() : dismissOne(current._id)}
-                        className={`flex-shrink-0 p-1 rounded-lg transition-colors ${cfg.dismiss}`}
-                        title="Dismiss">
-                        <X size={12} />
-                    </button>
+        <div className={`w-full border-b ${cfg.bar} backdrop-blur-md z-[60] relative flex-shrink-0`}>
+            <div className="max-w-screen-2xl mx-auto px-4 py-2 flex items-center gap-3">
+                {/* Icon */}
+                <div className="flex-shrink-0">
+                    <Icon size={15} className={cfg.text} />
                 </div>
+
+                {/* Content */}
+                <div className={`flex-1 min-w-0 text-xs ${cfg.text}`}>
+                    <span className="font-black mr-2">{current.title}</span>
+                    <span className="opacity-90">{current.message}</span>
+                </div>
+
+                {/* Multi-banner navigation */}
+                {visible.length > 1 && (
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                        <button onClick={prev}
+                            className={`p-1 rounded transition-colors ${cfg.dismiss}`}
+                            title="Previous">
+                            <ChevronLeft size={14} />
+                        </button>
+                        <span className={`text-[10px] font-bold ${cfg.text} opacity-60`}>
+                            {currentIndex + 1}/{visible.length}
+                        </span>
+                        <button onClick={next}
+                            className={`p-1 rounded transition-colors ${cfg.dismiss}`}
+                            title="Next">
+                            <ChevronRight size={14} />
+                        </button>
+                    </div>
+                )}
+
+                {/* Dismiss current */}
+                <button
+                    onClick={() => visible.length === 1 ? dismissAll() : dismissOne(current._id)}
+                    className={`flex-shrink-0 p-1 rounded transition-colors ${cfg.dismiss}`}
+                    title="Dismiss">
+                    <X size={14} />
+                </button>
             </div>
         </div>
     );

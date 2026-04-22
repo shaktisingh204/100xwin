@@ -5,24 +5,29 @@ import { useParams, useRouter } from 'next/navigation';
 import {
     getUserProfile, getUserTransactionsDirect, getUserCasinoTransactions,
     updateUserStatus, updateUserProfile, resetUserPassword,
-    assignManager, getManagersList, deleteUser, getUserSportsBets, convertBonusType,
+    assignManager, getManagersList, deleteUser, getUserSportsBets, convertBonusType, deleteUserTransactionLog,
+    updateSportsBetWinningAmount,
 } from '@/actions/users';
 import { createManualAdjustment as financeManualAdjustment } from '@/actions/finance';
+import { adminGiveBonus } from '@/actions/marketing';
+import { fmtUSD } from '@/utils/transactionCurrency';
 import UserProfileHeader from '@/components/users/UserProfileHeader';
 import UserTransactionsTable from '@/components/users/UserTransactionsTable';
 import UserBetsTable from '@/components/users/UserBetsTable';
 import UserCasinoTable from '@/components/users/UserCasinoTable';
+import UserHuiduPanel from '@/components/users/UserHuiduPanel';
 import VerificationTab from '@/components/users/VerificationTab';
 import ResponsibleGamblingTab from '@/components/users/ResponsibleGamblingTab';
 import {
     Loader2, ArrowLeft, Activity, CreditCard, FileText, Shield, ShieldCheck,
     ArrowUpRight, ArrowDownRight, CheckCircle, XCircle, Wallet, Save,
-    Gamepad2, ChevronLeft, ChevronRight, X, Edit2, KeyRound, UserCog, Trash2, RefreshCw, Ban, UserCheck, AlertTriangle
+    Gamepad2, ChevronLeft, ChevronRight, X, Edit2, KeyRound, UserCog, Trash2, RefreshCw, Ban, UserCheck, AlertTriangle, Gift
 } from 'lucide-react';
 import Link from 'next/link';
 
 type Toast = { msg: string; type: 'success' | 'error' };
 type TabId = 'overview' | 'transactions' | 'bets' | 'casino' | 'verification' | 'rg' | 'notes';
+type AdjustmentTarget = 'fiat' | 'crypto' | 'casinoBonus' | 'sportsBonus' | 'cryptoBonus';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -39,7 +44,8 @@ function fmtCurrency(amount: number, currency: string) {
 export default function UserProfilePage() {
     const params = useParams();
     const router = useRouter();
-    const userId = Number(params.id);
+    const identifier = params.id as string;
+    const [userId, setUserId] = useState<number | null>(null);
 
     // Core data
     const [user, setUser] = useState<any | null>(null);
@@ -56,9 +62,12 @@ export default function UserProfilePage() {
     // Wallet Actions
     const [walletAmount, setWalletAmount] = useState('');
     const [walletType, setWalletType] = useState<'credit' | 'debit'>('credit');
+    const [walletTarget, setWalletTarget] = useState<AdjustmentTarget>('fiat');
     const [walletRemarks, setWalletRemarks] = useState('');
+    const [walletSkipLog, setWalletSkipLog] = useState(false);
     const [walletLoading, setWalletLoading] = useState(false);
     const [walletMsg, setWalletMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+    const [deleteTxnLoadingId, setDeleteTxnLoadingId] = useState<number | null>(null);
 
     // Notes (localStorage)
     const [notes, setNotes] = useState('');
@@ -94,6 +103,13 @@ export default function UserProfilePage() {
 
     // Bonus conversion
     const [bonusConvertLoading, setBonusConvertLoading] = useState(false);
+    const [bonusLoading, setBonusLoading] = useState(false);
+    const [bonusForm, setBonusForm] = useState({
+        bonusType: 'CASINO_BONUS' as 'FIAT_BONUS' | 'CASINO_BONUS' | 'SPORTS_BONUS' | 'CRYPTO_BONUS',
+        amount: '',
+        title: '',
+        wageringRequirement: '0',
+    });
 
     // Manager Assignment
     const [managers, setManagers] = useState<any[]>([]);
@@ -103,20 +119,23 @@ export default function UserProfilePage() {
     // ─── Fetch data ───────────────────────────────────────────────────────────
 
     const fetchUser = useCallback(async () => {
-        if (!userId) return;
-        const res = await getUserProfile(userId);
+        if (!identifier) return null;
+        const res = await getUserProfile(identifier);
         if (res.success && res.user) {
             setUser(res.user);
+            setUserId(res.user.id);
             setTransactions((res.user as any).transactions || []);
             setCasinoTxns((res.user as any).casinoTransactions || []);
             setSelectedManager(String((res.user as any).managerId || ''));
-            const savedNotes = localStorage.getItem(`user_notes_${userId}`);
+            const savedNotes = localStorage.getItem(`user_notes_${res.user.id}`);
             if (savedNotes) setNotes(savedNotes);
+            return res.user.id;
         }
-    }, [userId]);
+        return null;
+    }, [identifier]);
 
     const fetchTransactions = useCallback(async (page = 1) => {
-        const res = await getUserTransactionsDirect(userId, page, 20);
+        const res = await getUserTransactionsDirect(userId as number, page, 20);
         if (res.success) {
             setTransactions(res.transactions as any[]);
             setTxPagination({ total: res.pagination.total, page: res.pagination.page, totalPages: res.pagination.totalPages });
@@ -124,23 +143,26 @@ export default function UserProfilePage() {
     }, [userId]);
 
     const fetchCasino = useCallback(async (page = 1) => {
-        const res = await getUserCasinoTransactions(userId, page, 20);
+        const res = await getUserCasinoTransactions(userId as number, page, 20);
         if (res.success) {
             setCasinoTxns(res.transactions as any[]);
             setCasinoPagination({ total: res.pagination.total, page: res.pagination.page, totalPages: res.pagination.totalPages });
         }
     }, [userId]);
 
-    const fetchBets = useCallback(async () => {
+    const fetchBets = useCallback(async (uid: number) => {
         try {
-            const res = await getUserSportsBets(userId);
+            const res = await getUserSportsBets(uid);
             if (res.success) setBets(res.bets || []);
         } catch { /* MongoDB bets — failure is non-fatal */ }
-    }, [userId]);
+    }, []);
 
     const loadAll = useCallback(async () => {
         setLoading(true);
-        await Promise.all([fetchUser(), fetchBets()]);
+        const uid = await fetchUser();
+        if (uid) {
+            await fetchBets(uid);
+        }
         setLoading(false);
     }, [fetchUser, fetchBets]);
 
@@ -167,7 +189,7 @@ export default function UserProfilePage() {
         if (!user) return;
         const newBan = !user.isBanned;
         setBanLoading(true);
-        const res = await updateUserStatus(userId, newBan, newBan ? banReason : undefined);
+        const res = await updateUserStatus(userId as number, newBan, newBan ? banReason : undefined);
         if (res.success) {
             showToast(`User ${newBan ? 'banned' : 'unbanned'} successfully.`, 'success');
             setUser((u: any) => ({ ...u, isBanned: newBan }));
@@ -180,7 +202,7 @@ export default function UserProfilePage() {
 
     const handleDeleteUser = async () => {
         setDeleteLoading(true);
-        const res = await deleteUser(userId);
+        const res = await deleteUser(userId as number);
         if (res.success) {
             showToast('User permanently deleted.', 'success');
             setShowDeleteConfirm(false);
@@ -209,7 +231,7 @@ export default function UserProfilePage() {
         e.preventDefault();
         setEditLoading(true);
         setEditError('');
-        const res = await updateUserProfile(userId, editForm);
+        const res = await updateUserProfile(userId as number, editForm);
         if (res.success) {
             showToast('Profile updated successfully.', 'success');
             setShowEditModal(false);
@@ -224,7 +246,7 @@ export default function UserProfilePage() {
         e.preventDefault();
         setPwLoading(true);
         setPwMsg(null);
-        const res = await resetUserPassword(userId, newPassword);
+        const res = await resetUserPassword(userId as number, newPassword);
         if (res.success) {
             setPwMsg({ text: 'Password reset successfully.', ok: true });
             setNewPassword('');
@@ -237,7 +259,7 @@ export default function UserProfilePage() {
     const handleAssignManager = async () => {
         setManagerLoading(true);
         const managerId = selectedManager ? Number(selectedManager) : null;
-        const res = await assignManager(userId, managerId);
+        const res = await assignManager(userId as number, managerId);
         if (res.success) {
             showToast('Manager assigned successfully.', 'success');
             await fetchUser();
@@ -250,18 +272,100 @@ export default function UserProfilePage() {
     const handleWalletAction = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user || !walletAmount) return;
+        const isBonusTarget =
+            walletTarget === 'casinoBonus' ||
+            walletTarget === 'sportsBonus' ||
+            walletTarget === 'cryptoBonus';
+        if (isBonusTarget && walletType === 'credit') {
+            showToast('Use Add Bonus below to credit a bonus wallet.', 'error');
+            return;
+        }
         setWalletLoading(true);
         setWalletMsg(null);
         const type = walletType === 'credit' ? 'DEPOSIT' : 'WITHDRAWAL';
-        const res = await financeManualAdjustment(userId, type as any, parseFloat(walletAmount), walletRemarks || `Manual ${walletType} by admin`, 1);
+        const amount = parseFloat(walletAmount);
+        const res = await financeManualAdjustment(
+            userId as number,
+            type as any,
+            amount,
+            walletRemarks || `Manual ${walletType} to ${walletTarget} wallet by admin`,
+            1,
+            walletTarget,
+            { skipTransactionLog: walletSkipLog },
+        );
         if (res.success) {
-            setWalletMsg({ text: `${walletType === 'credit' ? 'Credited' : 'Debited'} ${fmtCurrency(parseFloat(walletAmount), user.currency || 'INR')} successfully.`, type: 'success' });
-            setWalletAmount(''); setWalletRemarks('');
-            await fetchUser();
+            const amountLabel = walletTarget === 'crypto' || walletTarget === 'cryptoBonus'
+                ? `$${amount.toFixed(2)}`
+                : fmtCurrency(amount, user.currency || 'INR');
+            const targetLabel = ({
+                fiat: 'Main Wallet',
+                crypto: 'Crypto Wallet',
+                casinoBonus: 'Casino Bonus',
+                sportsBonus: 'Sports Bonus',
+                cryptoBonus: 'Crypto Bonus',
+            } as const)[walletTarget];
+            setWalletMsg({ text: `${walletType === 'credit' ? 'Credited' : 'Debited'} ${amountLabel} successfully.`, type: 'success' });
+            showToast(`${walletType === 'credit' ? 'Credited' : 'Deducted'} ${amountLabel} ${walletType === 'credit' ? 'to' : 'from'} ${targetLabel}${walletSkipLog ? ' without transaction log' : ''}.`, 'success');
+            setWalletAmount('');
+            setWalletRemarks('');
+            setWalletSkipLog(false);
+            await Promise.all([fetchUser(), fetchTransactions(txPagination.page)]);
         } else {
             setWalletMsg({ text: res.error || 'Action failed.', type: 'error' });
         }
         setWalletLoading(false);
+    };
+
+    const handleDeleteTransaction = async (transactionId: number) => {
+        if (!confirm('Delete this transaction log only? Wallet balances will not be changed.')) return;
+
+        setDeleteTxnLoadingId(transactionId);
+        const res = await deleteUserTransactionLog(userId as number, transactionId, 1);
+        if (res.success) {
+            showToast('Transaction log deleted.', 'success');
+            await Promise.all([fetchUser(), fetchTransactions(txPagination.page)]);
+        } else {
+            showToast(res.error || 'Failed to delete transaction log.', 'error');
+        }
+        setDeleteTxnLoadingId(null);
+    };
+
+    const handleEditBetWin = async (payload: {
+        betId: string;
+        userId: number;
+        currentWin: number;
+        newWin: number;
+        remarks: string;
+        createTx: boolean;
+    }) => {
+        const res = await updateSportsBetWinningAmount(
+            payload.betId,
+            payload.userId,
+            payload.newWin,
+            payload.createTx,
+            payload.remarks,
+        );
+        if (res.success) {
+            const txLogNote = (res as any).updatedTransactionLogs > 0
+                ? ` · ${(res as any).updatedTransactionLogs} transaction log(s) updated`
+                : '';
+            showToast(
+                `Win amount updated: ${fmtCurrency(payload.currentWin, currency)} → ${fmtCurrency(payload.newWin, currency)}${
+                    payload.createTx && payload.newWin !== payload.currentWin
+                        ? ` (wallet ${payload.newWin > payload.currentWin ? 'credited' : 'debited'} ${fmtCurrency(Math.abs(payload.newWin - payload.currentWin), currency)})`
+                        : ''
+                }${txLogNote}`,
+                'success',
+            );
+            await fetchBets(userId as number);
+            if (payload.createTx && payload.newWin !== payload.currentWin) {
+                await fetchTransactions(txPagination.page);
+                await fetchUser();
+            }
+        } else {
+            showToast((res as any).error || 'Failed to update bet win amount.', 'error');
+        }
+        return res;
     };
 
     const handleSaveNotes = () => {
@@ -275,7 +379,7 @@ export default function UserProfilePage() {
         const fromLabel = from === 'CASINO' ? 'Casino' : 'Sports';
         if (!confirm(`Convert all ${fromLabel} bonus to ${to} bonus for ${user?.username}?`)) return;
         setBonusConvertLoading(true);
-        const res = await convertBonusType(userId, from);
+        const res = await convertBonusType(userId as number, from);
         if (res.success) {
             showToast(`Converted ₹${(res as any).amount?.toFixed(2)} from ${fromLabel} → ${to} bonus.`, 'success');
             await fetchUser();
@@ -283,6 +387,40 @@ export default function UserProfilePage() {
             showToast((res as any).error || 'Conversion failed.', 'error');
         }
         setBonusConvertLoading(false);
+    };
+
+    const handleGiveBonus = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const amount = Number(bonusForm.amount);
+        const wageringRequirement = Number(bonusForm.wageringRequirement || '0');
+
+        if (!amount || amount <= 0) {
+            showToast('Enter a valid bonus amount.', 'error');
+            return;
+        }
+
+        setBonusLoading(true);
+        const res = await adminGiveBonus({
+            userId: userId as number,
+            bonusType: bonusForm.bonusType,
+            amount,
+            title: bonusForm.title.trim() || undefined,
+            wageringRequirement,
+        });
+
+        if (res.success) {
+            showToast(`${res.walletLabel || 'Bonus'} added successfully.`, 'success');
+            setBonusForm((prev) => ({
+                ...prev,
+                amount: '',
+                title: '',
+                wageringRequirement: '0',
+            }));
+            await fetchUser();
+        } else {
+            showToast(res.error || 'Failed to add bonus.', 'error');
+        }
+        setBonusLoading(false);
     };
 
     // ─── Loading / Not Found ──────────────────────────────────────────────────
@@ -558,18 +696,108 @@ export default function UserProfilePage() {
 
                 {/* ─── OVERVIEW ─── */}
                 {activeTab === 'overview' && (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="space-y-6">
+                        {/* Totals row — Casino profit, Sports profit, Deposits, Withdrawals */}
+                        {(() => {
+                            const u = user as any;
+                            const casinoProfit = Number(u?.casinoProfit ?? 0);
+                            const casinoBet = Number(u?.casinoTotalBet ?? 0);
+                            const casinoWin = Number(u?.casinoTotalWin ?? 0);
+                            const sportsProfit = Number(u?.sportsProfit ?? 0);
+                            const sportsBet = Number(u?.sportsTotalBet ?? 0);
+                            const sportsWin = Number(u?.sportsTotalWin ?? 0);
+                            const totalDeposited = Number(u?.totalDeposited ?? 0);
+                            const totalFiatDeposited = Number(u?.totalFiatDeposited ?? 0);
+                            const totalCryptoDeposited = Number(u?.totalCryptoDeposited ?? 0);
+                            const totalWithdrawn = Number(u?.totalWithdrawn ?? 0);
+                            const totalFiatWithdrawn = Number(u?.totalFiatWithdrawn ?? 0);
+                            const totalCryptoWithdrawn = Number(u?.totalCryptoWithdrawn ?? 0);
+                            const cur = currency;
+                            const signedClass = (v: number) =>
+                                v > 0 ? 'text-emerald-400' : v < 0 ? 'text-red-400' : 'text-slate-300';
+                            const signed = (v: number) =>
+                                `${v > 0 ? '+' : ''}${fmtCurrency(v, cur)}`;
+                            return (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    {/* Casino Profit */}
+                                    <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Gamepad2 size={16} className="text-fuchsia-400" />
+                                            <h4 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Casino Profit</h4>
+                                        </div>
+                                        <div className={`text-2xl font-bold font-mono ${signedClass(casinoProfit)}`}>
+                                            {signed(casinoProfit)}
+                                        </div>
+                                        <div className="mt-2 space-y-0.5 text-[11px] text-slate-500">
+                                            <div>Bet: <span className="text-slate-300 font-mono">{fmtCurrency(casinoBet, cur)}</span></div>
+                                            <div>Win: <span className="text-slate-300 font-mono">{fmtCurrency(casinoWin, cur)}</span></div>
+                                        </div>
+                                    </div>
+
+                                    {/* Sports Profit */}
+                                    <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Activity size={16} className="text-emerald-400" />
+                                            <h4 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Sports Profit</h4>
+                                        </div>
+                                        <div className={`text-2xl font-bold font-mono ${signedClass(sportsProfit)}`}>
+                                            {signed(sportsProfit)}
+                                        </div>
+                                        <div className="mt-2 space-y-0.5 text-[11px] text-slate-500">
+                                            <div>Bet: <span className="text-slate-300 font-mono">{fmtCurrency(sportsBet, cur)}</span></div>
+                                            <div>Win: <span className="text-slate-300 font-mono">{fmtCurrency(sportsWin, cur)}</span></div>
+                                        </div>
+                                    </div>
+
+                                    {/* Total Deposits */}
+                                    <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <ArrowDownRight size={16} className="text-sky-400" />
+                                            <h4 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Total Deposits</h4>
+                                        </div>
+                                        <div className="text-2xl font-bold font-mono text-sky-300">
+                                            {fmtCurrency(totalDeposited, cur)}
+                                        </div>
+                                        <div className="mt-2 space-y-0.5 text-[11px] text-slate-500">
+                                            <div>Fiat: <span className="text-slate-300 font-mono">{fmtCurrency(totalFiatDeposited, cur)}</span></div>
+                                            <div>Crypto: <span className="text-slate-300 font-mono">{fmtUSD(totalCryptoDeposited)}</span></div>
+                                        </div>
+                                    </div>
+
+                                    {/* Total Withdrawals */}
+                                    <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <ArrowUpRight size={16} className="text-amber-400" />
+                                            <h4 className="text-xs uppercase tracking-wider text-slate-400 font-semibold">Total Withdrawals</h4>
+                                        </div>
+                                        <div className="text-2xl font-bold font-mono text-amber-300">
+                                            {fmtCurrency(totalWithdrawn, cur)}
+                                        </div>
+                                        <div className="mt-2 space-y-0.5 text-[11px] text-slate-500">
+                                            <div>Fiat: <span className="text-slate-300 font-mono">{fmtCurrency(totalFiatWithdrawn, cur)}</span></div>
+                                            <div>Crypto: <span className="text-slate-300 font-mono">{fmtUSD(totalCryptoWithdrawn)}</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 space-y-6">
                             {/* Recent Transactions */}
                             <div>
                                 <h3 className="text-base font-semibold text-white mb-3">Recent Transactions</h3>
-                                <UserTransactionsTable transactions={transactions.slice(0, 5)} />
+                                <UserTransactionsTable
+                                    transactions={transactions.slice(0, 5)}
+                                    onDeleteTransaction={handleDeleteTransaction}
+                                    deletingTransactionId={deleteTxnLoadingId}
+                                />
                                 <button onClick={() => setActiveTab('transactions')} className="text-sm text-indigo-400 hover:underline mt-2 block">View All →</button>
                             </div>
                             {/* Recent Bets */}
                             <div>
                                 <h3 className="text-base font-semibold text-white mb-3">Recent Bets</h3>
-                                <UserBetsTable bets={bets.slice(0, 5)} />
+                                <UserBetsTable bets={bets.slice(0, 5)} userId={userId as number} onEditWin={handleEditBetWin} />
                                 <button onClick={() => setActiveTab('bets')} className="text-sm text-indigo-400 hover:underline mt-2 block">View All →</button>
                             </div>
                             {/* Recent Casino */}
@@ -585,7 +813,7 @@ export default function UserProfilePage() {
                             {/* Wallet Actions */}
                             <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
                                 <h3 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
-                                    <Wallet size={18} className="text-indigo-400" /> Wallet Actions
+                                    <Wallet size={18} className="text-indigo-400" /> Wallet & Bonus Adjustments
                                 </h3>
                                 <form onSubmit={handleWalletAction} className="space-y-4">
                                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -599,7 +827,32 @@ export default function UserProfilePage() {
                                         </button>
                                     </div>
                                     <div>
-                                        <label className="block text-xs text-slate-400 mb-1.5 font-medium">Amount ({currency})</label>
+                                        <label className="block text-xs text-slate-400 mb-1.5 font-medium">Target</label>
+                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                            <button type="button" onClick={() => setWalletTarget('fiat')}
+                                                className={`py-2.5 rounded-lg text-sm font-medium border transition-all ${walletTarget === 'fiat' ? 'bg-sky-500/10 border-sky-500 text-sky-300' : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-600'}`}>
+                                                Main Wallet ({currency})
+                                            </button>
+                                            <button type="button" onClick={() => setWalletTarget('crypto')}
+                                                className={`py-2.5 rounded-lg text-sm font-medium border transition-all ${walletTarget === 'crypto' ? 'bg-amber-500/10 border-amber-500 text-amber-300' : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-600'}`}>
+                                                Crypto Wallet (USD)
+                                            </button>
+                                            <button type="button" onClick={() => setWalletTarget('casinoBonus')}
+                                                className={`py-2.5 rounded-lg text-sm font-medium border transition-all ${walletTarget === 'casinoBonus' ? 'bg-fuchsia-500/10 border-fuchsia-500 text-fuchsia-300' : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-600'}`}>
+                                                Casino Bonus
+                                            </button>
+                                            <button type="button" onClick={() => setWalletTarget('sportsBonus')}
+                                                className={`py-2.5 rounded-lg text-sm font-medium border transition-all ${walletTarget === 'sportsBonus' ? 'bg-emerald-500/10 border-emerald-500 text-emerald-300' : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-600'}`}>
+                                                Sports Bonus
+                                            </button>
+                                            <button type="button" onClick={() => setWalletTarget('cryptoBonus')}
+                                                className={`py-2.5 rounded-lg text-sm font-medium border transition-all sm:col-span-2 ${walletTarget === 'cryptoBonus' ? 'bg-violet-500/10 border-violet-500 text-violet-300' : 'bg-slate-900 border-slate-700 text-slate-400 hover:border-slate-600'}`}>
+                                                Crypto Bonus
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-slate-400 mb-1.5 font-medium">Amount ({walletTarget === 'crypto' || walletTarget === 'cryptoBonus' ? 'USD' : currency})</label>
                                         <input type="number" min="1" required value={walletAmount} onChange={e => setWalletAmount(e.target.value)} placeholder="0"
                                             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm font-mono focus:border-indigo-500 focus:outline-none" />
                                     </div>
@@ -608,14 +861,35 @@ export default function UserProfilePage() {
                                         <input type="text" value={walletRemarks} onChange={e => setWalletRemarks(e.target.value)} placeholder="Reason..."
                                             className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-indigo-500 focus:outline-none" />
                                     </div>
+                                    <label className="flex items-start gap-3 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2.5 text-sm text-slate-300">
+                                        <input
+                                            type="checkbox"
+                                            checked={walletSkipLog}
+                                            onChange={e => setWalletSkipLog(e.target.checked)}
+                                            className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-950 text-indigo-500 focus:ring-indigo-500"
+                                        />
+                                        <span>
+                                            Apply without transaction log
+                                            <span className="block text-xs text-slate-500">
+                                                Wallet or bonus will still change, but no user history transaction row will be created.
+                                            </span>
+                                        </span>
+                                    </label>
+                                    {(walletTarget === 'casinoBonus' || walletTarget === 'sportsBonus' || walletTarget === 'cryptoBonus') && (
+                                        <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+                                            Bonus deductions also reduce matching active bonus rows and wagering counters. To add bonus, use the Add Bonus panel below.
+                                        </div>
+                                    )}
                                     {walletMsg && (
                                         <div className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${walletMsg.type === 'success' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
                                             {walletMsg.type === 'success' ? <CheckCircle size={12} /> : <XCircle size={12} />} {walletMsg.text}
                                         </div>
                                     )}
-                                    <button type="submit" disabled={walletLoading || !walletAmount}
+                                    <button
+                                        type="submit"
+                                        disabled={walletLoading || !walletAmount || ((walletTarget === 'casinoBonus' || walletTarget === 'sportsBonus' || walletTarget === 'cryptoBonus') && walletType === 'credit')}
                                         className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 text-sm">
-                                        {walletLoading ? 'Processing...' : `Confirm ${walletType === 'credit' ? 'Credit' : 'Debit'}`}
+                                        {walletLoading ? 'Processing...' : `Confirm ${walletType === 'credit' ? 'Credit' : 'Deduct'}`}
                                     </button>
                                 </form>
                             </div>
@@ -630,43 +904,35 @@ export default function UserProfilePage() {
                                 const sportsUB = activeUBs
                                     .filter((ub: any) => ub.applicableTo === 'SPORTS')
                                     .reduce((s: number, ub: any) => s + parseFloat((ub.bonusAmount || 0).toString()), 0);
-                                const approvedBonusTxns = transactions
-                                    .filter((tx: any) => tx.type === 'BONUS' && tx.status === 'APPROVED')
-                                    .reduce((s: number, tx: any) => s + parseFloat((tx.amount || 0).toString()), 0);
-                                // Prefer UserBonus records; fall back to wallet fields
+                                // Prefer UserBonus records; fall back to wallet fields only.
+                                // Do not infer convertible bonus from raw historical BONUS logs here.
                                 const walletCasinoTotal =
                                     parseFloat((((user as any).casinoBonus || 0) as number).toString()) +
                                     parseFloat((((user as any).fiatBonus || 0) as number).toString());
                                 const walletSportsTotal = parseFloat(((user as any).sportsBonus || 0).toString());
-                                const orphanCasinoTotal =
-                                    walletCasinoTotal <= 0 && walletSportsTotal <= 0 && casinoUB <= 0 && sportsUB <= 0
-                                        ? Math.max(0, approvedBonusTxns - walletCasinoTotal)
-                                        : 0;
+                                const walletCryptoTotal = parseFloat(((user as any).cryptoBonus || 0).toString());
                                 const casinoTotal = casinoUB > 0
                                     ? casinoUB
                                     : walletCasinoTotal > 0
                                         ? walletCasinoTotal
-                                        : orphanCasinoTotal;
+                                        : 0;
                                 const sportsTotal = sportsUB > 0 ? sportsUB : walletSportsTotal;
-                                const totalBonus = casinoTotal + sportsTotal;
+                                const cryptoTotal = walletCryptoTotal;
+                                const totalBonus = casinoTotal + sportsTotal + cryptoTotal;
                                 return (
                                     <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
                                         <h3 className="text-base font-semibold text-white mb-1 flex items-center gap-2">
                                             <RefreshCw size={18} className="text-amber-400" /> Convert Bonus Type
                                         </h3>
-                                        <p className="text-xs text-slate-500 mb-4">Move the user's entire active bonus from Casino to Sports or vice versa.</p>
-                                        {orphanCasinoTotal > 0 && (
-                                            <div className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
-                                                Legacy approved bonus found in transactions but not in active wallet. Converting will recover it automatically.
-                                            </div>
-                                        )}
+                                        <p className="text-xs text-slate-500 mb-4">Move the user&apos;s entire active bonus from Casino to Sports or vice versa.</p>
                                         {totalBonus <= 0 ? (
                                             <p className="text-xs text-slate-500 italic text-center py-2">No active bonus balance to convert.</p>
                                         ) : (
                                             <div className="space-y-2">
-                                                <div className="flex justify-between text-xs text-slate-400 mb-3">
-                                                    <span>Casino Bonus: <span className="text-amber-300 font-mono font-bold">{fmt(casinoTotal)}</span></span>
-                                                    <span>Sports Bonus: <span className="text-emerald-300 font-mono font-bold">{fmt(sportsTotal)}</span></span>
+                                                <div className="grid grid-cols-1 gap-1 text-xs text-slate-400 mb-3">
+                                                    <span>Casino: <span className="text-amber-300 font-mono font-bold">{fmt(casinoTotal)}</span></span>
+                                                    <span>Sports: <span className="text-emerald-300 font-mono font-bold">{fmt(sportsTotal)}</span></span>
+                                                    <span>Crypto: <span className="text-violet-300 font-mono font-bold">{fmtUSD(cryptoTotal)}</span></span>
                                                 </div>
                                                 <button
                                                     onClick={() => handleBonusConvert('CASINO')}
@@ -689,6 +955,73 @@ export default function UserProfilePage() {
                                     </div>
                                 );
                             })()}
+
+                            {/* Direct Bonus Credit */}
+                            <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
+                                <h3 className="text-base font-semibold text-white mb-1 flex items-center gap-2">
+                                    <Gift size={18} className="text-fuchsia-400" /> Add Bonus
+                                </h3>
+                                <p className="text-xs text-slate-500 mb-4">Credit a bonus directly from admin to this user.</p>
+                                <form onSubmit={handleGiveBonus} className="space-y-3">
+                                    <div>
+                                        <label className="block text-xs text-slate-400 mb-1.5 font-medium">Bonus Wallet</label>
+                                        <select
+                                            value={bonusForm.bonusType}
+                                            onChange={e => setBonusForm(prev => ({ ...prev, bonusType: e.target.value as typeof prev.bonusType }))}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-fuchsia-500 focus:outline-none"
+                                        >
+                                            <option value="CASINO_BONUS">Casino Bonus (INR)</option>
+                                            <option value="SPORTS_BONUS">Sports Bonus (INR)</option>
+                                            <option value="FIAT_BONUS">Fiat Bonus (INR)</option>
+                                            <option value="CRYPTO_BONUS">Crypto Bonus (USD)</option>
+                                        </select>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                        <div>
+                                            <label className="block text-xs text-slate-400 mb-1.5 font-medium">Amount</label>
+                                            <input
+                                                type="number"
+                                                min="0.01"
+                                                step="0.01"
+                                                value={bonusForm.amount}
+                                                onChange={e => setBonusForm(prev => ({ ...prev, amount: e.target.value }))}
+                                                placeholder="0.00"
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm font-mono focus:border-fuchsia-500 focus:outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs text-slate-400 mb-1.5 font-medium">Wagering (x)</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.1"
+                                                value={bonusForm.wageringRequirement}
+                                                onChange={e => setBonusForm(prev => ({ ...prev, wageringRequirement: e.target.value }))}
+                                                placeholder="0"
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm font-mono focus:border-fuchsia-500 focus:outline-none"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-slate-400 mb-1.5 font-medium">Title</label>
+                                        <input
+                                            type="text"
+                                            value={bonusForm.title}
+                                            onChange={e => setBonusForm(prev => ({ ...prev, title: e.target.value }))}
+                                            placeholder="Optional bonus title"
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-fuchsia-500 focus:outline-none"
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        disabled={bonusLoading}
+                                        className="w-full py-2.5 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        {bonusLoading ? <Loader2 size={14} className="animate-spin" /> : <Gift size={14} />}
+                                        {bonusLoading ? 'Adding Bonus...' : 'Add Bonus'}
+                                    </button>
+                                </form>
+                            </div>
 
                             {/* Manager Assignment */}
                             <div className="bg-slate-800 rounded-xl border border-slate-700 p-5">
@@ -716,13 +1049,18 @@ export default function UserProfilePage() {
                                 </div>
                             </div>
                         </div>
+                        </div>
                     </div>
                 )}
 
                 {/* ─── TRANSACTIONS ─── */}
                 {activeTab === 'transactions' && (
                     <div className="space-y-4">
-                        <UserTransactionsTable transactions={transactions} />
+                        <UserTransactionsTable
+                            transactions={transactions}
+                            onDeleteTransaction={handleDeleteTransaction}
+                            deletingTransactionId={deleteTxnLoadingId}
+                        />
                         {txPagination.totalPages > 1 && (
                             <div className="flex flex-col gap-3 pt-2 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
                                 <span>{txPagination.total} total transactions</span>
@@ -739,11 +1077,12 @@ export default function UserProfilePage() {
                 )}
 
                 {/* ─── BETS ─── */}
-                {activeTab === 'bets' && <UserBetsTable bets={bets} />}
+                {activeTab === 'bets' && <UserBetsTable bets={bets} userId={userId as number} onEditWin={handleEditBetWin} />}
 
                 {/* ─── CASINO ─── */}
                 {activeTab === 'casino' && (
                     <div className="space-y-4">
+                        {userId && <UserHuiduPanel userId={userId} />}
                         <UserCasinoTable transactions={casinoTxns} />
                         {casinoPagination.totalPages > 1 && (
                             <div className="flex flex-col gap-3 pt-2 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">

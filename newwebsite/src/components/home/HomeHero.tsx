@@ -40,7 +40,7 @@ export default function HomeHero() {
                         } bg-gradient-to-r ${banner.gradient} flex items-center px-10 md:px-20`}
                 >
                     <div className="max-w-2xl animate-fade-in-up">
-                        <span className={`inline-block py-1 px-3 rounded bg-white/10 text-xs font-bold mb-4 ${banner.accent} uppercase tracking-wider`}>
+                        <span className={`inline-block py-1 px-3 rounded bg-white/[0.08] text-xs font-bold mb-4 ${banner.accent} uppercase tracking-wider`}>
                             {banner.subtitle}
                         </span>
                         <h2 className="text-4xl md:text-6xl font-black text-text-primary italic mb-6 leading-tight">
@@ -56,13 +56,13 @@ export default function HomeHero() {
             {/* Navigation */}
             <button
                 onClick={prev}
-                className="absolute left-4 top-1/2 -translate-y-1/2 size-10 bg-black/30 hover:bg-black/50 text-text-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 backdrop-blur-sm"
+                className="absolute left-4 top-1/2 -translate-y-1/2 size-10 bg-black/30 hover:bg-black/50 text-text-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 backdrop-blur-md"
             >
                 <ArrowLeft size={20} />
             </button>
             <button
                 onClick={next}
-                className="absolute right-4 top-1/2 -translate-y-1/2 size-10 bg-black/30 hover:bg-black/50 text-text-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 backdrop-blur-sm"
+                className="absolute right-4 top-1/2 -translate-y-1/2 size-10 bg-black/30 hover:bg-black/50 text-text-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 backdrop-blur-md"
             >
                 <ArrowRight size={20} />
             </button>

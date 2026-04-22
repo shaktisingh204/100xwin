@@ -9,7 +9,7 @@ import { useModal } from "@/context/ModalContext";
 import { useOriginalsAccess } from "@/hooks/useOriginalsAccess";
 import { useOriginalsSocket } from "@/hooks/useOriginalsSocket";
 import toast from "react-hot-toast";
-import { ChevronUp, ChevronDown, Star, Shield, RotateCcw, Play, StopCircle } from "lucide-react";
+import { ChevronUp, ChevronDown, Star, Shield, RotateCcw, Play, StopCircle, Volume2, VolumeX } from "lucide-react";
 import { useGameSounds } from "@/hooks/useGameSounds";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ function MineIcon({ size = 40 }: { size?: number }) {
       <defs>
         <radialGradient id="bombBody" cx="40%" cy="35%" r="65%">
           <stop stopColor="#9ca3af" />
-          <stop offset="0.6" stopColor="#374151" />
+          <stop offset="0.6" stopColor="#262936" />
           <stop offset="1" stopColor="#111827" />
         </radialGradient>
         <radialGradient id="explosion" cx="50%" cy="50%" r="50%">
@@ -127,8 +127,8 @@ interface BigWinData {
 function BigWinOverlay({ data, onClose }: { data: BigWinData | null; onClose: () => void }) {
   if (!data) return null;
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-[#1a2a1a] border border-green-500/40 rounded-2xl p-10 text-center max-w-xs mx-4 shadow-2xl"
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md" onClick={onClose}>
+      <div className="bg-success-soft border border-green-500/40 rounded-2xl p-10 text-center max-w-xs mx-4 shadow-xl"
         style={{ boxShadow: "0 0 60px rgba(34,197,94,0.4)" }}>
         <div className="flex justify-center mb-3"><GemIcon size={64} /></div>
         <div className="text-green-400 font-black text-xs tracking-widest uppercase mb-1">ZEERO MINES</div>
@@ -213,7 +213,10 @@ export default function MinesPage() {
   useEffect(() => { autoStopOnWinRef.current = autoStopOnWin; }, [autoStopOnWin]);
   useEffect(() => { autoStopOnLossRef.current = autoStopOnLoss; }, [autoStopOnLoss]);
 
-  useEffect(() => { setWalletType(selectedWallet as "fiat" | "crypto"); }, [selectedWallet]);
+  useEffect(() => {
+    setWalletType(selectedWallet as "fiat" | "crypto");
+    if (selectedWallet === "crypto") setUseBonus(false);
+  }, [selectedWallet]);
   useEffect(() => { activeGameRef.current = activeGame; }, [activeGame]);
   useEffect(() => { tilesRef.current = tiles; }, [tiles]);
 
@@ -376,7 +379,16 @@ export default function MinesPage() {
           stopAuto();
         }
       },
-      onLiveBet: () => { },
+      onLiveBet: (data) => {
+        const username = (data.username as string) || "Player";
+        const amount = (data.betAmount as number) || 0;
+        if (amount > 0) {
+          toast(`${username} bet ${walletType === "fiat" ? "₹" : "$"}${amount.toFixed(0)} on Mines`, {
+            duration: 2000,
+            style: { background: "#1a1d24", border: "1px solid rgba(255,255,255,0.08)", color: "#9ca3af", fontSize: 11, padding: "6px 10px" },
+          });
+        }
+      },
       onBigWin: (data) => { setBigWin(data); setTimeout(() => setBigWin(null), 8000); },
       onEngagement: (data) => {
         if (engagementTimeoutRef.current) clearTimeout(engagementTimeoutRef.current);
@@ -511,20 +523,20 @@ export default function MinesPage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen md:h-screen overflow-y-auto md:overflow-hidden bg-[#0f1117] flex flex-col">
+    <div className="min-h-screen md:h-screen overflow-y-auto md:overflow-hidden bg-bg-zeero flex flex-col">
       <Header />
 
-      <div className="flex flex-1 md:overflow-hidden pt-[110px] md:pt-[64px] pb-[80px] md:pb-0 max-w-[1920px] mx-auto w-full">
+      <div className="flex flex-1 md:overflow-hidden pt-[100px] md:pt-[64px] pb-[80px] md:pb-0 max-w-[1920px] mx-auto w-full">
         <LeftSidebar />
 
-        <main className="flex-1 min-w-0 flex flex-col md:overflow-hidden border-l border-white/5">
+        <main className="flex-1 min-w-0 flex flex-col md:overflow-hidden border-l border-white/[0.04]">
           <div className="flex-1 flex flex-col md:flex-row md:overflow-hidden">
 
             {/* ── LEFT CONTROL PANEL (mobile: order 2, desktop: order 1 left) */}
-            <div className="w-full md:w-72 xl:w-80 flex-shrink-0 bg-[#1a1d24] border-t md:border-t-0 md:border-r border-white/5 flex flex-col overflow-y-auto order-2 md:order-1">
+            <div className="w-full md:w-72 xl:w-80 flex-shrink-0 bg-bg-modal-2 border-t md:border-t-0 md:border-r border-white/[0.04] flex flex-col overflow-y-auto order-2 md:order-1">
 
               {/* Manual / Auto tabs */}
-              <div className="flex border-b border-white/10">
+              <div className="flex border-b border-white/[0.06]">
                 {(["manual", "auto"] as const).map((m) => (
                   <button key={m} onClick={() => !isGameActive && !isAutoRunning && setBetMode(m)}
                     className={`flex-1 py-3 text-sm font-bold capitalize transition-all relative
@@ -546,38 +558,38 @@ export default function MinesPage() {
                         onClick={() => !isGameActive && !isAutoRunning && setWalletType("fiat")}>₹</span>
                       <span className="opacity-30">|</span>
                       <span className={`px-1.5 py-0.5 rounded cursor-pointer hover:text-white transition-colors ${walletType === "crypto" ? "text-white" : ""}`}
-                        onClick={() => !isGameActive && !isAutoRunning && setWalletType("crypto")}>$</span>
+                        onClick={() => { if (!isGameActive && !isAutoRunning) { setWalletType("crypto"); setUseBonus(false); } }}>$</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <div className="flex-1 relative flex items-center bg-[#13151a] border border-white/10 rounded-lg overflow-hidden focus-within:border-green-500/40">
+                    <div className="flex-1 relative flex items-center bg-bg-deep-3 border border-white/[0.06] rounded-lg overflow-hidden focus-within:border-green-500/40">
                       <div className="pl-3 pr-1 text-sm font-bold text-[#9ca3af]">{walletType === "fiat" ? "₹" : "$"}</div>
                       <input type="number" value={betInput} disabled={isGameActive || isAutoRunning}
                         onChange={(e) => setBetInput(e.target.value)}
                         className="flex-1 bg-transparent py-2.5 pr-2 text-white text-sm font-bold outline-none min-w-0" />
-                      <div className="flex flex-col border-l border-white/10">
+                      <div className="flex flex-col border-l border-white/[0.06]">
                         <button onClick={() => !isGameActive && !isAutoRunning && setBetInput(String((parseFloat(betInput) || 0) + 1))}
                           disabled={isGameActive || isAutoRunning}
-                          className="px-2 py-1 hover:bg-white/5 text-[#6b7280] hover:text-white transition-colors disabled:opacity-40">
+                          className="px-2 py-1 hover:bg-white/[0.05] text-[#6b7280] hover:text-white transition-colors disabled:opacity-40">
                           <ChevronUp size={12} />
                         </button>
                         <button onClick={() => !isGameActive && !isAutoRunning && setBetInput(String(Math.max(MIN_BET, (parseFloat(betInput) || 0) - 1)))}
                           disabled={isGameActive || isAutoRunning}
-                          className="px-2 py-1 hover:bg-white/5 text-[#6b7280] hover:text-white transition-colors disabled:opacity-40 border-t border-white/10">
+                          className="px-2 py-1 hover:bg-white/[0.05] text-[#6b7280] hover:text-white transition-colors disabled:opacity-40 border-t border-white/[0.06]">
                           <ChevronDown size={12} />
                         </button>
                       </div>
                     </div>
                     <button onClick={() => adjustBet("half")} disabled={isGameActive || isAutoRunning}
-                      className="px-3 py-2.5 bg-[#13151a] border border-white/10 rounded-lg text-xs font-bold text-[#9ca3af] hover:text-white hover:border-white/20 transition-all disabled:opacity-40">½</button>
+                      className="px-3 py-2.5 bg-bg-deep-3 border border-white/[0.06] rounded-lg text-xs font-bold text-[#9ca3af] hover:text-white hover:border-white/[0.12] transition-all disabled:opacity-40">½</button>
                     <button onClick={() => adjustBet(2)} disabled={isGameActive || isAutoRunning}
-                      className="px-3 py-2.5 bg-[#13151a] border border-white/10 rounded-lg text-xs font-bold text-[#9ca3af] hover:text-white hover:border-white/20 transition-all disabled:opacity-40">2×</button>
+                      className="px-3 py-2.5 bg-bg-deep-3 border border-white/[0.06] rounded-lg text-xs font-bold text-[#9ca3af] hover:text-white hover:border-white/[0.12] transition-all disabled:opacity-40">2×</button>
                   </div>
                   <div className="grid grid-cols-4 gap-1 mt-2">
                     {QUICK_BETS.map(n => (
                       <button key={n} onClick={() => !isGameActive && !isAutoRunning && setBetInput(String(n))}
                         disabled={isGameActive || isAutoRunning}
-                        className="py-1.5 bg-[#13151a] border border-white/10 hover:border-white/20 hover:text-white rounded-lg text-[#9ca3af] text-xs font-bold transition-all disabled:opacity-40">
+                        className="py-1.5 bg-bg-deep-3 border border-white/[0.06] hover:border-white/[0.12] hover:text-white rounded-lg text-[#9ca3af] text-xs font-bold transition-all disabled:opacity-40">
                         {fmtBet(n)}
                       </button>
                     ))}
@@ -589,16 +601,16 @@ export default function MinesPage() {
                   <label className="text-[11px] text-[#6b7280] font-bold uppercase tracking-wider mb-3 block">Mines</label>
                   <div className="flex items-center gap-3">
                     <span className="text-white text-sm font-black w-5 text-right">1</span>
-                    <div className="relative flex-1">
-                      <div className="h-1.5 bg-[#13151a] rounded-full border border-white/10 relative">
+                    <div className="relative flex-1 h-1.5 mt-2 mb-2">
+                      <div className="absolute inset-0 bg-bg-deep-3 rounded-full border border-white/[0.06] overflow-hidden">
                         <div className="absolute left-0 top-0 h-full bg-green-500 rounded-full transition-all"
                           style={{ width: `${((mineCount - 1) / 23) * 100}%` }} />
                       </div>
                       <input type="range" min={1} max={24} value={mineCount}
                         onChange={(e) => !isGameActive && !isAutoRunning && setMineCount(parseInt(e.target.value))}
                         disabled={isGameActive || isAutoRunning}
-                        className="absolute inset-0 w-full opacity-0 cursor-pointer disabled:cursor-not-allowed h-1.5" />
-                      <div className="absolute top-1/2 -translate-y-1/2 w-5 h-5 bg-white rounded-full border-2 border-green-500 shadow-lg pointer-events-none transition-all"
+                        className="absolute inset-0 w-full opacity-0 cursor-pointer disabled:cursor-not-allowed h-1.5 z-20" />
+                      <div className="absolute top-[-7px] w-5 h-5 bg-white rounded-full border-2 border-green-500 shadow-lg pointer-events-none transition-all z-10"
                         style={{ left: `calc(${((mineCount - 1) / 23) * 100}% - 10px)` }} />
                     </div>
                     <span className="text-white text-sm font-black w-5">24</span>
@@ -611,7 +623,7 @@ export default function MinesPage() {
 
                 {/* ── AUTO MODE SETTINGS ─────────────────────────────────── */}
                 {betMode === "auto" && (
-                  <div className="space-y-3 border-t border-white/10 pt-3">
+                  <div className="space-y-3 border-t border-white/[0.06] pt-3">
                     <p className="text-[10px] text-[#6b7280] font-bold uppercase tracking-wider">Auto Settings</p>
 
                     {/* Number of rounds */}
@@ -621,7 +633,7 @@ export default function MinesPage() {
                         {[5, 10, 20, 50, 100].map(n => (
                           <button key={n} onClick={() => setAutoRounds(n)}
                             className={`w-8 h-7 rounded text-[10px] font-black transition-all border
-                              ${autoRounds === n ? "bg-green-500/20 border-green-500/50 text-green-400" : "bg-[#13151a] border-white/10 text-[#6b7280] hover:text-white"}`}>
+                              ${autoRounds === n ? "bg-green-500/20 border-green-500/50 text-green-400" : "bg-bg-deep-3 border-white/[0.06] text-[#6b7280] hover:text-white"}`}>
                             {n}
                           </button>
                         ))}
@@ -633,10 +645,10 @@ export default function MinesPage() {
                       <span className="text-[11px] text-[#9ca3af]">Cash out at gems</span>
                       <div className="flex items-center gap-1.5">
                         <button onClick={() => setAutoCashoutGems(g => Math.max(1, g - 1))}
-                          className="w-6 h-6 bg-[#13151a] border border-white/10 rounded text-[#6b7280] hover:text-white flex items-center justify-center">−</button>
+                          className="w-6 h-6 bg-bg-deep-3 border border-white/[0.06] rounded text-[#6b7280] hover:text-white flex items-center justify-center">−</button>
                         <span className="text-white font-black text-sm w-5 text-center">{autoCashoutGems}</span>
                         <button onClick={() => setAutoCashoutGems(g => Math.min(25 - mineCount, g + 1))}
-                          className="w-6 h-6 bg-[#13151a] border border-white/10 rounded text-[#6b7280] hover:text-white flex items-center justify-center">+</button>
+                          className="w-6 h-6 bg-bg-deep-3 border border-white/[0.06] rounded text-[#6b7280] hover:text-white flex items-center justify-center">+</button>
                       </div>
                     </div>
 
@@ -648,7 +660,7 @@ export default function MinesPage() {
                         <input type="number" value={autoStopOnWin || ""}
                           onChange={e => setAutoStopOnWin(parseFloat(e.target.value) || 0)}
                           placeholder="0 = disabled"
-                          className="flex-1 bg-[#13151a] border border-white/10 focus:border-green-500/40 rounded-lg px-2 py-1.5 text-white text-xs font-bold outline-none" />
+                          className="flex-1 bg-bg-deep-3 border border-white/[0.06] focus:border-green-500/40 rounded-lg px-2 py-1.5 text-white text-xs font-bold outline-none" />
                       </div>
                     </div>
 
@@ -660,20 +672,20 @@ export default function MinesPage() {
                         <input type="number" value={autoStopOnLoss || ""}
                           onChange={e => setAutoStopOnLoss(parseFloat(e.target.value) || 0)}
                           placeholder="0 = disabled"
-                          className="flex-1 bg-[#13151a] border border-white/10 focus:border-green-500/40 rounded-lg px-2 py-1.5 text-white text-xs font-bold outline-none" />
+                          className="flex-1 bg-bg-deep-3 border border-white/[0.06] focus:border-green-500/40 rounded-lg px-2 py-1.5 text-white text-xs font-bold outline-none" />
                       </div>
                     </div>
 
                     {/* Auto profit tracker */}
                     {isAutoRunning && (
-                      <div className="bg-[#13151a] border border-white/10 rounded-xl px-3 py-2 space-y-1">
+                      <div className="bg-bg-deep-3 border border-white/[0.06] rounded-xl px-3 py-2 space-y-1">
                         <div className="flex justify-between text-xs">
                           <span className="text-[#6b7280]">Rounds left</span>
                           <span className="text-white font-black">{autoRoundsLeft}</span>
                         </div>
                         <div className="flex justify-between text-xs">
                           <span className="text-[#6b7280]">Net profit</span>
-                          <span className={`font-black ${autoProfit >= 0 ? "text-green-400" : "text-red-400"}`}>
+                          <span className={`font-black ${autoProfit >= 0 ? "text-green-400" : "text-danger"}`}>
                             {autoProfit >= 0 ? "+" : ""}{walletType === "fiat" ? "₹" : "$"}{autoProfit.toFixed(2)}
                           </span>
                         </div>
@@ -684,12 +696,12 @@ export default function MinesPage() {
 
                 {/* Bonus toggle */}
                 {betMode === "manual" && (
-                  <div className="flex items-center justify-between py-2 border-t border-white/5">
+                  <div className="flex items-center justify-between py-2 border-t border-white/[0.04]">
                     <span className="text-[11px] text-[#6b7280] font-bold uppercase tracking-wider">Casino Bonus</span>
                     <button onClick={() => !isGameActive && walletType !== "crypto" && setUseBonus(v => !v)}
                       disabled={isGameActive || walletType === "crypto"}
                       className={`relative w-10 h-5 rounded-full transition-all border flex-shrink-0
-                        ${useBonus && walletType !== "crypto" ? "bg-green-500 border-green-500" : "bg-[#13151a] border-white/10"}
+                        ${useBonus && walletType !== "crypto" ? "bg-green-500 border-green-500" : "bg-bg-deep-3 border-white/[0.06]"}
                         ${isGameActive || walletType === "crypto" ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}>
                       <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${useBonus && walletType !== "crypto" ? "left-[22px]" : "left-0.5"}`} />
                     </button>
@@ -704,7 +716,7 @@ export default function MinesPage() {
 
                 {/* Live stats while active */}
                 {isGameActive && (
-                  <div className="bg-[#13151a] border border-white/10 rounded-xl p-3 space-y-1.5">
+                  <div className="bg-bg-deep-3 border border-white/[0.06] rounded-xl p-3 space-y-1.5">
                     <div className="flex justify-between text-xs">
                       <span className="text-[#6b7280]">Gems found</span>
                       <span className="text-white font-black">{gemsRevealed}</span>
@@ -723,37 +735,37 @@ export default function MinesPage() {
                 {/* Action button */}
                 {!hasSession ? (
                   <button onClick={openLogin}
-                    className="w-full py-4 bg-green-500 hover:bg-green-400 text-black font-black text-base rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]">
+                    className="w-full py-4 bg-green-500 hover:bg-green-400 text-white font-black text-base rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]">
                     Login to Play
                   </button>
                 ) : betMode === "auto" ? (
                   isAutoRunning ? (
                     <button onClick={stopAuto}
-                      className="w-full py-4 bg-red-500/20 border border-red-500/50 hover:bg-red-500/30 text-red-400 font-black text-base rounded-xl transition-all flex items-center justify-center gap-2">
+                      className="w-full py-4 bg-danger-alpha-16 border border-red-500/50 hover:bg-red-500/30 text-danger font-black text-base rounded-xl transition-all flex items-center justify-center gap-2">
                       <StopCircle size={18} /> Stop Auto
                     </button>
                   ) : (
                     <button onClick={handleStartAuto} disabled={isLoading || !connected || isInitializing}
-                      className="w-full py-4 bg-green-500 hover:bg-green-400 disabled:opacity-50 text-black font-black text-base rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
+                      className="w-full py-4 bg-green-500 hover:bg-green-400 disabled:opacity-50 text-white font-black text-base rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
                       {isInitializing ? <><RotateCcw size={18} className="animate-spin" /> Checking…</> : <><Play size={18} fill="currentColor" /> Start Auto ({autoRounds} bets)</>}
                     </button>
                   )
                 ) : gameStatus === "idle" ? (
                   <button onClick={handleBet} disabled={isLoading || !connected || isInitializing}
-                    className="w-full py-4 bg-green-500 hover:bg-green-400 disabled:opacity-50 text-black font-black text-base rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
+                    className="w-full py-4 bg-green-500 hover:bg-green-400 disabled:opacity-50 text-white font-black text-base rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
                     {isInitializing
                       ? <><RotateCcw size={18} className="animate-spin" /> Checking…</>
                       : isLoading ? <><RotateCcw size={18} className="animate-spin" /> Starting…</> : "Bet"}
                   </button>
                 ) : gameStatus === "active" ? (
                   <button onClick={handleCashout} disabled={isLoading || gemsRevealed === 0}
-                    className="w-full py-4 bg-green-500 hover:bg-green-400 disabled:opacity-40 text-black font-black text-base rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
+                    className="w-full py-4 bg-green-500 hover:bg-green-400 disabled:opacity-40 text-white font-black text-base rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2">
                     {isLoading ? <RotateCcw size={18} className="animate-spin" /> : null}
                     Cash Out {walletType === "fiat" ? "₹" : "$"}{potentialPayout.toFixed(2)}
                   </button>
                 ) : (
                   <button onClick={handleReset}
-                    className="w-full py-4 bg-[#13151a] border border-white/10 hover:border-white/20 text-white font-black text-base rounded-xl transition-all flex items-center justify-center gap-2">
+                    className="w-full py-4 bg-bg-deep-3 border border-white/[0.06] hover:border-white/[0.12] text-white font-black text-base rounded-xl transition-all flex items-center justify-center gap-2">
                     <RotateCcw size={16} /> New Game
                   </button>
                 )}
@@ -761,7 +773,7 @@ export default function MinesPage() {
               </div>
 
               {/* Bottom bar */}
-              <div className="border-t border-white/10 px-4 py-3 flex items-center justify-between">
+              <div className="border-t border-white/[0.06] px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-3 text-[#6b7280]">
                   <div className={`w-2 h-2 rounded-full ${connected ? "bg-green-400 animate-pulse" : "bg-red-400"}`} />
                   {activePlayers > 0 && (
@@ -771,8 +783,9 @@ export default function MinesPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={toggleMute} title={muted ? "Unmute" : "Mute"} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, opacity: 0.7 }}>
-                    {muted ? "🔇" : "🔊"}
+                  <button onClick={toggleMute} title={muted ? "Unmute" : "Mute"}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/[0.05] text-[#6b7280] hover:text-white transition-colors">
+                    {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
                   </button>
                   <button onClick={() => setShowFairness(v => !v)}
                     className="flex items-center gap-1.5 text-[11px] text-[#6b7280] hover:text-white transition-colors">
@@ -780,10 +793,24 @@ export default function MinesPage() {
                   </button>
                 </div>
               </div>
-              {showFairness && serverSeedHash && (
-                <div className="border-t border-white/10 p-4 bg-[#13151a]">
-                  <p className="text-[10px] text-[#6b7280] mb-1 font-bold uppercase tracking-wider">Server Seed Hash</p>
-                  <p className="text-[9px] text-[#9ca3af] break-all font-mono leading-relaxed">{serverSeedHash}</p>
+              {showFairness && (
+                <div className="border-t border-white/[0.06] p-4 bg-bg-deep-3 space-y-3">
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[10px] text-[#6b7280] font-bold uppercase tracking-wider">Server Seed Hash</p>
+                      {serverSeedHash && (
+                        <button onClick={() => { navigator.clipboard.writeText(serverSeedHash); toast.success("Copied!"); }}
+                          className="text-[9px] text-[#6b7280] hover:text-white transition-colors">Copy</button>
+                      )}
+                    </div>
+                    <p className="text-[9px] text-[#9ca3af] break-all font-mono leading-relaxed bg-black/20 rounded px-2 py-1.5 border border-white/[0.04]">
+                      {serverSeedHash || "Place a bet to generate seed"}
+                    </p>
+                  </div>
+                  <div className="text-[10px] text-[#6b7280] leading-relaxed">
+                    <p className="font-bold uppercase tracking-wider mb-1">How it works</p>
+                    <p>Before each game, the server generates a seed and shows you its SHA-256 hash. After the game, the original seed is revealed so you can verify the hash matches — proving the outcome was predetermined and not manipulated.</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -805,7 +832,7 @@ export default function MinesPage() {
               </div>
 
               {/* Status text */}
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 text-[#6b7280] text-xs font-medium px-4 py-1.5 bg-black/30 backdrop-blur-sm rounded-full border border-white/5">
+              <div className="absolute top-4 left-1/2 -translate-x-1/2 text-[#6b7280] text-xs font-medium px-4 py-1.5 bg-black/30 backdrop-blur-md rounded-full border border-white/[0.04]">
                 {isAutoRunning
                   ? `🤖 Auto · Round ${autoRounds - autoRoundsLeft + 1}/${autoRounds} · ${gemsRevealed} gems`
                   : gameStatus === "idle" ? "Game result will be displayed"
@@ -827,13 +854,13 @@ export default function MinesPage() {
                         aspect-square rounded-xl border transition-all duration-200 relative overflow-hidden
                         ${state === "hidden"
                           ? clickable
-                            ? `bg-[#2a2d35] border-[#3a3d45] hover:bg-[#35383f] hover:border-[#4a4d55] hover:scale-105 cursor-pointer active:scale-95
+                            ? `bg-bg-elevated border-[#3a3d45] hover:bg-bg-hover hover:border-[#4a4d55] hover:scale-105 cursor-pointer active:scale-95
                                ${isNearMiss ? "border-orange-400/40 shadow-[0_0_12px_rgba(251,146,60,0.25)]" : ""}`
-                            : `bg-[#22252d] border-[#2a2d35] cursor-not-allowed ${isGameActive && !isAutoRunning ? "" : "opacity-60"}`
+                            : `bg-bg-surface-3 border-[#2a2d35] cursor-not-allowed ${isGameActive && !isAutoRunning ? "" : "opacity-60"}`
                           : ""}
-                        ${state === "gem" ? "bg-[#0d2a15] border-cyan-500/50 scale-[1.03]" : ""}
-                        ${state === "mine" ? "bg-[#2a0d0d] border-red-500/60 scale-[1.03]" : ""}
-                        ${state === "revealed-mine" ? "bg-[#1a0808] border-red-900/20 opacity-40" : ""}
+                        ${state === "gem" ? "bg-success-soft border-cyan-500/50 scale-[1.03]" : ""}
+                        ${state === "mine" ? "bg-danger-soft border-red-500/60 scale-[1.03]" : ""}
+                        ${state === "revealed-mine" ? "bg-danger-soft border-red-900/20 opacity-40" : ""}
                       `}
                       style={{
                         animation: state === "gem" ? "gemFlip 0.3s ease-out" :
@@ -856,7 +883,7 @@ export default function MinesPage() {
                       {/* Mine hit */}
                       {state === "mine" && (
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="absolute inset-0 bg-red-500/10 animate-pulse" />
+                          <div className="absolute inset-0 bg-danger-alpha-10 animate-pulse" />
                           <div className="relative z-10">
                             <MineIcon size={36} />
                           </div>
@@ -878,15 +905,15 @@ export default function MinesPage() {
           </div>
 
           {/* Bottom info bar */}
-          <div className="flex-shrink-0 px-5 py-3 bg-[#13151a] border-t border-white/5 flex items-center justify-between">
+          <div className="flex-shrink-0 px-5 py-3 bg-bg-deep-3 border-t border-white/[0.04] flex items-center justify-between">
             <div>
               <span className="text-white text-sm font-black">Mines</span>
               <span className="text-[#6b7280] text-xs ml-2">by Zeero Originals</span>
             </div>
             <div className="flex items-center gap-3">
-              <span className="text-[11px] px-2.5 py-1 bg-[#1a1d24] border border-white/10 rounded-full text-[#9ca3af]"># Mining</span>
-              <span className="text-[11px] px-2.5 py-1 bg-[#1a1d24] border border-white/10 rounded-full text-[#9ca3af]"># Zeero Originals</span>
-              <span className="text-[11px] px-2.5 py-1 bg-[#1a1d24] border border-white/10 rounded-full text-[#9ca3af]"># Provably Fair</span>
+              <span className="text-[11px] px-2.5 py-1 bg-bg-modal-2 border border-white/[0.06] rounded-full text-[#9ca3af]"># Mining</span>
+              <span className="text-[11px] px-2.5 py-1 bg-bg-modal-2 border border-white/[0.06] rounded-full text-[#9ca3af]"># Zeero Originals</span>
+              <span className="text-[11px] px-2.5 py-1 bg-bg-modal-2 border border-white/[0.06] rounded-full text-[#9ca3af]"># Provably Fair</span>
             </div>
           </div>
         </main>

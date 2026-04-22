@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { io, Socket } from "socket.io-client";
 import { toast } from "react-hot-toast";
-import Image from "next/image";
 import Header from "@/components/layout/Header";
 import LeftSidebar from "@/components/layout/LeftSidebar";
 import { useAuth } from "@/context/AuthContext";
@@ -12,16 +11,16 @@ import { useModal } from "@/context/ModalContext";
 import { useOriginalsAccess } from "@/hooks/useOriginalsAccess";
 import { useGameSounds } from "@/hooks/useGameSounds";
 import { getConfiguredSocketNamespace } from "@/utils/socketUrl";
+import { Volume2, VolumeX, Users } from "lucide-react";
 
 const FIRE_FRAME_H = 96;
 const FIRE_TOTAL_FRAMES = 27;
 
-interface LimboResult { resultMultiplier: number; targetMultiplier: number; result: "WIN" | "LOSE"; payout: number; betAmount: number; }
-interface ManualStart { betId: string; crashPoint: number; betAmount: number; }
-interface LiveBet { username: string; betAmount: number; targetMultiplier: number; resultMultiplier: number; result: "WIN" | "LOSE"; payout: number; }
-interface LimboHistoryBet { cashedOutAt?: number; resultMultiplier: number; result: "WIN" | "LOSE" | "ACTIVE"; }
+interface LiveBet { username: string; betAmount: number; targetMultiplier?: number; resultMultiplier?: number; result?: "WIN" | "LOSE"; payout?: number; }
+interface HistoryRound { roundId: number; crashPoint: number; serverSeedHash?: string; }
 interface StarDot { width: number; height: number; top: string; left: string; opacity: number; animation: string; animationDelay: string; }
 type WalletType = "fiat" | "crypto";
+type GamePhase = "BETTING" | "FLYING" | "CRASHED";
 
 function getWalletSymbol(walletType: WalletType) {
   return walletType === "crypto" ? "$" : "₹";
@@ -39,16 +38,17 @@ function buildStarField(): StarDot[] {
   }));
 }
 
-function ResultPill({ r }: { r: { multiplier: number; isWin: boolean } }) {
+function ResultPill({ r }: { r: HistoryRound }) {
+  const isWin = r.crashPoint >= 2.0; // Arbitrary styling threshold like Aviator
   return (
     <span style={{
       fontSize: 11, fontWeight: 800, padding: "2px 8px", borderRadius: 100,
-      background: r.isWin ? "#0a2a0a" : "#2a0a0a",
-      color: r.isWin ? "#2ecc71" : "#e74c3c",
-      border: `1px solid ${r.isWin ? "#2ecc7133" : "#e74c3c33"}`,
+      background: isWin ? "#0a2a0a" : "#2a0a0a",
+      color: isWin ? "#2ecc71" : "#e74c3c",
+      border: `1px solid ${isWin ? "#2ecc7133" : "#e74c3c33"}`,
       whiteSpace: "nowrap",
     }}>
-      {r.multiplier.toFixed(2)}×
+      {r.crashPoint.toFixed(2)}×
     </span>
   );
 }
@@ -56,13 +56,7 @@ function ResultPill({ r }: { r: { multiplier: number; isWin: boolean } }) {
 export default function LimboPage() {
   const { token, loading: authLoading } = useAuth();
   const { canAccessOriginals, loading: accessLoading } = useOriginalsAccess();
-  const {
-    fiatBalance,
-    cryptoBalance,
-    refreshWallet,
-    selectedWallet,
-    setSelectedWallet,
-  } = useWallet();
+  const { fiatBalance, cryptoBalance, refreshWallet, selectedWallet, setSelectedWallet } = useWallet();
   const { openLogin } = useModal();
   const socketRef = useRef<Socket | null>(null);
   const { playBet, playLimboRise, playWin, playCrash, muted, toggleMute } = useGameSounds();
@@ -76,54 +70,54 @@ export default function LimboPage() {
   }, [hasSession, authLoading, accessLoading, canAccessOriginals]);
 
   const [betInput, setBetInput] = useState("100.00");
-  const [playing, setPlaying] = useState(false);
-  const [historyItems, setHistoryItems] = useState<{ multiplier: number; isWin: boolean }[]>([]);
-  const [liveBets, setLiveBets] = useState<LiveBet[]>([]);
-  const [walletType, setWalletType] = useState<WalletType>(selectedWallet);
-
-  // Manual / Auto
-  const [betTab, setBetTab] = useState<"manual" | "auto">("manual");
-
-  // === MANUAL MODE state ===
-  const [manualBetId, setManualBetId] = useState("");
-  const manualCrashRef = useRef(0);
-  const [manualMulti, setManualMulti] = useState(1.0);
-  const manualMultiRef = useRef(1.0);
-  const [manualPhase, setManualPhase] = useState<"idle" | "flying" | "won" | "bust">("idle");
-  const manualStartRef = useRef(0);
-  const manualRafRef = useRef(0);
-  const manualBetIdRef = useRef("");
-
-  // === AUTO MODE state ===
   const [targetInput, setTargetInput] = useState("2.00");
-  const [autoRounds, setAutoRounds] = useState("10");
-  const [autoStopWin, setAutoStopWin] = useState("");
-  const [autoStopLoss, setAutoStopLoss] = useState("");
-  const [autoRunning, setAutoRunning] = useState(false);
-  const [autoRoundsLeft, setAutoRoundsLeft] = useState(0);
-  const [autoProfit, setAutoProfit] = useState(0);
-  const autoRunningRef = useRef(false);
-  const autoProfitRef = useRef(0);
+  const [walletType, setWalletType] = useState<WalletType>(selectedWallet);
+  const [betTab, setBetTab] = useState<"manual" | "auto">("manual");
+  const [showMobileBets, setShowMobileBets] = useState(false);
+  
+  // Game States
+  const [phase, setPhase] = useState<GamePhase>("BETTING");
+  const [multiplier, setMultiplier] = useState(1.00);
+  const [historyItems, setHistoryItems] = useState<HistoryRound[]>([]);
+  const [roundBets, setRoundBets] = useState<LiveBet[]>([]);
+  const [roundId, setRoundId] = useState(0);
+
+  // Auto Bet
+  const [autoEnabled, setAutoEnabled] = useState(false);
+  const autoEnabledRef = useRef(false);
+
+  // Player state
+  const [hasBetNextRound, setHasBetNextRound] = useState(false);
+  const [activeBetAmount, setActiveBetAmount] = useState(0);
+  const [hasBetThisRound, setHasBetThisRound] = useState(false);
+  const [playerCashedOut, setPlayerCashedOut] = useState(false);
+
+  const multiplierRef = useRef(multiplier);
+  const phaseRef = useRef(phase);
+  const walletTypeRef = useRef<WalletType>(walletType);
   const betInputRef = useRef(betInput);
   const targetInputRef = useRef(targetInput);
-  const autoStopWinRef = useRef(autoStopWin);
-  const autoStopLossRef = useRef(autoStopLoss);
-  const walletTypeRef = useRef<WalletType>(walletType);
+  const betTabRef = useRef(betTab);
+  const hasBetNextRoundRef = useRef(false);
+  const roundIdRef = useRef(roundId);
+
+  useEffect(() => { multiplierRef.current = multiplier; }, [multiplier]);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
+  useEffect(() => { walletTypeRef.current = walletType; }, [walletType]);
   useEffect(() => { betInputRef.current = betInput; }, [betInput]);
   useEffect(() => { targetInputRef.current = targetInput; }, [targetInput]);
-  useEffect(() => { autoStopWinRef.current = autoStopWin; }, [autoStopWin]);
-  useEffect(() => { autoStopLossRef.current = autoStopLoss; }, [autoStopLoss]);
-  useEffect(() => { walletTypeRef.current = walletType; }, [walletType]);
+  useEffect(() => { betTabRef.current = betTab; }, [betTab]);
+  useEffect(() => { hasBetNextRoundRef.current = hasBetNextRound; }, [hasBetNextRound]);
+  useEffect(() => { roundIdRef.current = roundId; }, [roundId]);
   useEffect(() => { setWalletType(selectedWallet); }, [selectedWallet]);
 
-  // Animation
-  const [rocketY, setRocketY] = useState(5);
+  // Animation Refs
   const [fireFrame, setFireFrame] = useState(0);
   const stars = useMemo<StarDot[]>(() => buildStarField(), []);
-
+  
   // Fire animation
   useEffect(() => {
-    if (manualPhase !== "flying") return;
+    if (phase !== "FLYING") return;
     let raf: number;
     let lastT = 0;
     const tick = (ts: number) => {
@@ -132,144 +126,146 @@ export default function LimboPage() {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [manualPhase]);
+  }, [phase]);
 
-  // Manual multiplier growth loop
-  const startManualGrowth = useCallback((crashPoint: number) => {
-    manualStartRef.current = Date.now();
-    manualCrashRef.current = crashPoint;
-    setManualPhase("flying");
-    setManualMulti(1.0);
-    manualMultiRef.current = 1.0;
-
-    const grow = () => {
-      const elapsed = Date.now() - manualStartRef.current;
-      const m = parseFloat(Math.pow(Math.E, 0.00006 * elapsed).toFixed(2));
-      manualMultiRef.current = m;
-      setManualMulti(m);
-      setRocketY(Math.min(55, 5 + Math.min((m - 1) / 4, 1) * 50));
-
-      // Play rising sound every ~200ms
+  // Handle Rocket Sound
+  useEffect(() => {
+    if (phase === "FLYING") {
       const now = Date.now();
-      if (now - lastRiseSoundRef.current > 200) {
-        playLimboRise(m);
+      if (now - lastRiseSoundRef.current >= 300) {
+        playLimboRise(multiplier);
         lastRiseSoundRef.current = now;
       }
-
-      if (m >= manualCrashRef.current) {
-        // BUST
-        playCrash();
-        setManualPhase("bust");
-        setManualMulti(manualCrashRef.current);
-        setHistoryItems(prev => [{ multiplier: manualCrashRef.current, isWin: false }, ...prev.slice(0, 29)]);
-        socketRef.current?.emit("limbo:bust", { betId: manualBetIdRef.current });
-        setPlaying(false);
-        setTimeout(() => { setManualPhase("idle"); setRocketY(5); setManualMulti(1.0); }, 1500);
-        return;
-      }
-      manualRafRef.current = requestAnimationFrame(grow);
-    };
-    manualRafRef.current = requestAnimationFrame(grow);
-  }, [playCrash, playLimboRise]);
+    }
+  }, [phase, multiplier, playLimboRise]);
 
   /* ── Socket ─────────────────────────────────────────────────────────── */
   useEffect(() => {
     const endpoint = getConfiguredSocketNamespace("limbo");
-    if (!endpoint) {
-      return;
-    }
+    if (!endpoint) return;
 
-    const token = localStorage.getItem("token") || "";
-    const s = io(endpoint.url, { path: endpoint.path, auth: { token }, transports: ["websocket"] });
+    const tkn = localStorage.getItem("token") || "";
+    const s = io(endpoint.url, { path: endpoint.path, auth: { token: tkn }, transports: ["websocket", "polling"], upgrade: true, reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 1000, reconnectionDelayMax: 15000 });
     socketRef.current = s;
 
-    s.on("limbo:connected", () => {});
-
-    // Manual: server sends crash point
-    s.on("limbo:manual-started", (d: ManualStart) => {
-      setManualBetId(d.betId);
-      manualBetIdRef.current = d.betId;
-      startManualGrowth(d.crashPoint);
-      void refreshWallet();
+    s.on("limbo:state", (d: { status: GamePhase; roundId: number; multiplier: number }) => {
+      setPhase(d.status);
+      setRoundId(d.roundId);
+      setMultiplier(d.multiplier);
+      if (d.status === "BETTING") {
+        setHasBetThisRound(false);
+        setPlayerCashedOut(false);
+        setRoundBets([]);
+      }
     });
 
-    // Manual: cashout success
-    s.on("limbo:cashout-success", (d: { payout: number; multiplier: number }) => {
-      cancelAnimationFrame(manualRafRef.current);
-      setManualPhase("won");
-      setManualMulti(d.multiplier);
-      setHistoryItems(prev => [{ multiplier: d.multiplier, isWin: true }, ...prev.slice(0, 29)]);
-      setPlaying(false);
-      playWin();
-      void refreshWallet();
-      toast.success(`Won ${getWalletSymbol(walletTypeRef.current)}${d.payout.toFixed(2)} at ${d.multiplier.toFixed(2)}×`);
-      setTimeout(() => { setManualPhase("idle"); setRocketY(5); setManualMulti(1.0); }, 1500);
+    s.on("limbo:history", (d: HistoryRound[]) => {
+      setHistoryItems(d);
     });
 
-    // Auto: instant result
-    s.on("limbo:result", (d: LimboResult) => {
-      setHistoryItems(prev => [{ multiplier: d.resultMultiplier, isWin: d.result === "WIN" }, ...prev.slice(0, 29)]);
-      setPlaying(false);
-      if (d.result === "WIN") playWin(); else playCrash();
-      void refreshWallet();
+    s.on("limbo:betting", (d: { roundId: number; status: GamePhase }) => {
+      setPhase(d.status);
+      setRoundId(d.roundId);
+      setMultiplier(1.0);
+      setRoundBets([]);
+      setPlayerCashedOut(false);
 
-      const netGain = d.result === "WIN" ? d.payout - d.betAmount : -d.betAmount;
-      autoProfitRef.current += netGain;
-      setAutoProfit(autoProfitRef.current);
-
-      // Auto: animate briefly then fire next
-      setManualMulti(d.resultMultiplier);
-      setManualPhase(d.result === "WIN" ? "won" : "bust");
-      setRocketY(d.result === "WIN" ? 55 : 5);
+      // Transition queued bets or auto bets
+      setHasBetThisRound(false);
 
       setTimeout(() => {
-        setManualPhase("idle");
-        setRocketY(5);
-        setManualMulti(1.0);
-
-        if (autoRunningRef.current) {
-          setAutoRoundsLeft(prev => {
-            const left = prev - 1;
-            if (left <= 0) { autoRunningRef.current = false; setAutoRunning(false); return 0; }
-            const sw = parseFloat(autoStopWinRef.current) || 0;
-            const sl = parseFloat(autoStopLossRef.current) || 0;
-            if (sw > 0 && autoProfitRef.current >= sw) { autoRunningRef.current = false; setAutoRunning(false); toast.success("Auto stopped: profit target reached"); return 0; }
-            if (sl > 0 && autoProfitRef.current <= -sl) { autoRunningRef.current = false; setAutoRunning(false); toast.error("Auto stopped: loss limit reached"); return 0; }
-            setTimeout(() => {
-              if (autoRunningRef.current && socketRef.current) {
-                setPlaying(true);
-                const ba = parseFloat(betInputRef.current) || 100;
-                const tm = parseFloat(targetInputRef.current) || 2;
-                socketRef.current.emit("limbo:play", { betAmount: ba, targetMultiplier: tm, walletType: walletTypeRef.current });
-              }
-            }, 300);
-            return left;
-          });
+        if (autoEnabledRef.current || hasBetNextRoundRef.current) {
+          const ba = parseFloat(betInputRef.current) || 100;
+          const target = betTabRef.current === "auto" ? parseFloat(targetInputRef.current) || 0 : 0;
+          s.emit("limbo:bet", { roundId: d.roundId, betAmount: ba, autoCashoutAt: target, walletType: walletTypeRef.current });
+          setHasBetNextRound(false);
+          hasBetNextRoundRef.current = false;
+          playBet();
         }
-      }, autoRunningRef.current ? 800 : 1200);
+      }, 500); // Wait a bit into the betting phase
     });
 
-    s.on("limbo:live-bet", (d: LiveBet) => setLiveBets(prev => [d, ...prev.slice(0, 49)]));
-    s.on("limbo:history", (d: LimboHistoryBet[]) => {
-      setHistoryItems(d.map((bet) => ({
-        multiplier: bet.cashedOutAt || bet.resultMultiplier,
-        isWin: bet.result === "WIN",
-      })));
+    s.on("limbo:start", (d: { roundId: number; status: GamePhase }) => {
+      setPhase(d.status);
+      setMultiplier(1.0);
     });
+
+    s.on("limbo:tick", (d: { roundId: number; multiplier: number }) => {
+      setMultiplier(d.multiplier);
+    });
+
+    s.on("limbo:crash", (d: { roundId: number; crashPoint: number }) => {
+      setPhase("CRASHED");
+      setMultiplier(d.crashPoint);
+      setHistoryItems(prev => [{ roundId: d.roundId, crashPoint: d.crashPoint }, ...prev.slice(0, 29)]);
+      playCrash();
+    });
+
+    s.on("limbo:bet-placed", (d: { betId: string; roundId: number; betAmount: number }) => {
+      if (d.roundId === roundIdRef.current) {
+        setHasBetThisRound(true);
+        setActiveBetAmount(d.betAmount);
+        void refreshWallet();
+        toast.success("Bet placed");
+      } else {
+        setHasBetNextRound(true);
+        hasBetNextRoundRef.current = true;
+        setActiveBetAmount(d.betAmount);
+        toast.success("Waiting for next round");
+      }
+    });
+
+    s.on("limbo:cashout-success", (d: { userId: number; payout: number; multiplier: number; auto: boolean }) => {
+      setPlayerCashedOut(true);
+      if (d.auto) {
+        toast.success(`Auto cashed out at ${d.multiplier.toFixed(2)}× for ${getWalletSymbol(walletTypeRef.current)}${d.payout.toFixed(2)}`);
+      } else {
+        toast.success(`Cashed out at ${d.multiplier.toFixed(2)}× for ${getWalletSymbol(walletTypeRef.current)}${d.payout.toFixed(2)}`);
+      }
+      playWin();
+      void refreshWallet();
+    });
+
+    s.on("limbo:player-bet", (d: { username: string; betAmount: number }) => {
+      setRoundBets(prev => [...prev, { username: d.username, betAmount: d.betAmount }]);
+    });
+
+    s.on("limbo:player-cashout", (d: { username: string; multiplier: number; payout: number }) => {
+      setRoundBets(prev => prev.map(b => 
+        b.username === d.username && !b.resultMultiplier 
+          ? { ...b, resultMultiplier: d.multiplier, payout: d.payout, result: "WIN" as const }
+          : b
+      ));
+    });
+
     s.on("limbo:error", (d: { message: string }) => {
       toast.error(d.message);
-      setPlaying(false);
-      autoRunningRef.current = false;
-      setAutoRunning(false);
+      setAutoEnabled(false);
+      autoEnabledRef.current = false;
+      setHasBetNextRound(false);
       void refreshWallet();
+    });
+
+    s.on("disconnect", (reason) => {
+      if (reason === "io server disconnect") {
+        setTimeout(() => s.connect(), 2000);
+      }
+    });
+
+    s.on("connect_error", () => {
+      toast.error("Connection lost. Reconnecting...");
+    });
+
+    s.on("connect", () => {
+      // Re-request state on reconnect
+      s.emit("limbo:get-history");
     });
 
     return () => { s.disconnect(); };
-  }, [playCrash, playWin, refreshWallet, startManualGrowth]);
+  }, [hasSession, playBet, playWin, playCrash, refreshWallet]);
 
   const betAmount = parseFloat(betInput) || 0;
-  const targetMultiplier = parseFloat(targetInput) || 2;
-  const winChance = targetMultiplier > 1 ? (99 / targetMultiplier).toFixed(2) : "99.00";
+  const targetMulti = parseFloat(targetInput) || 2;
   const activeBalance = walletType === "crypto" ? cryptoBalance : fiatBalance;
   const activeSymbol = getWalletSymbol(walletType);
 
@@ -278,41 +274,49 @@ export default function LimboPage() {
     void setSelectedWallet(nextWallet);
   }, [setSelectedWallet]);
 
-  // Manual: bet
-  const handleManualBet = useCallback(() => {
+  const handleBetClick = useCallback(() => {
     if (!hasSession) { openLogin(); return; }
     if (betAmount <= 0) { toast.error("Enter a bet amount"); return; }
     if (betAmount > activeBalance) { toast.error("Insufficient balance"); return; }
-    if (playing) return;
-    setPlaying(true);
-    playBet();
-    lastRiseSoundRef.current = 0;
-    socketRef.current?.emit("limbo:play-manual", { betAmount, walletType: walletTypeRef.current });
-  }, [activeBalance, betAmount, hasSession, openLogin, playBet, playing]);
 
-  // Manual: cashout
+    if (phase === "BETTING" && !hasBetThisRound) {
+      socketRef.current?.emit("limbo:bet", { roundId: roundIdRef.current, betAmount, autoCashoutAt: betTab === "auto" ? targetMulti : 0, walletType: walletTypeRef.current });
+      playBet();
+    } else {
+      setHasBetNextRound(true);
+      hasBetNextRoundRef.current = true;
+      toast.success("Bet queued for next round");
+    }
+  }, [hasSession, openLogin, betAmount, activeBalance, phase, hasBetThisRound, betTab, targetMulti, playBet]);
+
+  const handleCancelHit = useCallback(() => {
+    setHasBetNextRound(false);
+    hasBetNextRoundRef.current = false;
+    toast.success("Queued bet cancelled");
+  }, []);
+
   const handleCashout = useCallback(() => {
-    if (!manualBetId || manualPhase !== "flying") return;
-    cancelAnimationFrame(manualRafRef.current);
-    socketRef.current?.emit("limbo:cashout", { betId: manualBetId, cashoutAt: manualMultiRef.current });
-  }, [manualBetId, manualPhase]);
+    if (!hasBetThisRound || playerCashedOut || phase !== "FLYING") return;
+    socketRef.current?.emit("limbo:cashout", { roundId: roundIdRef.current });
+  }, [hasBetThisRound, playerCashedOut, phase]);
 
-  // Auto: start
-  const handleStartAuto = useCallback(() => {
+  const handleAutoToggle = useCallback(() => {
     if (!hasSession) { openLogin(); return; }
-    if (betAmount <= 0) { toast.error("Enter a bet amount"); return; }
-    if (betAmount > activeBalance) { toast.error("Insufficient balance"); return; }
-    if (targetMultiplier < 1.01) { toast.error("Target must be ≥ 1.01×"); return; }
-    const rounds = parseInt(autoRounds) || 10;
-    autoProfitRef.current = 0; setAutoProfit(0);
-    setAutoRoundsLeft(rounds);
-    autoRunningRef.current = true; setAutoRunning(true);
-    setPlaying(true);
-    playBet();
-    socketRef.current?.emit("limbo:play", { betAmount, targetMultiplier, walletType: walletTypeRef.current });
-  }, [activeBalance, autoRounds, betAmount, hasSession, openLogin, playBet, targetMultiplier]);
-
-  const handleStopAuto = useCallback(() => { autoRunningRef.current = false; setAutoRunning(false); }, []);
+    if (!autoEnabled) {
+      setAutoEnabled(true);
+      autoEnabledRef.current = true;
+      if (phase === "BETTING" && !hasBetThisRound) {
+        handleBetClick();
+      } else if (!hasBetThisRound) {
+        setHasBetNextRound(true);
+        toast.success("Auto bet queued for next round");
+      }
+    } else {
+      setAutoEnabled(false);
+      autoEnabledRef.current = false;
+      setHasBetNextRound(false);
+    }
+  }, [hasSession, openLogin, autoEnabled, phase, hasBetThisRound, handleBetClick]);
 
   const adjustBet = (dir: "up" | "down") => {
     const cur = parseFloat(betInput) || 0;
@@ -323,42 +327,48 @@ export default function LimboPage() {
     setTargetInput(dir === "down" ? Math.max(1.01, cur - 0.1).toFixed(2) : (cur + 0.1).toFixed(2));
   };
 
+  const rocketY = Math.min(55, 5 + Math.min((multiplier - 1) / 4, 1) * 50);
+
   return (
     <div className="min-h-screen md:h-screen overflow-y-auto md:overflow-hidden flex flex-col" style={{ background: "#0e0e0e", fontFamily: "'Roboto', sans-serif" }}>
       <Header />
-      <div className="flex flex-1 md:overflow-hidden pt-[110px] md:pt-[64px] pb-[80px] md:pb-0 max-w-[1920px] mx-auto w-full">
+      <div className="flex flex-1 md:overflow-hidden pt-[100px] md:pt-[64px] pb-[80px] md:pb-0 max-w-[1920px] mx-auto w-full">
         <LeftSidebar />
-        <main className="flex-1 min-w-0 flex flex-col md:flex-row md:overflow-hidden" style={{ borderLeft: "1px solid #1a1a1a" }}>
+        <main className="flex-1 min-w-0 flex flex-col md:flex-row md:overflow-hidden" style={{ borderLeft: "1px solid #0F1016" }}>
 
           {/* ═══ LEFT — Live bets ═══════════════════════════════════════ */}
           <div className="hidden md:flex flex-col w-[280px] flex-shrink-0" style={{ background: "#141516" }}>
             <div className="px-3 py-2" style={{ borderBottom: "1px solid #1e1e1e" }}>
               <span className="text-[10px] text-zinc-500 uppercase tracking-[0.15em] font-bold">
-                Live Bets <span className="text-green-500">{liveBets.length}</span>
+                Live Bets <span className="text-green-500">{roundBets.length}</span>
               </span>
             </div>
-            <div className="flex px-2 py-1 text-[10px] text-zinc-600 font-bold uppercase" style={{ borderBottom: "1px solid #1a1a1a" }}>
+            <div className="flex px-2 py-1 text-[10px] text-zinc-600 font-bold uppercase" style={{ borderBottom: "1px solid #0F1016" }}>
               <div style={{ width: "28%" }}>User</div>
-              <div style={{ width: "22%", textAlign: "center" }}>Target</div>
-              <div style={{ width: "22%", textAlign: "center" }}>Result</div>
+              <div style={{ width: "22%", textAlign: "center" }}>Bet</div>
+              <div style={{ width: "22%", textAlign: "center" }}>Multi</div>
               <div style={{ width: "28%", textAlign: "right" }}>Payout</div>
             </div>
             <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "#333 transparent" }}>
-              {liveBets.length === 0 ? (
+              {roundBets.length === 0 ? (
                 <div className="text-center text-zinc-700 text-xs py-10">No bets yet</div>
-              ) : liveBets.map((b, i) => (
+              ) : roundBets.map((b, i) => (
                 <div key={i} className="flex items-center px-2" style={{
                   height: 32, margin: "1px 2px", borderRadius: 16, fontSize: 11, fontWeight: 600,
                   background: b.result === "WIN" ? "linear-gradient(85deg,#0a2a0a,#0f1214)" : "linear-gradient(85deg,#1a0a0a,#0f1214)",
-                  border: b.result === "WIN" ? "1px solid #2ecc7133" : "1px solid #1a1a1a",
+                  border: b.result === "WIN" ? "1px solid #2ecc7133" : "1px solid #0F1016",
                 }}>
                   <div style={{ width: "28%" }} className="truncate text-zinc-400">{b.username}</div>
-                  <div style={{ width: "22%", textAlign: "center" }} className="text-zinc-300">{b.targetMultiplier.toFixed(2)}×</div>
+                  <div style={{ width: "22%", textAlign: "center" }} className="text-zinc-300">{b.betAmount}</div>
                   <div style={{ width: "22%", textAlign: "center" }}>
-                    <span style={{ color: b.result === "WIN" ? "#2ecc71" : "#e74c3c", fontWeight: 800 }}>{b.resultMultiplier.toFixed(2)}×</span>
+                    {b.resultMultiplier ? (
+                      <span style={{ color: "#2ecc71", fontWeight: 800 }}>{b.resultMultiplier.toFixed(2)}×</span>
+                    ) : (
+                      "-"
+                    )}
                   </div>
                   <div style={{ width: "28%", textAlign: "right" }} className="text-zinc-300">
-                    {b.result === "WIN" ? `+₹${b.payout.toFixed(0)}` : `−₹${b.betAmount.toFixed(0)}`}
+                    {b.result === "WIN" && b.payout ? `+₹${b.payout.toFixed(0)}` : "-"}
                   </div>
                 </div>
               ))}
@@ -373,7 +383,7 @@ export default function LimboPage() {
               <div className="flex-1 overflow-hidden relative">
                 <div className="flex gap-1 items-center overflow-x-auto no-scrollbar py-1">
                   {historyItems.length === 0
-                    ? <span className="text-zinc-700 text-xs">Place a bet…</span>
+                    ? <span className="text-zinc-700 text-xs">Waiting for history…</span>
                     : historyItems.slice(0, 25).map((h, i) => <ResultPill key={i} r={h} />)}
                 </div>
                 <div style={{ position: "absolute", right: 0, top: 0, width: 30, height: "100%", background: "linear-gradient(to left, #0e0e0e, transparent)", pointerEvents: "none" }} />
@@ -393,44 +403,40 @@ export default function LimboPage() {
 
               {/* Multiplier display */}
               <div className="absolute inset-0 flex items-start justify-center pt-8 md:pt-12" style={{ zIndex: 3, pointerEvents: "none" }}>
-                {manualPhase === "idle" && (
+                {phase === "BETTING" && (
                   <div className="text-center mt-4">
                     <div className="text-zinc-500 font-bold text-sm uppercase tracking-[0.15em] mb-2">
-                      {betTab === "manual" ? "Place bet & cash out" : "Set target & bet"}
+                       Waiting For Next Round
                     </div>
                     <div className="text-zinc-600 font-black tabular-nums" style={{ fontSize: "clamp(36px, 10vw, 80px)", lineHeight: 1 }}>
                       1.00<span style={{ fontSize: "0.65em" }}>×</span>
                     </div>
                   </div>
                 )}
-                {manualPhase === "flying" && (
+                {phase === "FLYING" && (
                   <div className="text-center font-black tabular-nums" style={{
                     color: "#ff8c00", fontSize: "clamp(40px, 10vw, 90px)", lineHeight: 1,
                     textShadow: "0 0 30px rgba(255,140,0,0.4)",
                   }}>
-                    {manualMulti.toFixed(2)}<span style={{ fontSize: "0.65em" }}>×</span>
+                    {multiplier.toFixed(2)}<span style={{ fontSize: "0.65em" }}>×</span>
                   </div>
                 )}
-                {manualPhase === "won" && (
-                  <div className="text-center">
-                    <div className="font-black tabular-nums" style={{
-                      color: "#2ecc71", fontSize: "clamp(40px, 10vw, 90px)", lineHeight: 1,
-                      textShadow: "0 0 30px rgba(46,204,113,0.4)",
-                    }}>
-                      {manualMulti.toFixed(2)}<span style={{ fontSize: "0.65em" }}>×</span>
-                    </div>
-                    <div className="mt-2 font-bold text-sm uppercase tracking-[0.2em]" style={{ color: "#2ecc71" }}>CASHED OUT</div>
-                  </div>
-                )}
-                {manualPhase === "bust" && (
+                {phase === "CRASHED" && (
                   <div className="text-center">
                     <div className="font-black tabular-nums" style={{
                       color: "#e74c3c", fontSize: "clamp(40px, 10vw, 90px)", lineHeight: 1,
                       textShadow: "0 0 30px rgba(231,76,60,0.4)",
                     }}>
-                      {manualMulti.toFixed(2)}<span style={{ fontSize: "0.65em" }}>×</span>
+                      {multiplier.toFixed(2)}<span style={{ fontSize: "0.65em" }}>×</span>
                     </div>
-                    <div className="mt-2 font-bold text-sm uppercase tracking-[0.2em]" style={{ color: "#e74c3c" }}>BUST</div>
+                    <div className="mt-2 font-bold text-sm uppercase tracking-[0.2em]" style={{ color: "#e74c3c" }}>CRASHED</div>
+                  </div>
+                )}
+                
+                {/* Local Player Floating Cashout Message */}
+                {playerCashedOut && phase === "FLYING" && (
+                  <div className="absolute top-[60%] text-center font-black animate-pulse" style={{ color: "#2ecc71", fontSize: "24px" }}>
+                    CASHED OUT!
                   </div>
                 )}
               </div>
@@ -439,22 +445,24 @@ export default function LimboPage() {
               <div style={{
                 position: "absolute", left: "50%", bottom: `${rocketY}%`,
                 transform: "translateX(-50%)", zIndex: 2,
-                transition: manualPhase === "flying" ? "none" : "bottom 600ms ease-out",
+                transition: phase === "FLYING" ? "none" : "bottom 600ms ease-out",
                 display: "flex", flexDirection: "column", alignItems: "center",
               }}>
-                <Image
+                <img
                   src="/limbo/rocket.png"
                   alt="Limbo Rocket"
                   width={110}
                   height={110}
+                  loading="eager"
+                  decoding="async"
                   style={{
                     width: "clamp(70px, 12vw, 110px)", height: "auto", display: "block",
-                    filter: manualPhase === "bust" ? "grayscale(0.7) brightness(0.5)" : "drop-shadow(0 10px 30px rgba(0,0,0,0.5))",
+                    filter: phase === "CRASHED" ? "grayscale(0.7) brightness(0.5)" : "drop-shadow(0 10px 30px rgba(0,0,0,0.5))",
                     transition: "filter 0.3s, transform 0.3s",
-                    transform: manualPhase === "bust" ? "rotate(15deg)" : "rotate(0deg)",
+                    transform: phase === "CRASHED" ? "rotate(15deg)" : "rotate(0deg)",
                   }}
                 />
-                {(manualPhase === "flying" || manualPhase === "idle") && (
+                {(phase === "FLYING" || phase === "BETTING") && (
                   <div style={{
                     width: 81, height: 96, marginTop: -10,
                     backgroundRepeat: "no-repeat", backgroundSize: "81px auto",
@@ -472,12 +480,14 @@ export default function LimboPage() {
                 {/* Manual / Auto tabs */}
                 <div className="flex" style={{ borderBottom: "1px solid #2A2B2E" }}>
                   {(["manual", "auto"] as const).map(t => (
-                    <button key={t} onClick={() => { if (!autoRunning && manualPhase === "idle") setBetTab(t); }}
+                    <button key={t} onClick={() => { if (!hasBetThisRound && !hasBetNextRound && phase === "BETTING" && !autoEnabled) setBetTab(t); }}
                       className="flex-1 py-2 text-xs font-bold uppercase tracking-[0.12em]"
+                      disabled={hasBetThisRound || hasBetNextRound || autoEnabled}
                       style={{
                         color: betTab === t ? "#fff" : "#555",
                         borderBottom: betTab === t ? "2px solid #28a909" : "2px solid transparent",
                         background: "transparent",
+                        opacity: (hasBetThisRound || hasBetNextRound || autoEnabled) ? 0.5 : 1
                       }}>
                       {t}
                     </button>
@@ -489,12 +499,12 @@ export default function LimboPage() {
                   <div className="flex flex-col gap-1" style={{ minWidth: 130 }}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Amount</div>
-                      <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 p-0.5">
+                      <div className="flex items-center gap-1 rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
                         {(["fiat", "crypto"] as const).map((type) => (
                           <button
                             key={type}
                             onClick={() => handleWalletTypeChange(type)}
-                            disabled={playing || autoRunning}
+                            disabled={hasBetThisRound || hasBetNextRound || autoEnabled}
                             className="px-2 py-0.5 text-[10px] font-black rounded-full transition-colors disabled:opacity-40"
                             style={{
                               color: walletType === type ? "#fff" : "#71717a",
@@ -508,17 +518,17 @@ export default function LimboPage() {
                     </div>
                     <div className="flex items-center" style={{ height: 34, borderRadius: 22, background: "#000", border: "1px solid #3C3C42", paddingLeft: 10, paddingRight: 4 }}>
                       <span style={{ color: "#e74c3c", marginRight: 4, fontSize: 13, fontWeight: 700 }}>{activeSymbol}</span>
-                      <input type="text" value={betInput} disabled={playing || autoRunning}
+                      <input type="text" value={betInput} disabled={hasBetThisRound || hasBetNextRound || autoEnabled}
                         onChange={e => setBetInput(e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*?)\..*/g, "$1"))}
                         className="flex-1 bg-transparent text-white font-bold text-sm outline-none min-w-0" />
                       <div className="flex items-center gap-0.5 ml-1">
-                        <button onClick={() => { if (!playing && !autoRunning) adjustBet("down"); }} className="spin-btn">−</button>
-                        <button onClick={() => { if (!playing && !autoRunning) adjustBet("up"); }} className="spin-btn">+</button>
+                        <button onClick={() => { if (!hasBetThisRound && !hasBetNextRound && !autoEnabled) adjustBet("down"); }} className="spin-btn">−</button>
+                        <button onClick={() => { if (!hasBetThisRound && !hasBetNextRound && !autoEnabled) adjustBet("up"); }} className="spin-btn">+</button>
                       </div>
                     </div>
                     <div className="flex gap-0.5">
                       {[100, 200, 500, 1000].map(v => (
-                        <button key={v} onClick={() => { if (!playing && !autoRunning) setBetInput(v.toFixed(2)); }} className="quick-btn">{activeSymbol}{v}</button>
+                        <button key={v} onClick={() => { if (!hasBetThisRound && !hasBetNextRound && !autoEnabled) setBetInput(v.toFixed(2)); }} className="quick-btn">{activeSymbol}{v}</button>
                       ))}
                     </div>
                   </div>
@@ -528,18 +538,18 @@ export default function LimboPage() {
                     <div className="flex flex-col gap-1" style={{ minWidth: 130 }}>
                       <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Target Multiplier</div>
                       <div className="flex items-center" style={{ height: 34, borderRadius: 22, background: "#000", border: "1px solid #3C3C42", paddingLeft: 10, paddingRight: 4 }}>
-                        <input type="text" value={targetInput} disabled={autoRunning}
+                        <input type="text" value={targetInput} disabled={autoEnabled}
                           onChange={e => setTargetInput(e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*?)\..*/g, "$1"))}
                           className="flex-1 bg-transparent text-white font-bold text-sm outline-none min-w-0" />
                         <span className="text-zinc-500 font-bold text-sm mr-1">×</span>
                         <div className="flex items-center gap-0.5">
-                          <button onClick={() => { if (!autoRunning) adjustTarget("down"); }} className="spin-btn">‹</button>
-                          <button onClick={() => { if (!autoRunning) adjustTarget("up"); }} className="spin-btn">›</button>
+                          <button onClick={() => { if (!autoEnabled) adjustTarget("down"); }} className="spin-btn">‹</button>
+                          <button onClick={() => { if (!autoEnabled) adjustTarget("up"); }} className="spin-btn">›</button>
                         </div>
                       </div>
                       <div className="flex gap-0.5">
                         {[1.5, 2, 5, 10, 100].map(v => (
-                          <button key={v} onClick={() => { if (!autoRunning) setTargetInput(v.toFixed(2)); }}
+                          <button key={v} onClick={() => { if (!autoEnabled) setTargetInput(v.toFixed(2)); }}
                             className="quick-btn" style={targetInput === v.toFixed(2) ? { background: "#1a2a1a", borderColor: "#2ecc71", color: "#2ecc71" } : {}}>
                             {v}×
                           </button>
@@ -552,100 +562,69 @@ export default function LimboPage() {
                   <div className="flex-1 min-w-[120px] flex flex-col justify-end gap-1">
                     {betTab === "manual" ? (
                       <>
-                        {manualPhase === "flying" ? (
+                        {hasBetThisRound && !playerCashedOut && phase === "FLYING" ? (
                           <button onClick={handleCashout} style={{
                             width: "100%", height: 64, borderRadius: 20, border: 0, cursor: "pointer",
                             backgroundColor: "#2ecc71", color: "#000", fontWeight: 800, fontSize: 18,
                             textTransform: "uppercase", transition: "all 0.15s",
                             boxShadow: "0 10px 15px -10px #2ecc71, inset 0 1px 1px rgba(255,255,255,0.5)",
                           }}>
-                            CASH OUT ({activeSymbol}{(betAmount * manualMulti).toFixed(2)})
+                            CASH OUT ({activeSymbol}{(activeBetAmount * multiplier).toFixed(2)})
                           </button>
+                        ) : hasBetNextRound ? (
+                           <button onClick={handleCancelHit} style={{
+                              width: "100%", height: 64, borderRadius: 20, border: 0, cursor: "pointer",
+                              backgroundColor: "#c53030", color: "#fff", fontWeight: 800, fontSize: 16,
+                              textTransform: "uppercase", transition: "all 0.15s",
+                            }}>
+                              CANCEL QUEUED BET
+                            </button>
                         ) : (
-                          <button onClick={handleManualBet} disabled={playing} style={{
+                          <button onClick={handleBetClick} disabled={hasBetThisRound} style={{
                             width: "100%", height: 64, borderRadius: 20, border: 0,
-                            cursor: playing ? "not-allowed" : "pointer",
-                            backgroundColor: playing ? "#555" : "#28a909",
+                            cursor: hasBetThisRound ? "not-allowed" : "pointer",
+                            backgroundColor: hasBetThisRound ? "#555" : "#28a909",
                             color: "#fff", fontWeight: 800, fontSize: 20,
                             textShadow: "0 1px 2px rgba(0,0,0,0.5)", textTransform: "uppercase",
-                            boxShadow: playing ? "none" : "0 10px 15px -10px #28a909, inset 0 1px 1px rgba(255,255,255,0.5)",
+                            boxShadow: hasBetThisRound ? "none" : "0 10px 15px -10px #28a909, inset 0 1px 1px rgba(255,255,255,0.5)",
                             transition: "all 0.15s",
                           }}>
-                            {playing ? "Playing…" : "BET"}
+                            {hasBetThisRound ? "PLAYING" : (phase === "BETTING" ? "BET" : "BET NEXT ROUND")}
                           </button>
                         )}
                       </>
-                    ) : autoRunning ? (
-                      <button onClick={handleStopAuto} style={{
-                        width: "100%", height: 64, borderRadius: 20, border: 0, cursor: "pointer",
-                        backgroundColor: "#c53030", color: "#fff", fontWeight: 800, fontSize: 16,
-                        textTransform: "uppercase", transition: "all 0.15s",
-                      }}>
-                        STOP ({autoRoundsLeft} left)
-                      </button>
                     ) : (
-                      <button onClick={handleStartAuto} style={{
+                      <button onClick={handleAutoToggle} style={{
                         width: "100%", height: 64, borderRadius: 20, border: 0, cursor: "pointer",
-                        backgroundColor: "#e69308", color: "#fff", fontWeight: 800, fontSize: 18,
+                        backgroundColor: autoEnabled ? "#c53030" : "#e69308", color: "#fff", fontWeight: 800, fontSize: 18,
                         textShadow: "0 1px 2px rgba(0,0,0,0.5)", textTransform: "uppercase",
-                        boxShadow: "0 10px 15px -10px #e69308, inset 0 1px 1px rgba(255,255,255,0.5)",
+                        boxShadow: autoEnabled ? "none" : "0 10px 15px -10px #e69308, inset 0 1px 1px rgba(255,255,255,0.5)",
                         transition: "all 0.15s",
                       }}>
-                        START AUTO
+                        {autoEnabled ? "STOP AUTO" : "START AUTO"}
                       </button>
                     )}
                   </div>
                 </div>
 
-                {/* Auto settings (only in auto tab) */}
-                {betTab === "auto" && (
-                  <div className="px-3 pb-2 flex flex-wrap gap-2">
-                    <div className="flex flex-col gap-0.5" style={{ minWidth: 80 }}>
-                      <div className="text-[9px] text-zinc-600 font-bold uppercase">Rounds</div>
-                      <input type="text" value={autoRounds} disabled={autoRunning}
-                        onChange={e => setAutoRounds(e.target.value.replace(/[^0-9]/g, ""))}
-                        className="bg-transparent text-white font-bold text-xs outline-none"
-                        style={{ height: 28, borderRadius: 6, background: "#000", border: "1px solid #3C3C42", paddingLeft: 8, paddingRight: 8 }} />
-                      <div className="flex gap-0.5">
-                        {[10, 25, 50, 100].map(v => (
-                          <button key={v} onClick={() => { if (!autoRunning) setAutoRounds(String(v)); }}
-                            className="quick-btn" style={{ fontSize: 9, padding: "1px 3px" }}>{v}</button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-0.5" style={{ minWidth: 80 }}>
-                      <div className="text-[9px] text-zinc-600 font-bold uppercase">Stop on Profit ₹</div>
-                      <input type="text" value={autoStopWin} disabled={autoRunning} placeholder="0"
-                        onChange={e => setAutoStopWin(e.target.value.replace(/[^0-9.]/g, ""))}
-                        className="bg-transparent text-white font-bold text-xs outline-none placeholder:text-zinc-700"
-                        style={{ height: 28, borderRadius: 6, background: "#000", border: "1px solid #3C3C42", paddingLeft: 8, paddingRight: 8 }} />
-                    </div>
-                    <div className="flex flex-col gap-0.5" style={{ minWidth: 80 }}>
-                      <div className="text-[9px] text-zinc-600 font-bold uppercase">Stop on Loss ₹</div>
-                      <input type="text" value={autoStopLoss} disabled={autoRunning} placeholder="0"
-                        onChange={e => setAutoStopLoss(e.target.value.replace(/[^0-9.]/g, ""))}
-                        className="bg-transparent text-white font-bold text-xs outline-none placeholder:text-zinc-700"
-                        style={{ height: 28, borderRadius: 6, background: "#000", border: "1px solid #3C3C42", paddingLeft: 8, paddingRight: 8 }} />
-                    </div>
-                    {autoRunning && (
-                      <div className="flex flex-col gap-0.5 ml-auto text-right">
-                        <div className="text-[9px] text-zinc-600 font-bold uppercase">Profit</div>
-                        <div className="font-bold text-sm tabular-nums" style={{ color: autoProfit >= 0 ? "#2ecc71" : "#e74c3c" }}>
-                          {autoProfit >= 0 ? "+" : ""}{activeSymbol}{autoProfit.toFixed(2)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 {/* Bottom row */}
                 <div className="flex items-center justify-between px-3 py-2" style={{ background: "#111215", borderRadius: "0 0 16px 16px" }}>
-                  <div className="text-[10px] text-zinc-600">
-                    {betTab === "auto" ? <>Win Chance: <span className="text-green-400 font-bold">{winChance}%</span></> : <span>Manual cashout</span>}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-zinc-600">Limbo Multiplayer</span>
+                    <button onClick={() => setShowMobileBets(v => !v)}
+                      className="md:hidden flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors"
+                      style={{
+                        background: showMobileBets ? "rgba(46,204,113,0.15)" : "rgba(255,255,255,0.05)",
+                        color: showMobileBets ? "#2ecc71" : "#71717a",
+                        border: showMobileBets ? "1px solid rgba(46,204,113,0.3)" : "1px solid rgba(255,255,255,0.1)",
+                      }}>
+                      <Users size={10} /> {roundBets.length}
+                    </button>
                   </div>
                   <div className="flex items-center gap-2">
-                    <button onClick={toggleMute} title={muted ? "Unmute" : "Mute"} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, opacity: 0.7 }}>
-                      {muted ? "🔇" : "🔊"}
+                    <button onClick={toggleMute} title={muted ? "Unmute" : "Mute"}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/[0.05] text-zinc-500 hover:text-white transition-colors">
+                      {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
                     </button>
                     <div className="text-[10px] text-zinc-500">
                       Balance: <span className="text-white font-bold">{activeSymbol}{activeBalance?.toFixed(2) ?? "—"}</span>
@@ -654,6 +633,46 @@ export default function LimboPage() {
                 </div>
               </div>
             </div>
+
+            {/* Mobile Live Bets Panel */}
+            {showMobileBets && (
+              <div className="md:hidden flex-shrink-0" style={{ background: "#141516", borderTop: "1px solid #1e1e1e", maxHeight: 240, overflow: "hidden" }}>
+                <div className="px-3 py-2 flex items-center justify-between" style={{ borderBottom: "1px solid #1e1e1e" }}>
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-[0.15em] font-bold">
+                    Live Bets <span className="text-green-500">{roundBets.length}</span>
+                  </span>
+                  <button onClick={() => setShowMobileBets(false)} className="text-zinc-500 hover:text-white text-xs font-bold">Close</button>
+                </div>
+                <div className="flex px-2 py-1 text-[10px] text-zinc-600 font-bold uppercase" style={{ borderBottom: "1px solid #0F1016" }}>
+                  <div style={{ width: "28%" }}>User</div>
+                  <div style={{ width: "22%", textAlign: "center" }}>Bet</div>
+                  <div style={{ width: "22%", textAlign: "center" }}>Multi</div>
+                  <div style={{ width: "28%", textAlign: "right" }}>Payout</div>
+                </div>
+                <div className="overflow-y-auto" style={{ maxHeight: 170, scrollbarWidth: "thin", scrollbarColor: "#333 transparent" }}>
+                  {roundBets.length === 0 ? (
+                    <div className="text-center text-zinc-700 text-xs py-6">No bets yet</div>
+                  ) : roundBets.map((b, i) => (
+                    <div key={i} className="flex items-center px-2" style={{
+                      height: 32, margin: "1px 2px", borderRadius: 16, fontSize: 11, fontWeight: 600,
+                      background: b.result === "WIN" ? "linear-gradient(85deg,#0a2a0a,#0f1214)" : "linear-gradient(85deg,#1a0a0a,#0f1214)",
+                      border: b.result === "WIN" ? "1px solid #2ecc7133" : "1px solid #0F1016",
+                    }}>
+                      <div style={{ width: "28%" }} className="truncate text-zinc-400">{b.username}</div>
+                      <div style={{ width: "22%", textAlign: "center" }} className="text-zinc-300">{b.betAmount}</div>
+                      <div style={{ width: "22%", textAlign: "center" }}>
+                        {b.resultMultiplier ? (
+                          <span style={{ color: "#2ecc71", fontWeight: 800 }}>{b.resultMultiplier.toFixed(2)}×</span>
+                        ) : "-"}
+                      </div>
+                      <div style={{ width: "28%", textAlign: "right" }} className="text-zinc-300">
+                        {b.result === "WIN" && b.payout ? `+${activeSymbol}${b.payout.toFixed(0)}` : "-"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </main>
       </div>

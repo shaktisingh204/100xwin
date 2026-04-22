@@ -4,10 +4,12 @@ import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, ArrowRight, Loader2 } from 'lucide-react';
 import { promoApi, PromoCard } from '@/services/promo';
 import Link from 'next/link';
-import Image from 'next/image';
 import { casinoService } from '@/services/casino';
 import { useAuth } from '@/context/AuthContext';
 import { useModal } from '@/context/ModalContext';
+import { useWallet } from '@/context/WalletContext';
+import { getCasinoWalletModeFromSubWallet } from '@/utils/casinoWalletMode';
+import { cfImage, cfImageSrcSet } from '@/utils/cfImages';
 
 interface PromoCardSliderProps {
     onGameLaunch?: (game: { id: string; name: string; provider: string; url: string }) => void;
@@ -16,6 +18,7 @@ interface PromoCardSliderProps {
 export default function PromoCardSlider({ onGameLaunch }: PromoCardSliderProps) {
     const { user } = useAuth();
     const { openLogin } = useModal();
+    const { selectedSubWallet } = useWallet();
     const [promoCards, setPromoCards] = useState<PromoCard[]>([]);
     const [loading, setLoading] = useState(true);
     const [launchingId, setLaunchingId] = useState<string | null>(null);
@@ -89,6 +92,7 @@ export default function PromoCardSlider({ onGameLaunch }: PromoCardSliderProps) 
                 provider,
                 gameId: gameCode,
                 isLobby: false,
+                walletMode: getCasinoWalletModeFromSubWallet(selectedSubWallet),
             });
             if (res?.url) {
                 onGameLaunch?.({ id: gameCode, name: gameName, provider, url: res.url });
@@ -104,7 +108,7 @@ export default function PromoCardSlider({ onGameLaunch }: PromoCardSliderProps) 
 
     if (loading) {
         return (
-            <div className="w-full h-[220px] md:h-[340px] bg-white/[0.02] rounded-xl animate-pulse border border-white/[0.04] mb-4" />
+            <div className="w-full h-[220px] md:h-[340px] bg-bg-card rounded-xl animate-pulse border border-white/[0.04] mb-6" />
         );
     }
 
@@ -120,7 +124,7 @@ export default function PromoCardSlider({ onGameLaunch }: PromoCardSliderProps) 
         : 'linear-gradient(120deg, #0f2027, #203a43, #2c5364)';
 
     return (
-        <div className="relative w-full mb-4 rounded-2xl overflow-hidden group promo-banner-wrap aspect-video sm:aspect-[21/7]">
+        <div className="relative w-full mb-6 rounded-xl overflow-hidden group promo-banner-wrap aspect-video sm:aspect-[21/7]">
 
             {/* ── Slides ── */}
             {promoCards.map((c, i) => {
@@ -131,14 +135,23 @@ export default function PromoCardSlider({ onGameLaunch }: PromoCardSliderProps) 
                         className="absolute inset-0 transition-opacity duration-700"
                         style={{ opacity: isActive ? 1 : 0, zIndex: isActive ? 1 : 0, pointerEvents: isActive ? 'auto' : 'none' }}
                     >
-                        {/* Background Image */}
+                        {/* Background Image
+                            Plain <img> with Cloudflare Images flexible
+                            variants — cfImage/cfImageSrcSet emit w=XXX URLs
+                            that CF serves at the right size (huge mobile
+                            bandwidth saving). srcset lets the browser pick
+                            the smallest sufficient size per device.
+                            First slide is eager + high priority for LCP. */}
                         {c.bgImage ? (
-                            <Image
-                                src={c.bgImage}
+                            <img
+                                src={cfImage(c.bgImage, { width: 1200 })}
+                                srcSet={cfImageSrcSet(c.bgImage, [480, 800, 1200, 1600])}
+                                sizes="100vw"
                                 alt={c.title}
-                                fill
-                                priority={i === 0}
-                                className="object-cover object-center"
+                                loading={i === 0 ? 'eager' : 'lazy'}
+                                {...(i === 0 ? { fetchPriority: 'high' as const } : {})}
+                                decoding="async"
+                                className="absolute inset-0 w-full h-full object-cover object-center"
                             />
                         ) : (
                             <div className="absolute inset-0" style={{ background: c.gradient || gradientStyle }} />
@@ -149,10 +162,21 @@ export default function PromoCardSlider({ onGameLaunch }: PromoCardSliderProps) 
                             style={{ background: 'linear-gradient(90deg, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.45) 55%, rgba(0,0,0,0.05) 100%)' }}
                         />
 
-                        {/* Character image (right side) */}
+                        {/* Character image (right side) — ~50vw wide, so
+                            smaller srcset targets. */}
                         {c.charImage && (
                             <div className="absolute right-0 bottom-0 top-0 w-1/2 z-10">
-                                <Image src={c.charImage} alt="Character" fill className="object-contain object-right-bottom" />
+                                <img
+                                    src={cfImage(c.charImage, { width: 600, fit: 'contain' })}
+                                    srcSet={cfImageSrcSet(c.charImage, [300, 600, 900], { fit: 'contain' })}
+                                    sizes="50vw"
+                                    alt=""
+                                    aria-hidden
+                                    loading={i === 0 ? 'eager' : 'lazy'}
+                                    {...(i === 0 ? { fetchPriority: 'high' as const } : {})}
+                                    decoding="async"
+                                    className="absolute inset-0 h-full w-full object-contain object-right-bottom"
+                                />
                             </div>
                         )}
 
@@ -210,14 +234,14 @@ export default function PromoCardSlider({ onGameLaunch }: PromoCardSliderProps) 
                     <button
                         onClick={() => handleNav(goPrev)}
                         aria-label="Previous"
-                        className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 z-30 size-8 md:size-10 bg-black/40 hover:bg-black/70 border border-white/[0.06] text-white/70 rounded-full flex items-center justify-center backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 hover:scale-105"
+                        className="absolute left-3 md:left-5 top-1/2 -translate-y-1/2 z-30 size-9 md:size-11 bg-black/50 hover:bg-black/80 border border-white/[0.06] text-white rounded-full flex items-center justify-center backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 hover:scale-110"
                     >
                         <ChevronLeft size={20} />
                     </button>
                     <button
                         onClick={() => handleNav(goNext)}
                         aria-label="Next"
-                        className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 z-30 size-8 md:size-10 bg-black/40 hover:bg-black/70 border border-white/[0.06] text-white/70 rounded-full flex items-center justify-center backdrop-blur-sm transition-all opacity-0 group-hover:opacity-100 hover:scale-105"
+                        className="absolute right-3 md:right-5 top-1/2 -translate-y-1/2 z-30 size-9 md:size-11 bg-black/50 hover:bg-black/80 border border-white/[0.06] text-white rounded-full flex items-center justify-center backdrop-blur-md transition-all opacity-0 group-hover:opacity-100 hover:scale-110"
                     >
                         <ChevronRight size={20} />
                     </button>
@@ -233,8 +257,8 @@ export default function PromoCardSlider({ onGameLaunch }: PromoCardSliderProps) 
                             onClick={() => { handleNav(() => goTo(i)); }}
                             aria-label={`Go to slide ${i + 1}`}
                             className={`rounded-full transition-all duration-300 ${i === activeIndex
-                                ? 'bg-brand-gold w-6 h-1.5'
-                                : 'bg-white/20 hover:bg-white/40 w-1.5 h-1.5'
+                                ? 'bg-brand-gold w-7 h-2'
+                                : 'bg-white/30 hover:bg-white/60 w-2 h-2'
                                 }`}
                         />
                     ))}

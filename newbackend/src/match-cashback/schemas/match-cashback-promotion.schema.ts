@@ -89,7 +89,6 @@ export class MatchCashbackPromotion {
 }
 
 export const MatchCashbackPromotionSchema = SchemaFactory.createForClass(MatchCashbackPromotion);
-MatchCashbackPromotionSchema.index({ matchId: 1, promotionType: 1, isActive: 1 });
 MatchCashbackPromotionSchema.index(
     { matchId: 1, promotionType: 1, isActive: 1 },
     { unique: true, partialFilterExpression: { isActive: true } },

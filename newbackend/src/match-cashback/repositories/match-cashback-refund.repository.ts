@@ -40,7 +40,7 @@ export class MatchCashbackRefundRepository {
                         errorMessage: null,
                     },
                 },
-                { new: true },
+                { returnDocument: 'after' },
             ).exec();
 
             return { acquired: true, refund: updated };

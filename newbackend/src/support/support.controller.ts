@@ -1,5 +1,6 @@
 import { Controller, Get, Post, Patch, Body, Param, UseGuards, Req } from '@nestjs/common';
 import { SupportService } from './support.service';
+import { SupportGateway } from './support.gateway';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -8,7 +9,10 @@ import { Role } from '@prisma/client';
 @Controller('support')
 @UseGuards(JwtAuthGuard)
 export class SupportController {
-    constructor(private readonly supportService: SupportService) { }
+    constructor(
+        private readonly supportService: SupportService,
+        private readonly supportGateway: SupportGateway,
+    ) { }
 
     // ─── User Endpoints ──────────────────────────────────────────────────────
 
@@ -24,7 +28,9 @@ export class SupportController {
         const ticket = await this.supportService.createTicket(req.user.userId, body.subject, body.category);
         // If an opening message was provided, add it immediately
         if (body.message?.trim()) {
-            await this.supportService.addMessage(ticket.id, body.message.trim(), 'USER');
+            const msg = await this.supportService.addMessage(ticket.id, body.message.trim(), 'USER');
+            // Broadcast the opening message to admin
+            await this.supportGateway.broadcastMessage(ticket.id, msg);
         }
         return ticket;
     }
@@ -35,7 +41,7 @@ export class SupportController {
         return this.supportService.getTicket(parseInt(id));
     }
 
-    // Common: Send Message (HTTP — role enforced from JWT)
+    // Common: Send Message (HTTP) — saves + broadcasts via socket
     @Post('message')
     async sendMessage(
         @Req() req,
@@ -43,7 +49,10 @@ export class SupportController {
     ) {
         const adminRoles: Role[] = [Role.TECH_MASTER, Role.SUPER_ADMIN, Role.MANAGER, Role.MASTER, Role.AGENT];
         const sender: 'USER' | 'ADMIN' = adminRoles.includes(req.user.role) ? 'ADMIN' : 'USER';
-        return this.supportService.addMessage(body.ticketId, body.message, sender);
+        const msg = await this.supportService.addMessage(body.ticketId, body.message, sender);
+        // Broadcast to connected socket clients
+        await this.supportGateway.broadcastMessage(body.ticketId, msg);
+        return msg;
     }
 
     // ─── Admin Endpoints ─────────────────────────────────────────────────────

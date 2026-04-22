@@ -27,7 +27,7 @@ const PromoCard: React.FC<Partial<PromoCardProps>> = ({
 }) => {
     return (
         <div 
-            className="relative overflow-hidden rounded-2xl p-6 md:p-8 shadow-2xl group border border-gray-800 h-full min-h-[250px] flex flex-col justify-center transition-all hover:scale-[1.02]"
+            className="relative overflow-hidden rounded-2xl p-6 md:p-8 shadow-xl group border border-gray-800 h-full min-h-[250px] flex flex-col justify-center transition-all hover:scale-[1.02]"
             style={{ background: gradient || '#1e1e1e' }}
         >
             {/* Background Image Overlay */}
@@ -41,7 +41,7 @@ const PromoCard: React.FC<Partial<PromoCardProps>> = ({
 
             {/* Content Container */}
             <div className="relative z-10 flex flex-col justify-center h-full max-w-lg">
-                <div className="inline-flex items-center space-x-2 bg-white text-black px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider w-fit mb-3">
+                <div className="inline-flex items-center space-x-2 bg-white text-text-inverse px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider w-fit mb-3">
                     <span>{tag}</span>
                 </div>
 
@@ -53,7 +53,7 @@ const PromoCard: React.FC<Partial<PromoCardProps>> = ({
                     {subtitle}
                 </p>
 
-                <a href={buttonLink} className="group/btn relative inline-flex items-center justify-center px-6 py-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm font-bold rounded-lg transition-all duration-300 backdrop-blur-sm w-fit">
+                <a href={buttonLink} className="group/btn relative inline-flex items-center justify-center px-6 py-2 bg-white/[0.08] hover:bg-white/[0.16] border border-white/[0.12] text-white text-sm font-bold rounded-lg transition-all duration-300 backdrop-blur-md w-fit">
                     <span className="mr-2">{buttonText}</span>
                 </a>
             </div>
@@ -61,7 +61,14 @@ const PromoCard: React.FC<Partial<PromoCardProps>> = ({
             {/* Decorative Elements */}
             <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20 pointer-events-none">
                 {charImage ? (
-                    <img src={charImage} alt="Character" className="h-[180px] object-contain drop-shadow-2xl" />
+                    <img
+                        src={charImage}
+                        alt=""
+                        aria-hidden
+                        loading="lazy"
+                        decoding="async"
+                        className="h-[180px] object-contain drop-shadow-xl"
+                    />
                 ) : (
                     <div className="w-32 h-32 bg-gradient-to-br from-yellow-400/20 to-yellow-600/20 rounded-full blur-2xl animate-pulse absolute" />
                 )}
@@ -72,7 +79,7 @@ const PromoCard: React.FC<Partial<PromoCardProps>> = ({
             </div>
 
             {/* Angle Element */}
-            <div className="absolute top-0 right-0 h-full w-1/3 bg-white/5 -skew-x-12 origin-bottom-right z-0 mix-blend-overlay" />
+            <div className="absolute top-0 right-0 h-full w-1/3 bg-white/[0.04] -skew-x-12 origin-bottom-right z-0 mix-blend-overlay" />
         </div>
     );
 };

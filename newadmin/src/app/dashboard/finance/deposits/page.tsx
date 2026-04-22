@@ -1,15 +1,20 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { getTransactions, approveDeposit, rejectDeposit, searchUsersForManualDeposit, createManualDeposit } from '@/actions/finance';
+import React, { useEffect, useState, useCallback, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { getTransactionsFiltered, approveDeposit, rejectDeposit, searchUsersForManualDeposit, createManualDeposit } from '@/actions/finance';
+import { getDepositBreakdown } from '@/actions/dashboard';
 import { Clock, CheckCircle, XCircle, RefreshCcw, ChevronLeft, ChevronRight,
     Loader2, Search, Copy, Check, Eye, Receipt, User, ArrowDownRight, Plus, IndianRupee,
+    Building2, Landmark, Download, Calendar, DollarSign, SlidersHorizontal, X, Filter,
 } from 'lucide-react';
+import { formatCurrencyParts, formatTransactionAmount, isCryptoTransaction, fmtUSD } from '@/utils/transactionCurrency';
+import { UserPopup } from '@/components/shared/UserPopup';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const fmtINR = (n: number) =>
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+const fmtAmount = (tx: DepositTx) =>
+    formatTransactionAmount(tx.amount, tx);
 
 function CopyBtn({ text }: { text: string }) {
     const [copied, setCopied] = useState(false);
@@ -66,6 +71,7 @@ function resolveGatewaySubLabel(tx: DepositTx): string {
             : '';
 
     if (!gateway) return '';
+    if (gateway === 'manual_upi' || gateway === 'admin_manual') return '';
     const label = resolveGatewayLabel(tx).toLowerCase();
     return label.includes(gateway.toLowerCase()) ? '' : gateway;
 }
@@ -102,7 +108,7 @@ function DetailDrawer({ tx, onClose }: { tx: DepositTx; onClose: () => void }) {
                     {/* Amount */}
                     <div className="bg-slate-900/60 rounded-xl p-3">
                         <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-2">Amount</p>
-                        <p className="text-2xl font-bold text-emerald-400">{fmtINR(tx.amount)}</p>
+                        <p className="text-2xl font-bold text-emerald-400">{fmtAmount(tx)}</p>
                     </div>
 
                     {/* Payment Info */}
@@ -162,11 +168,19 @@ function ApproveModal({
     loading,
 }: {
     tx: DepositTx;
-    onConfirm: (txnId: string) => void;
+    onConfirm: (txnId: string, receiverUpiId?: string) => void;
     onClose: () => void;
     loading: boolean;
 }) {
     const [txnId, setTxnId] = useState('');
+    const [upiAccounts, setUpiAccounts] = useState<any[]>([]);
+    const [selectedUpi, setSelectedUpi] = useState<string>('');
+
+    useEffect(() => {
+        import('@/actions/expenses').then(m => m.getUpiAccounts()).then(data => {
+            setUpiAccounts(data.filter((d:any) => d.isActive));
+        });
+    }, []);
 
     return (
         <div className="fixed inset-0 bg-black/60 z-40 flex items-center justify-center p-4">
@@ -178,7 +192,7 @@ function ApproveModal({
                 {/* Summary */}
                 <div className="mt-3 mb-4 bg-slate-900/60 rounded-xl p-3 text-sm space-y-1">
                     <p className="text-slate-400">User: <span className="text-white font-medium">{tx.user?.username || '—'}</span></p>
-                    <p className="text-slate-400">Amount: <span className="text-emerald-400 font-bold">{fmtINR(tx.amount)}</span></p>
+                    <p className="text-slate-400">Amount: <span className="text-emerald-400 font-bold">{fmtAmount(tx)}</span></p>
                     {tx.utr && (
                         <p className="text-slate-400">UTR: <span className="text-emerald-300 font-mono">{tx.utr}</span></p>
                     )}
@@ -204,6 +218,24 @@ function ApproveModal({
                 </div>
                 <p className="text-[10px] text-slate-600 mt-1.5">This will be shown to the user in their transaction history and sent as a notification.</p>
 
+                {/* Ledger Integration Picker */}
+                <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl space-y-1">
+                    <label className="block text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1">
+                        Corporate Ledger (Credit To) *
+                    </label>
+                    <select
+                        value={selectedUpi}
+                        onChange={e => setSelectedUpi(e.target.value)}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-emerald-500 focus:outline-none"
+                    >
+                        <option value="">-- Do not log / External --</option>
+                        {upiAccounts.map(u => (
+                            <option key={u.upiId} value={u.upiId}>{u.name} ({u.upiId})</option>
+                        ))}
+                    </select>
+                    <p className="text-[9px] text-slate-500 mt-1 leading-tight">If selected, the deposit amount will be automatically credited to this gateway&apos;s balance in the Expenses Module.</p>
+                </div>
+
                 <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                     <button
                         onClick={onClose}
@@ -212,7 +244,7 @@ function ApproveModal({
                         Cancel
                     </button>
                     <button
-                        onClick={() => onConfirm(txnId.trim())}
+                        onClick={() => onConfirm(txnId.trim(), selectedUpi)}
                         disabled={loading}
                         className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-2"
                     >
@@ -255,6 +287,11 @@ function ManualDepositModal({ onClose, onSuccess }: { onClose: () => void; onSuc
         return () => clearTimeout(t);
     }, [search, handleSearch]);
 
+    // Method "Crypto (Manual)" credits the user's USD crypto wallet instead
+    // of the INR main balance. The label / currency symbol and the server
+    // action payload both need to switch on this flag.
+    const isCryptoMethod = method === 'Crypto (Manual)';
+
     const handleSubmit = async () => {
         if (!selectedUser) { setError('Please select a user'); return; }
         const numAmt = parseFloat(amount);
@@ -268,6 +305,7 @@ function ManualDepositModal({ onClose, onSuccess }: { onClose: () => void; onSuc
                 utr,
                 remarks,
                 adminId: 1,
+                wallet: isCryptoMethod ? 'crypto' : 'fiat',
             });
             if (data.success) {
                 setSuccess(data.message || 'Deposit successful!');
@@ -338,9 +376,13 @@ function ManualDepositModal({ onClose, onSuccess }: { onClose: () => void; onSuc
 
                     {/* Amount */}
                     <div>
-                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Amount (₹)</label>
+                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                            Amount ({isCryptoMethod ? 'USD — credits Crypto Wallet' : '₹'})
+                        </label>
                         <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">₹</span>
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-bold text-sm">
+                                {isCryptoMethod ? '$' : '₹'}
+                            </span>
                             <input type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)}
                                 placeholder="0" className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-7 pr-4 py-2.5 text-white text-lg font-bold font-mono focus:border-emerald-500 focus:outline-none" />
                         </div>
@@ -395,15 +437,26 @@ function ManualDepositModal({ onClose, onSuccess }: { onClose: () => void; onSuc
     );
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// ─── Main Page Content ────────────────────────────────────────────────────────
 
-export default function PendingDepositsPage() {
+function PendingDepositsContent() {
+    const searchParams = useSearchParams();
+    const currencyParam = searchParams.get('currency') || 'ALL';
+
     const [deposits, setDeposits] = useState<DepositTx[]>([]);
     const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
+    const [search, setSearch] = useState(searchParams.get('search') || '');
     const [statusFilter, setStatusFilter] = useState('ALL');
+    const [methodFilter, setMethodFilter] = useState('ALL');
+    const [dateFrom, setDateFrom] = useState('');
+    const [dateTo, setDateTo] = useState('');
+    const [amountMin, setAmountMin] = useState('');
+    const [amountMax, setAmountMax] = useState('');
+    const [showAdvanced, setShowAdvanced] = useState(false);
     const [page, setPage] = useState(1);
     const [pagination, setPagination] = useState({ totalPages: 1, total: 0 });
+    const [summary, setSummary] = useState({ uniqueDepositors: 0, todayAmount: 0, todayCount: 0 });
+    const [depositBreakdown, setDepositBreakdown] = useState({ gatewayDeposits: 0, gatewayCount: 0, manualDeposits: 0, manualCount: 0, cryptoDeposits: 0, cryptoCount: 0 });
     const [actionLoading, setActionLoading] = useState<number | null>(null);
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
     const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -420,27 +473,55 @@ export default function PendingDepositsPage() {
         setTimeout(() => setToast(null), 4000);
     };
 
+    const handleExportCSV = () => {
+        // Trigger a browser download from the streaming API route. No server-action
+        // payload limit — returns the FULL filtered result regardless of row count.
+        const params = new URLSearchParams();
+        params.set('type', 'DEPOSIT');
+        if (search) params.set('search', search);
+        if (statusFilter && statusFilter !== 'ALL') params.set('status', statusFilter);
+        if (currencyParam && currencyParam !== 'ALL') params.set('currencyFilter', currencyParam);
+        if (methodFilter && methodFilter !== 'ALL') params.set('methodFilter', methodFilter);
+        if (dateFrom) params.set('dateFrom', dateFrom);
+        if (dateTo) params.set('dateTo', dateTo);
+        if (amountMin) params.set('amountMin', amountMin);
+        if (amountMax) params.set('amountMax', amountMax);
+        window.location.href = `/api/export/transactions?${params.toString()}`;
+    };
+
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const data = await getTransactions(page, 15, search, statusFilter !== 'ALL' ? statusFilter : '', 'DEPOSIT');
+            const [data, bd] = await Promise.all([
+                getTransactionsFiltered({
+                    page, limit: 15, search,
+                    status: statusFilter !== 'ALL' ? statusFilter : '',
+                    type: 'DEPOSIT',
+                    currencyFilter: currencyParam,
+                    methodFilter,
+                    dateFrom, dateTo, amountMin, amountMax,
+                }),
+                getDepositBreakdown(),
+            ]);
             setDeposits(data.transactions as DepositTx[]);
             setPagination(data.pagination);
+            setSummary(data.summary || { uniqueDepositors: 0, todayAmount: 0, todayCount: 0 });
+            if (bd.success) setDepositBreakdown(bd.data);
         } catch (e) {
             console.error(e);
         } finally {
             setLoading(false);
         }
-    }, [page, search, statusFilter]);
+    }, [page, search, statusFilter, currencyParam, methodFilter, dateFrom, dateTo, amountMin, amountMax]);
 
     useEffect(() => {
         const t = setTimeout(fetchData, 300);
         return () => clearTimeout(t);
     }, [fetchData]);
 
-    const handleApprove = async (id: number, txnId: string) => {
+    const handleApprove = async (id: number, txnId: string, receiverUpiId?: string) => {
         setActionLoading(id);
-        const res = await approveDeposit(id, 1, 'Approved by admin', txnId || undefined);
+        const res = await approveDeposit(id, 1, 'Approved by admin', txnId || undefined, receiverUpiId);
         if (res.success) {
             showToast(
                 res.bonusApplied
@@ -492,7 +573,17 @@ export default function PendingDepositsPage() {
         setSelectedIds(prev => prev.length === deposits.length ? [] : deposits.map(d => d.id));
 
     const pendingList = deposits.filter(d => d.status === 'PENDING');
-    const totalPendingAmt = pendingList.reduce((s, d) => s + d.amount, 0);
+    const totalPendingAmounts = pendingList.reduce(
+        (totals, deposit) => {
+            if (isCryptoTransaction(deposit)) {
+                totals.crypto += deposit.amount;
+            } else {
+                totals.fiat += deposit.amount;
+            }
+            return totals;
+        },
+        { fiat: 0, crypto: 0 },
+    );
 
     const statusBadge = (status: string) => {
         const map: Record<string, string> = {
@@ -527,7 +618,7 @@ export default function PendingDepositsPage() {
             {showApproveModal && (
                 <ApproveModal
                     tx={showApproveModal}
-                    onConfirm={(txnId) => handleApprove(showApproveModal.id, txnId)}
+                    onConfirm={(txnId, receiverUpiId) => handleApprove(showApproveModal.id, txnId, receiverUpiId)}
                     onClose={() => setShowApproveModal(null)}
                     loading={actionLoading === showApproveModal.id}
                 />
@@ -579,9 +670,9 @@ export default function PendingDepositsPage() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                        <ArrowDownRight size={28} className="text-emerald-400" /> Deposit Management
+                        <ArrowDownRight size={28} className="text-emerald-400" /> {currencyParam === 'CRYPTO' ? 'Crypto' : currencyParam === 'FIAT' ? 'Fiat' : ''} Deposit Management
                     </h1>
-                    <p className="text-slate-400 mt-1">Review, approve, reject, or manually credit user deposits.</p>
+                    <p className="text-slate-400 mt-1">Review, approve, reject, or manually credit user {currencyParam === 'CRYPTO' ? 'crypto ' : ''}deposits.</p>
                 </div>
                 <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
                     {/* Add Manual Deposit */}
@@ -595,12 +686,55 @@ export default function PendingDepositsPage() {
                     {statusFilter === 'PENDING' && pendingList.length > 0 && (
                         <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2 text-center">
                             <p className="text-[10px] text-slate-400 uppercase tracking-wide">Pending Total</p>
-                            <p className="text-lg font-bold text-emerald-400">{fmtINR(totalPendingAmt)}</p>
+                            <p className="text-lg font-bold text-emerald-400">{formatCurrencyParts(totalPendingAmounts)}</p>
                         </div>
                     )}
+
+                    {/* Gateway Deposits — INR ₹ */}
+                    <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-2 text-center">
+                        <div className="flex items-center justify-center gap-1 mb-0.5">
+                            <Landmark size={10} className="text-emerald-400" />
+                            <p className="text-[10px] text-emerald-400/80 uppercase tracking-wide font-bold">Gateway</p>
+                        </div>
+                        <p className="text-sm font-bold text-emerald-400">
+                            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(depositBreakdown.gatewayDeposits)}
+                        </p>
+                        <p className="text-[9px] text-slate-500">{depositBreakdown.gatewayCount} txns</p>
+                    </div>
+
+                    {/* Manual Adjustments — INR ₹ */}
+                    <div className="bg-violet-500/10 border border-violet-500/20 rounded-xl px-4 py-2 text-center">
+                        <div className="flex items-center justify-center gap-1 mb-0.5">
+                            <Building2 size={10} className="text-violet-400" />
+                            <p className="text-[10px] text-violet-400/80 uppercase tracking-wide font-bold">MAN Adj.</p>
+                        </div>
+                        <p className="text-sm font-bold text-violet-400">
+                            {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(depositBreakdown.manualDeposits)}
+                        </p>
+                        <p className="text-[9px] text-slate-500">{depositBreakdown.manualCount} txns</p>
+                    </div>
+
+                    {/* Crypto Deposits — USD $ */}
+                    {depositBreakdown.cryptoDeposits > 0 && (
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-2 text-center">
+                            <div className="flex items-center justify-center gap-1 mb-0.5">
+                                <span className="text-amber-400 text-[10px] font-bold">₿</span>
+                                <p className="text-[10px] text-amber-400/80 uppercase tracking-wide font-bold">Crypto (USD)</p>
+                            </div>
+                            <p className="text-sm font-bold text-amber-400">
+                                {fmtUSD(depositBreakdown.cryptoDeposits)}
+                            </p>
+                            <p className="text-[9px] text-slate-500">{depositBreakdown.cryptoCount} txns</p>
+                        </div>
+                    )}
+
                     <div className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center">
                         <p className="text-[10px] text-slate-400 uppercase tracking-wide">Count</p>
                         <p className="text-lg font-bold text-white">{pagination.total}</p>
+                    </div>
+                    <div className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-center">
+                        <p className="text-[10px] text-slate-400 uppercase tracking-wide">Deposit Users</p>
+                        <p className="text-lg font-bold text-white">{summary.uniqueDepositors}</p>
                     </div>
                     <button
                         onClick={fetchData}
@@ -613,34 +747,114 @@ export default function PendingDepositsPage() {
             </div>
 
             {/* ── Filters ── */}
-            <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                    <input
-                        type="text"
-                        placeholder="Search by username, email, or UTR..."
-                        className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500 text-sm"
-                        value={search}
-                        onChange={e => { setSearch(e.target.value); setPage(1); }}
-                    />
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                    {['PENDING', 'COMPLETED', 'REJECTED', 'ALL'].map(s => (
+            <div className="space-y-3">
+                {/* Primary row */}
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Search by username, email, phone, UTR, TxnID, UPI ID, bank acc, holder name, gateway, crypto addr…"
+                            className="w-full pl-9 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-emerald-500 text-sm"
+                            value={search}
+                            onChange={e => { setSearch(e.target.value); setPage(1); }}
+                        />
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                        {['PENDING', 'COMPLETED', 'REJECTED', 'ALL'].map(s => (
+                            <button
+                                key={s}
+                                onClick={() => { setStatusFilter(s); setPage(1); }}
+                                className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border ${statusFilter === s
+                                    ? s === 'PENDING' ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+                                        : s === 'COMPLETED' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                                            : s === 'REJECTED' ? 'bg-red-500/15 border-red-500/40 text-red-400'
+                                                : 'bg-slate-600 border-slate-500 text-white'
+                                    : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
+                                    }`}
+                            >
+                                {s}
+                            </button>
+                        ))}
                         <button
-                            key={s}
-                            onClick={() => { setStatusFilter(s); setPage(1); }}
-                            className={`px-3 py-2 rounded-xl text-xs font-bold transition-colors border ${statusFilter === s
-                                ? s === 'PENDING' ? 'bg-amber-500/15 border-amber-500/40 text-amber-400'
-                                    : s === 'COMPLETED' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
-                                        : s === 'REJECTED' ? 'bg-red-500/15 border-red-500/40 text-red-400'
-                                            : 'bg-slate-600 border-slate-500 text-white'
-                                : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'
-                                }`}
+                            onClick={() => setShowAdvanced(v => !v)}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-colors ${showAdvanced ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
                         >
-                            {s}
+                            <SlidersHorizontal size={12} /> Filters
+                            {(dateFrom || dateTo || amountMin || amountMax || methodFilter !== 'ALL') && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />}
                         </button>
-                    ))}
+                        <button
+                            onClick={handleExportCSV}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-emerald-600/20 bg-emerald-600/10 text-xs font-bold text-emerald-400 hover:bg-emerald-600/20 transition-colors"
+                        >
+                            <Download size={12} /> Export CSV
+                        </button>
+                        {(dateFrom || dateTo || amountMin || amountMax || methodFilter !== 'ALL' || search) && (
+                            <button onClick={() => { setSearch(''); setMethodFilter('ALL'); setDateFrom(''); setDateTo(''); setAmountMin(''); setAmountMax(''); setPage(1); }} className="flex items-center gap-1 px-2.5 py-2 rounded-xl border border-slate-700 bg-slate-800 text-slate-400 hover:text-red-400 text-xs transition-colors">
+                                <X size={11} /> Clear
+                            </button>
+                        )}
+                    </div>
                 </div>
+
+                {/* Match count tag */}
+                {!loading && (
+                    <div className="flex items-center gap-2">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            (search || dateFrom || dateTo || amountMin || amountMax || methodFilter !== 'ALL')
+                                ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300'
+                                : 'bg-slate-700/60 border border-slate-700 text-slate-400'
+                        }`}>
+                            <span className="w-1.5 h-1.5 rounded-full bg-current inline-block" />
+                            {pagination.total.toLocaleString('en-IN')} matching deposit{pagination.total !== 1 ? 's' : ''}
+                        </span>
+                        {(search || dateFrom || dateTo || amountMin || amountMax || methodFilter !== 'ALL') && (
+                            <span className="text-xs text-slate-600">searched across UTR, UPI ID, bank acc, holder name, email, phone, gateway…</span>
+                        )}
+                    </div>
+                )}
+
+                {/* Advanced filters row */}
+                {showAdvanced && (
+                    <div className="bg-slate-800/60 border border-slate-700 rounded-xl px-4 py-3 flex flex-wrap gap-4">
+                        {/* Payment Method */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] text-slate-500 uppercase tracking-wider font-bold flex items-center gap-1"><Filter size={9} /> Method</label>
+                            <div className="flex gap-1">
+                                {['ALL', 'UPI', 'BANK', 'CRYPTO', 'MANUAL'].map(m => (
+                                    <button key={m} onClick={() => { setMethodFilter(m); setPage(1); }}
+                                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-colors border ${methodFilter === m ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-300' : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'}`}>
+                                        {m}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        {/* Date From */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] text-slate-500 uppercase tracking-wider font-bold flex items-center gap-1"><Calendar size={9} /> From</label>
+                            <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1); }}
+                                className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 [color-scheme:dark]" />
+                        </div>
+                        {/* Date To */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] text-slate-500 uppercase tracking-wider font-bold flex items-center gap-1"><Calendar size={9} /> To</label>
+                            <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1); }}
+                                className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500 [color-scheme:dark]" />
+                        </div>
+                        {/* Amount Min */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] text-slate-500 uppercase tracking-wider font-bold flex items-center gap-1"><DollarSign size={9} /> Min ₹</label>
+                            <input type="number" min="0" placeholder="0" value={amountMin} onChange={e => { setAmountMin(e.target.value); setPage(1); }}
+                                className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500" />
+                        </div>
+                        {/* Amount Max */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[10px] text-slate-500 uppercase tracking-wider font-bold flex items-center gap-1"><DollarSign size={9} /> Max ₹</label>
+                            <input type="number" min="0" placeholder="∞" value={amountMax} onChange={e => { setAmountMax(e.target.value); setPage(1); }}
+                                className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500" />
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* ── Table ── */}
@@ -706,15 +920,24 @@ export default function PendingDepositsPage() {
                                                 </td>
                                             )}
                                             <td className="px-4 py-4">
-                                                <p className="text-white font-medium">{tx.user?.username || '—'}</p>
-                                                <p className="text-[11px] text-slate-500">{tx.user?.email}</p>
+                                                {tx.user?.username ? (
+                                                    <UserPopup 
+                                                        userId={tx.user.username} 
+                                                        username={tx.user.username}
+                                                        email={tx.user.email}
+                                                        phoneNumber={tx.user.phoneNumber}
+                                                    />
+                                                ) : (
+                                                    <p className="text-white font-medium">—</p>
+                                                )}
+                                                <p className="text-[11px] text-slate-500 mt-1">{tx.user?.email}</p>
                                                 {tx.user?.phoneNumber && (
                                                     <p className="text-[11px] text-slate-500">{tx.user.phoneNumber}</p>
                                                 )}
                                             </td>
                                             <td className="px-4 py-4">
                                                 <span className="text-emerald-400 font-mono font-bold text-base">
-                                                    {fmtINR(tx.amount)}
+                                                    {fmtAmount(tx)}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-4">
@@ -849,5 +1072,13 @@ export default function PendingDepositsPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function DepositsPage() {
+    return (
+        <Suspense fallback={<div className="py-20 flex justify-center"><Loader2 className="animate-spin text-emerald-500" size={32} /></div>}>
+            <PendingDepositsContent />
+        </Suspense>
     );
 }

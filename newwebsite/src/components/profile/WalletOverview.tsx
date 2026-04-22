@@ -38,10 +38,10 @@ export default function WalletOverview() {
                 <h2 className="text-xs font-bold text-white/20 uppercase tracking-wider">My Wallets</h2>
                 <button
                     onClick={refreshWallet}
-                    className={`p-1.5 rounded-lg hover:bg-white/5 transition-colors ${loading ? 'animate-spin' : ''}`}
+                    className={`p-1.5 rounded-lg hover:bg-white/[0.05] transition-colors ${loading ? 'animate-spin' : ''}`}
                     title="Refresh balances"
                 >
-                    <RefreshCw size={13} className="text-[#3BC117]" />
+                    <RefreshCw size={13} className="text-brand-gold" />
                 </button>
             </div>
 
@@ -49,11 +49,11 @@ export default function WalletOverview() {
             <button
                 onClick={() => setSelectedWallet('fiat')}
                 className={`w-full text-left bg-gradient-to-br from-[#1a1d21] to-[#252830] rounded-xl p-5 border relative overflow-hidden transition-all ${selectedWallet === 'fiat'
-                    ? 'border-brand-gold/50 shadow-[0_0_20px_rgba(212,175,55,0.12)]'
+                    ? 'border-brand-gold/50 shadow-[0_0_20px_rgba(212,175,55,0.03)]'
                     : 'border-white/[0.06] hover:border-brand-gold/20'
                     }`}
             >
-                <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-[#3BC117]/5 blur-2xl" />
+                <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-success-vivid/5 blur-2xl" />
 
                 <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2 text-white/40 text-xs font-semibold uppercase tracking-wider">
@@ -65,7 +65,7 @@ export default function WalletOverview() {
                             <CheckCircle2 size={10} /> Active
                         </span>
                     ) : (
-                        <span className="text-[10px] text-white/20 px-2 py-0.5 rounded-full border border-white/5">
+                        <span className="text-[10px] text-white/20 px-2 py-0.5 rounded-full border border-white/[0.04]">
                             Click to use
                         </span>
                     )}
@@ -78,21 +78,21 @@ export default function WalletOverview() {
 
                 {/* Casino Bonus chip */}
                 {casinoBonus > 0 && (
-                    <div className="mt-2 inline-flex items-center gap-1 bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-bold px-2 py-0.5 rounded-full mr-1.5">
+                    <div className="mt-2 inline-flex items-center gap-1 bg-accent-purple-alpha border border-accent-purple/20 text-accent-purple text-[10px] font-bold px-2 py-0.5 rounded-full mr-1.5">
                         <Gift size={10} />
                         {activeSymbol}{formatINR(casinoBonus)} Casino Bonus
                     </div>
                 )}
                 {/* Sports Bonus chip */}
                 {sportsBonus > 0 && (
-                    <div className="mt-2 inline-flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <div className="mt-2 inline-flex items-center gap-1 bg-success-alpha-10 border border-success-primary/20 text-success-bright text-[10px] font-bold px-2 py-0.5 rounded-full">
                         <Gift size={10} />
                         {activeSymbol}{formatINR(sportsBonus)} Sports Bonus
                     </div>
                 )}
                 {/* Legacy fiatBonus fallback (BOTH type bonuses) */}
                 {fiatBonus > 0 && casinoBonus === 0 && sportsBonus === 0 && (
-                    <div className="mt-2 inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <div className="mt-2 inline-flex items-center gap-1 bg-warning-alpha-08 border border-amber-500/20 text-warning-bright text-[10px] font-bold px-2 py-0.5 rounded-full">
                         <Gift size={10} />
                         {activeSymbol}{formatINR(fiatBonus)} Fiat Bonus
                     </div>
@@ -104,14 +104,14 @@ export default function WalletOverview() {
                         <div className="flex gap-2">
                             <button
                                 onClick={openDeposit}
-                                className="flex-1 flex items-center justify-center gap-2 bg-[#3BC117] hover:bg-[#34a814] text-black font-bold py-2.5 rounded-lg transition-colors text-sm"
+                                className="flex-1 flex items-center justify-center gap-2 bg-brand-gold hover:bg-brand-gold-hover text-white font-bold py-2.5 rounded-lg transition-colors text-sm"
                             >
                                 <ArrowDownToLine size={14} />
                                 Deposit
                             </button>
                             <button
                                 onClick={openWithdraw}
-                                className="flex-1 flex items-center justify-center gap-2 bg-[#252830] hover:bg-[#2e323b] text-white border border-white/10 font-bold py-2.5 rounded-lg transition-colors text-sm"
+                                className="flex-1 flex items-center justify-center gap-2 bg-bg-surface hover:bg-bg-elevated text-white border border-white/[0.06] font-bold py-2.5 rounded-lg transition-colors text-sm"
                             >
                                 <ArrowUpFromLine size={14} />
                                 Withdraw
@@ -129,19 +129,19 @@ export default function WalletOverview() {
                     : 'border-purple-500/15 hover:border-purple-500/30'
                     }`}
             >
-                <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-purple-500/10 blur-2xl" />
+                <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-accent-purple-alpha blur-2xl" />
 
                 <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2 text-purple-400/70 text-xs font-semibold uppercase tracking-wider">
-                        <Bitcoin size={13} className="text-purple-400" />
+                    <div className="flex items-center gap-2 text-accent-purple/70 text-xs font-semibold uppercase tracking-wider">
+                        <Bitcoin size={13} className="text-accent-purple" />
                         Crypto Wallet
                     </div>
                     {selectedWallet === 'crypto' ? (
-                        <span className="flex items-center gap-1 text-[10px] font-bold text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full">
+                        <span className="flex items-center gap-1 text-[10px] font-bold text-accent-purple bg-accent-purple-alpha border border-accent-purple/20 px-2 py-0.5 rounded-full">
                             <CheckCircle2 size={10} /> Active
                         </span>
                     ) : (
-                        <span className="text-[10px] text-white/20 px-2 py-0.5 rounded-full border border-white/5">
+                        <span className="text-[10px] text-white/20 px-2 py-0.5 rounded-full border border-white/[0.04]">
                             Click to use
                         </span>
                     )}
@@ -154,7 +154,7 @@ export default function WalletOverview() {
 
                 {/* Crypto Bonus mini-chip */}
                 {cryptoBonus > 0 && (
-                    <div className="mt-2 inline-flex items-center gap-1 bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <div className="mt-2 inline-flex items-center gap-1 bg-accent-purple-alpha border border-accent-purple/20 text-accent-purple text-[10px] font-bold px-2 py-0.5 rounded-full">
                         <Gift size={10} />
                         ${formatUSD(cryptoBonus)} Crypto Bonus
                     </div>
@@ -175,9 +175,9 @@ export default function WalletOverview() {
             </button>
 
             {/* ── Stats row ── */}
-            <div className="bg-[#1a1d21] rounded-xl p-4 border border-white/[0.06]">
+            <div className="bg-bg-modal rounded-xl p-4 border border-white/[0.06]">
                 <div className="flex items-center gap-1.5 text-white/30 text-[10px] font-semibold uppercase tracking-wider mb-2">
-                    <ShieldAlert size={12} className="text-red-400" />
+                    <ShieldAlert size={12} className="text-danger" />
                     Exposure
                 </div>
                 <div className="text-lg font-bold text-white">

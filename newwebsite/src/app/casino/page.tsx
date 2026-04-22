@@ -1,16 +1,23 @@
 "use client";
 
-import React, { useEffect, useState, Suspense } from 'react';
+import React, { useEffect, useMemo, useState, Suspense } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Search, X } from 'lucide-react';
+import { Search, X, Gamepad2, Flame, Dice5, House, Fish, Tickets, CircleDot, Drama, Trophy, ChevronRight, Star, Layers, Sparkles, Rocket, Target } from 'lucide-react';
 import Header from '@/components/layout/Header';
 import LeftSidebar from '@/components/layout/LeftSidebar';
 import GameGrid from '@/components/casino/GameGrid';
-import ProviderList from '@/components/casino/ProviderList';
 import GamePlayInterface from '@/components/casino/GamePlayInterface';
 import CasinoMobileView from '@/components/casino/CasinoMobileView';
 import { casinoService } from '@/services/casino';
 import { useAuth } from '@/context/AuthContext';
+import { useWallet } from '@/context/WalletContext';
+import MaintenanceState from '@/components/maintenance/MaintenanceState';
+import { useSectionMaintenance } from '@/hooks/useSectionMaintenance';
+import { getCasinoWalletModeFromSubWallet } from '@/utils/casinoWalletMode';
+import PromoCardSlider from '@/components/home/PromoCardSlider';
+import CasinoBrowserModal from '@/components/casino/CasinoBrowserModal';
+import DynamicHeroSlider from '@/components/shared/DynamicHeroSlider';
+
 
 interface LaunchableGame {
     id?: string;
@@ -22,6 +29,22 @@ interface LaunchableGame {
     url?: string;
 }
 
+const CASINO_RAIL = [
+    { key: 'all', label: 'Lobby', Icon: House },
+    { key: 'providers', label: 'Providers', Icon: Layers },
+    { key: 'popular', label: 'Hot Games', Icon: Flame },
+    { key: 'slots', label: 'Slots', Icon: Tickets },
+    { key: 'live', label: 'Live Casino', Icon: Star },
+    { key: 'table', label: 'Table Games', Icon: Dice5 },
+    { key: 'crash', label: 'Crash', Icon: Rocket },
+    { key: 'new', label: 'New Games', Icon: Sparkles },
+    { key: 'top-slots', label: 'Top Slots', Icon: Target },
+    { key: 'fishing', label: 'Fishing', Icon: Fish },
+    { key: 'blackjack', label: 'Blackjack', Icon: Drama },
+    { key: 'roulette', label: 'Roulette', Icon: CircleDot },
+    { key: 'baccarat', label: 'Baccarat', Icon: Trophy },
+];
+
 function CasinoContent() {
     const router = useRouter();
     const pathname = usePathname();
@@ -31,235 +54,220 @@ function CasinoContent() {
     const selectedCategory = categoryParam || 'all';
 
     const { user } = useAuth();
-    const [selectedProvider, setSelectedProvider] = useState(providerParam);
-    const [searchQuery, setSearchQuery] = useState('');
+    const { selectedSubWallet } = useWallet();
+    const { blocked, loading: maintenanceLoading, message: maintenanceMessage } = useSectionMaintenance(
+        'casino',
+        'Casino is currently under maintenance. Game launches are temporarily unavailable.',
+    );
     const [activeGame, setActiveGame] = useState<{ id: string; name: string; provider: string; url: string } | null>(null);
     const [launching, setLaunching] = useState(false);
     const [launchError, setLaunchError] = useState<string | null>(null);
 
-    useEffect(() => {
-        setSelectedProvider(providerParam);
-    }, [providerParam]);
+    // Browser Modal State
+    const [isBrowserOpen, setIsBrowserOpen] = useState(false);
+    const [browserInitialCat, setBrowserInitialCat] = useState('all');
+    const [browserInitialSearch, setBrowserInitialSearch] = useState('');
 
-    const toActiveGame = (gameData: LaunchableGame, url: string) => ({
-        id: gameData.id || gameData.gameCode || '',
-        name: gameData.name || gameData.gameName || '',
-        provider: gameData.providerCode || gameData.provider || '',
+
+    // Sections shown as horizontal rows on the casino lobby
+    const sectionConfigs = useMemo(() => ([
+        { title: 'Hot Games', category: 'popular', icon: <Flame size={15} className="text-rose-400" /> },
+        { title: 'Slots', category: 'slots', icon: <Dice5 size={15} className="text-brand-gold" /> },
+        { title: 'Live Casino', category: 'live', icon: <CircleDot size={15} className="text-red-400" /> },
+        { title: 'Table Games', category: 'table', icon: <Layers size={15} className="text-violet-400" /> },
+        { title: 'Crash', category: 'crash', icon: <Rocket size={15} className="text-orange-400" /> },
+        { title: 'New Games', category: 'new', icon: <Sparkles size={15} className="text-teal-400" /> },
+        { title: 'Top Slots', category: 'top-slots', icon: <Star size={15} className="text-amber-400" /> },
+    ]), []);
+
+    // Auto-open browser modal when URL has a category param — must be before early returns
+    useEffect(() => {
+        if (categoryParam && categoryParam !== 'all') {
+            setBrowserInitialCat(categoryParam);
+            setBrowserInitialSearch('');
+            setIsBrowserOpen(true);
+        } else if (!categoryParam) {
+            setIsBrowserOpen(false);
+        }
+    }, [categoryParam]);
+
+    if (maintenanceLoading) {
+        return <div className="min-h-screen bg-bg-base flex items-center justify-center"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-gold" /></div>;
+    }
+
+    if (blocked) {
+        return (
+            <div className="h-screen overflow-hidden bg-bg-base flex flex-col">
+                <Header />
+                <div className="pt-[58px]">
+                    <MaintenanceState title="Casino Maintenance" message={maintenanceMessage} backHref="/" backLabel="Back to Home" />
+                </div>
+            </div>
+        );
+    }
+
+    const toActiveGame = (g: LaunchableGame, url: string) => ({
+        id: g.id || g.gameCode || '',
+        name: g.name || g.gameName || '',
+        provider: g.providerCode || g.provider || '',
         url,
     });
 
-    const handleProviderSelect = (provider: string) => {
-        setSelectedProvider(provider);
-        if (searchQuery) setSearchQuery('');
-
-        const nextParams = new URLSearchParams(searchParams.toString());
-        if (provider === 'all') {
-            nextParams.delete('provider');
-        } else {
-            nextParams.set('provider', provider);
+    const handleCategoryClick = (cat: string) => {
+        if (cat === 'all') {
+            router.push('/casino');
+            return;
         }
+        router.push(`/casino?category=${cat}`);
+    };
 
-        const nextUrl = nextParams.toString() ? `${pathname}?${nextParams.toString()}` : pathname;
-        router.replace(nextUrl, { scroll: false });
+    const handleSearchClick = () => {
+        setBrowserInitialCat('all');
+        setIsBrowserOpen(true);
     };
 
     const handleGameLaunch = async (gameData: LaunchableGame) => {
-        // If URL is already resolved (e.g. from a previous launch), use it directly
-        if (gameData.url) {
-            setActiveGame(toActiveGame(gameData, gameData.url));
-            setLaunchError(null);
-            return;
-        }
-        if (!user) {
-            alert('Please login to play');
-            return;
-        }
-
+        if (gameData.url) { setActiveGame(toActiveGame(gameData, gameData.url)); setLaunchError(null); return; }
+        if (!user) { alert('Please login to play'); return; }
         const providerCode = gameData.providerCode || gameData.provider;
         const gameId = gameData.gameCode || gameData.id;
-        if (!providerCode || !gameId) {
-            setLaunchError('Game data is incomplete. Please try another game.');
-            return;
-        }
-
-        setLaunching(true);
-        setLaunchError(null);
+        if (!providerCode || !gameId) { setLaunchError('Game data is incomplete.'); return; }
+        setLaunching(true); setLaunchError(null);
         try {
             const res = await casinoService.launchGame({
-                username: user.username,
-                provider: providerCode,
-                gameId,
-                isLobby: false,
+                username: user.username, provider: providerCode, gameId, isLobby: false,
+                walletMode: getCasinoWalletModeFromSubWallet(selectedSubWallet),
             });
-            if (res?.url) {
-                setActiveGame(toActiveGame(gameData, res.url));
-            } else {
-                setLaunchError('Could not get game URL. Please try again.');
-            }
+            if (res?.url) setActiveGame(toActiveGame(gameData, res.url));
+            else setLaunchError('Could not get game URL.');
         } catch (error: unknown) {
-            const errorMessage = error instanceof Error
-                ? error.message
-                : 'Failed to launch game.';
-            setLaunchError(errorMessage);
-        } finally {
-            setLaunching(false);
-        }
+            setLaunchError(error instanceof Error ? error.message : 'Failed to launch game.');
+        } finally { setLaunching(false); }
     };
 
     return (
         <div className="h-screen overflow-hidden bg-bg-base flex flex-col">
             <Header />
 
-            {/* ── LAUNCHING OVERLAY ── */}
+            {/* Launching overlay */}
             {launching && (
-                <div className="fixed inset-0 z-[600] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center gap-4">
-                    <div className="relative w-16 h-16">
-                        <div className="w-16 h-16 rounded-full border-2 border-[#E37D32]/20 border-t-[#E37D32] animate-spin" />
-                        <div className="absolute inset-0 flex items-center justify-center text-2xl">🎰</div>
+                <div className="fixed inset-0 z-[600] bg-black/85 backdrop-blur-md flex flex-col items-center justify-center gap-3">
+                    <div className="relative w-14 h-14">
+                        <div className="w-14 h-14 rounded-full border-2 border-brand-gold/20 border-t-brand-gold animate-spin" />
+                        <div className="absolute inset-0 flex items-center justify-center text-xl">🎰</div>
                     </div>
-                    <p className="text-white/60 text-sm font-semibold tracking-widest uppercase animate-pulse">Launching game…</p>
+                    <p className="text-white/50 text-xs font-bold tracking-widest uppercase animate-pulse">Launching…</p>
                 </div>
             )}
 
-            {/* ── LAUNCH ERROR OVERLAY ── */}
+            {/* Error overlay */}
             {launchError && (
-                <div className="fixed inset-0 z-[600] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center gap-5 px-6">
-                    <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-3xl">⚠️</div>
+                <div className="fixed inset-0 z-[600] bg-black/85 backdrop-blur-md flex flex-col items-center justify-center gap-4 px-6">
+                    <div className="w-14 h-14 rounded-2xl bg-danger-alpha-10 border border-danger/20 flex items-center justify-center text-2xl">⚠️</div>
                     <div className="text-center">
-                        <h2 className="text-white font-bold text-lg mb-1">Unable to Launch</h2>
+                        <h2 className="text-white font-bold text-base mb-1">Unable to Launch</h2>
                         <p className="text-white/40 text-sm">{launchError}</p>
                     </div>
                     <button
                         onClick={() => setLaunchError(null)}
-                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white/10 border border-white/10 text-white font-bold text-sm active:scale-95 transition-transform"
+                        className="flex items-center gap-2 px-5 py-2 rounded-xl bg-white/[0.06] border border-white/[0.06] text-white font-bold text-sm active:scale-95 transition-transform"
                     >
-                        <X size={16} /> Close
+                        <X size={14} /> Close
                     </button>
                 </div>
             )}
 
-            {/* ── GAME OVERLAY (both viewports) ── */}
+            {/* Game overlay */}
             {activeGame && (
-                <div className="fixed inset-0 z-[500] bg-[#0d0d0f] flex flex-col">
-                    <GamePlayInterface
-                        game={activeGame}
-                        onClose={() => setActiveGame(null)}
-                        isEmbedded={false}
-                        onLaunch={handleGameLaunch}
-                        key={activeGame.id}
-                    />
+                <div className="fixed inset-0 z-[500] bg-bg-deep flex flex-col">
+                    <GamePlayInterface game={activeGame} onClose={() => setActiveGame(null)} isEmbedded={false} onLaunch={handleGameLaunch} key={activeGame.id} />
                 </div>
             )}
 
-            {/* ══ MOBILE LAYOUT (md:hidden) ════════════════════════════════ */}
-            <div className="md:hidden flex-1 overflow-y-auto pt-[64px] pb-[72px]">
+            <CasinoBrowserModal 
+                isOpen={isBrowserOpen}
+                onClose={() => {
+                    setIsBrowserOpen(false);
+                    router.push('/casino');
+                }}
+                initialCategory={browserInitialCat}
+                initialSearch={browserInitialSearch}
+                onLaunch={handleGameLaunch}
+                categories={CASINO_RAIL}
+            />
+
+            <div className="md:hidden flex-1 overflow-y-auto pt-[58px] pb-[72px]">
                 <CasinoMobileView
                     onLaunch={handleGameLaunch}
-                    onViewAll={(cat) => {
-                        // navigate to filtered view (could set a state or URL)
-                        window.location.href = `/casino?category=${cat}`;
-                    }}
                 />
             </div>
 
-            {/* ══ DESKTOP LAYOUT (hidden md:flex) ══════════════════════════ */}
-            <div className="hidden md:flex flex-1 overflow-hidden pt-[64px] pb-0 max-w-[1920px] mx-auto w-full">
+            {/* ── DESKTOP ── */}
+            <div className="hidden md:flex flex-1 overflow-hidden pt-[58px]">
                 {!activeGame && <LeftSidebar />}
 
-                <main className={`flex-1 min-w-0 bg-bg-base overflow-y-auto overflow-x-hidden ${!activeGame ? 'border-l border-white/5 border-r border-white/5' : ''}`}>
+                <main className={`flex-1 min-w-0 overflow-y-auto overflow-x-hidden bg-bg-base ${!activeGame ? 'border-l border-white/[0.04]' : ''}`}>
                     {activeGame ? (
-                        <div className="w-full bg-bg-base">
-                            <GamePlayInterface
-                                game={activeGame}
-                                onClose={() => setActiveGame(null)}
-                                isEmbedded={true}
-                                onLaunch={handleGameLaunch}
-                                key={activeGame.id}
-                            />
-                        </div>
+                        <GamePlayInterface game={activeGame} onClose={() => setActiveGame(null)} isEmbedded={true} onLaunch={handleGameLaunch} key={activeGame.id} />
                     ) : (
-                        <div className="p-2 sm:p-4 md:p-6 space-y-6 md:space-y-8">
-                            {/* Banner Carousel */}
+                        <div className="p-4 md:p-5 space-y-5 max-w-[1600px] mx-auto">
+
+                            {/* ── Hero banner — admin-controlled from CMS > Sliders ── */}
                             {selectedCategory === 'all' && (
-                                <div className="relative w-full h-[180px] md:h-[320px] rounded-2xl overflow-hidden shadow-2xl group">
-                                    <img
-                                        src="/assets/banner-casino-main.jpg"
-                                        alt="Casino Banner"
-                                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                        onError={(e) => {
-                                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1596838132731-3301c3fd4317?q=80&w=2070&auto=format&fit=crop';
-                                        }}
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent flex flex-col justify-center p-8 md:p-12">
-                                        <span className="text-brand-gold font-bold tracking-widest text-xs md:text-sm mb-2 animate-pulse">EXCLUSIVE OFFER</span>
-                                        <h1 className="text-3xl md:text-5xl font-extrabold text-text-primary mb-4 leading-tight">
-                                            WELCOME TO <br />
-                                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-gold to-brand-gold-hover">ZEERO CASINO</span>
-                                        </h1>
-                                        <p className="text-text-secondary text-sm md:text-base max-w-lg mb-6 line-clamp-2">
-                                            Experience the thrill of next-gen gaming with instant deposits, lightning-fast withdrawals, and VIP rewards.
-                                        </p>
-                                        <button className="w-max bg-brand-gold hover:bg-brand-gold-hover text-text-inverse font-bold py-3 px-8 rounded-lg transition-all transform hover:scale-105 shadow-glow-gold">
-                                            PLAY NOW
-                                        </button>
-                                    </div>
-                                </div>
+                                <DynamicHeroSlider
+                                    page="CASINO"
+                                    className="w-full"
+                                    onGameLaunch={handleGameLaunch}
+                                    fallback={<PromoCardSlider onGameLaunch={handleGameLaunch} />}
+                                />
                             )}
 
-                            {/* Search Bar */}
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={20} />
-                                <input
-                                    type="text"
-                                    placeholder="Search games..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-bg-elevated text-text-primary rounded-lg py-3 pl-10 pr-4 outline-none transition-all shadow-inner focus:shadow-[0_0_0_2px_var(--action-primary)] placeholder-text-muted"
-                                />
+
+                            {/* ── Search bar ── */}
+                            <div className="relative cursor-pointer" onClick={handleSearchClick}>
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30" size={18} />
+                                <div className="h-11 w-full rounded-xl border border-white/[0.06] bg-white/[0.03] py-2.5 pl-11 pr-4 text-sm font-medium text-white/30 flex items-center transition-all hover:border-brand-gold/30 hover:bg-white/[0.04]">
+                                    Search games...
+                                </div>
                             </div>
 
-                            {searchQuery ? (
-                                <GameGrid
-                                    title={`Search Results for "${searchQuery}"`}
-                                    category="all"
-                                    search={searchQuery}
-                                    layout="grid"
-                                    onLaunch={handleGameLaunch}
-                                />
-                            ) : (
-                                <>
-                                    {selectedCategory === 'all' && (
-                                        <ProviderList
-                                            selectedCategory={selectedCategory}
-                                            selectedProvider={selectedProvider}
-                                            onSelectProvider={handleProviderSelect}
-                                            previewLimit={8}
-                                            viewAllHref="/casino/providers"
-                                        />
-                                    )}
+                            {/* ── Category rail ── */}
+                            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                                {CASINO_RAIL.map(({ key, label, Icon }) => {
+                                    const active = selectedCategory === key;
+                                    return (
+                                        <button
+                                            key={key}
+                                            onClick={() => handleCategoryClick(key)}
+                                            className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-2 text-[11px] font-semibold transition-all border ${
+                                                active
+                                                    ? 'bg-brand-gold/10 border-brand-gold/25 text-brand-gold'
+                                                    : 'bg-white/[0.03] border-white/[0.06] text-white/45 hover:text-white/75 hover:border-white/[0.1] hover:bg-white/[0.05]'
+                                            }`}
+                                        >
+                                            <Icon size={13} className={active ? 'text-brand-gold' : 'text-white/40'} />
+                                            {label}
+                                        </button>
+                                    );
+                                })}
+                                <button className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.03] border border-white/[0.06] text-white/40 hover:text-white/70 hover:border-white/[0.1] transition-all">
+                                    <ChevronRight size={15} />
+                                </button>
+                            </div>
 
-                                    {selectedProvider === 'all' && selectedCategory === 'all' ? (
-                                        <div className="space-y-8">
-                                            <GameGrid title="🌟 Exclusive Games" category="exclusive" layout="row" onViewAll={() => router.push('/casino?category=exclusive')} onLaunch={handleGameLaunch} />
-                                            <GameGrid title="🔥 Popular Games"   category="popular"   layout="row" onViewAll={() => router.push('/casino?category=popular')}   onLaunch={handleGameLaunch} />
-                                            <GameGrid title="✨ New Games"        category="new"       layout="row" onViewAll={() => router.push('/casino?category=new')}       onLaunch={handleGameLaunch} />
-                                            <GameGrid title="📈 Trending Now"     category="trending"  layout="row" onViewAll={() => router.push('/casino?category=trending')}  onLaunch={handleGameLaunch} />
-                                            <GameGrid title="🎰 Top Slots"        category="slots"     layout="row" onViewAll={() => router.push('/casino?category=slots')}     onLaunch={handleGameLaunch} />
-                                            <GameGrid title="🎲 Live Casino"      category="live"      layout="row" onViewAll={() => router.push('/casino?category=live')}      onLaunch={handleGameLaunch} />
-                                            <GameGrid title="♟️ Table Games"      category="table"     layout="row" onViewAll={() => router.push('/casino?category=table')}     onLaunch={handleGameLaunch} />
-                                            <GameGrid title="💥 Crash Games"      category="crash"     layout="row" onViewAll={() => router.push('/casino?category=crash')}     onLaunch={handleGameLaunch} />
-                                        </div>
-                                    ) : (
-                                        <GameGrid
-                                            title={`${selectedProvider !== 'all' ? selectedProvider : ''} ${selectedCategory !== 'all' ? selectedCategory : 'Games'}`}
-                                            category={selectedCategory}
-                                            provider={selectedProvider}
-                                            layout="grid"
-                                            onLaunch={handleGameLaunch}
-                                        />
-                                    )}
-                                </>
-                            )}
+                            <div className="space-y-6">
+                                                {sectionConfigs.map((section) => (
+                                                    <GameGrid
+                                                        key={section.category}
+                                                        title={section.title}
+                                                        icon={section.icon}
+                                                        category={section.category}
+                                                        layout="row"
+                                                        onViewAll={() => handleCategoryClick(section.category)}
+                                                        onLaunch={handleGameLaunch}
+                                                    />
+                                                ))}
+                                            </div>
                         </div>
                     )}
                 </main>
@@ -270,7 +278,7 @@ function CasinoContent() {
 
 export default function CasinoPage() {
     return (
-        <Suspense fallback={<div className="min-h-screen bg-bg-base flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-gold"></div></div>}>
+        <Suspense fallback={<div className="min-h-screen bg-bg-base flex items-center justify-center"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand-gold" /></div>}>
             <CasinoContent />
         </Suspense>
     );

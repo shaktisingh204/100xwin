@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 
 const toastStyle = {
     borderRadius: '12px',
-    background: '#1a1d21',
+    background: '#12141C',
     color: '#fff',
 } as const;
 
@@ -44,6 +44,21 @@ export function showBetErrorToast(error: any) {
             style: {
                 ...toastStyle,
                 border: '1px solid rgba(255,170,0,0.4)',
+            },
+        });
+        return;
+    }
+
+    if (
+        message.includes('Match completed') ||
+        message.includes('Betting is closed') ||
+        message.includes('betting is closed') ||
+        message.includes('Market is already settled')
+    ) {
+        toast.error('Betting closed — this match has already finished.', {
+            style: {
+                ...toastStyle,
+                border: '1px solid rgba(255,80,80,0.3)',
             },
         });
         return;

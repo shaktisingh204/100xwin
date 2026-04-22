@@ -192,7 +192,7 @@ export default function SportsBetsPage() {
                         <table className="w-full text-sm">
                             <thead>
                                 <tr className="bg-slate-900/60 border-b border-slate-700">
-                                    {['User ID', 'Event', 'Market', 'Selection', 'Type', 'Odds', 'Stake', 'Potential Win', 'Status', 'Date'].map(h => (
+                                    {['User ID', 'Event', 'Market', 'Selection', 'Odds', 'Stake', 'Potential Win', 'Status', 'Date'].map(h => (
                                         <th key={h} className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap">{h}</th>
                                     ))}
                                 </tr>
@@ -215,12 +215,6 @@ export default function SportsBetsPage() {
                                         </td>
                                         <td className="px-3 py-2.5">
                                             <span className="text-xs text-slate-300 font-medium">{bet.selectionName || '—'}</span>
-                                        </td>
-                                        <td className="px-3 py-2.5">
-                                            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border
-                                                bg-sky-500/10 text-sky-400 border-sky-500/20">
-                                                {bet.betType || 'back'}
-                                            </span>
                                         </td>
                                         <td className="px-3 py-2.5">
                                             <span className="text-xs font-mono text-white">{bet.odds?.toFixed(2)}</span>

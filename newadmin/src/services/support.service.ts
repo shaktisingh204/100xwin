@@ -42,7 +42,8 @@ export const supportService = {
         socket.emit('adminJoinSupport');
     },
 
-    sendSocketMessage: (ticketId: number, message: string, sender: 'ADMIN') => {
-        socket.emit('sendMessage', { ticketId, message, sender });
+    // Broadcast-only: message is already saved, just notify other clients
+    broadcastMessage: (ticketId: number, message: any) => {
+        socket.emit('broadcastSupportMessage', { ticketId, message });
     }
 };

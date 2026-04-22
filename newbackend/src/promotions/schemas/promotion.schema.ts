@@ -29,6 +29,30 @@ export class Promotion {
     @Prop({ default: 0 })
     bonusPercentage: number;
 
+    @Prop({ default: 0 })
+    maxBonus: number;
+
+    @Prop({ default: 0 })
+    wageringMultiplier: number;
+
+    @Prop({ default: 30 })
+    validityDays: number;
+
+    @Prop({ default: 'BOTH', enum: ['INR', 'CRYPTO', 'BOTH'] })
+    currency: string;
+
+    @Prop({ default: 'ALL', enum: ['ALL', 'NEW_USERS', 'VIP', 'RETURNING'] })
+    targetAudience: string;
+
+    @Prop({ default: 0 })
+    claimLimit: number;
+
+    @Prop({ default: 0 })
+    claimCount: number;
+
+    @Prop()
+    startDate: Date;
+
     @Prop()
     expiryDate: Date;
 

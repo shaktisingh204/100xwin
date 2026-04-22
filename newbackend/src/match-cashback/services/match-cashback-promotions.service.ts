@@ -268,7 +268,7 @@ export class MatchCashbackPromotionsService {
         switch (promotionType) {
             case 'FIRST_OVER_SIX_CASHBACK': {
                 const oversWindow = triggerConfig.oversWindow || 1;
-                return `If any team hits a six in the first ${oversWindow} over${oversWindow > 1 ? 's' : ''}, losing bets on this match qualify for cashback.`;
+                return `If your selected pre-match Match Odds team hits a six in the first ${oversWindow} over${oversWindow > 1 ? 's' : ''} but still loses, the losing bet qualifies for cashback.${selectionLabel}`;
             }
             case 'LEAD_MARGIN_PAYOUT': {
                 const leadThreshold = triggerConfig.leadThreshold || 2;
@@ -296,7 +296,7 @@ export class MatchCashbackPromotionsService {
         switch (promotionType) {
             case 'FIRST_OVER_SIX_CASHBACK': {
                 const window = triggerConfig?.oversWindow || 1;
-                return `${eventName} — ${rewardPercentage}% back if a 6 lands in first ${window} over${window > 1 ? 's' : ''}`;
+                return `${eventName} — ${rewardPercentage}% back if your pre-match team hits a 6 in first ${window} over${window > 1 ? 's' : ''}`;
             }
             case 'LEAD_MARGIN_PAYOUT': {
                 const leadThreshold = triggerConfig?.leadThreshold || 2;
@@ -327,7 +327,7 @@ export class MatchCashbackPromotionsService {
         switch (promotionType) {
             case 'FIRST_OVER_SIX_CASHBACK': {
                 const window = triggerConfig?.oversWindow || 1;
-                return `If any team hits a six in the first ${window} over${window > 1 ? 's' : ''} of ${eventName}, losing bets get ${rewardPercentage}% refunded to the ${walletLabel}.`;
+                return `Place a pre-match Match Odds bet on ${eventName}. If your selected team hits a six in the first ${window} over${window > 1 ? 's' : ''} but still loses, get ${rewardPercentage}% refunded to the ${walletLabel}.`;
             }
             case 'LEAD_MARGIN_PAYOUT': {
                 const leadThreshold = triggerConfig?.leadThreshold || 2;

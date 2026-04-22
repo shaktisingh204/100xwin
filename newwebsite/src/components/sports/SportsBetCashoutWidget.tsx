@@ -58,8 +58,18 @@ export default function SportsBetCashoutWidget({
                 if (data.fullRefundEligible) return 'FULL_REFUND';
                 return 'IDLE';
             });
-        } catch {
-            // Keep the existing UI state on transient polling errors.
+        } catch (err: unknown) {
+            const maybeAxiosError = err as { response?: { status?: number; data?: { message?: string } } };
+            const message = maybeAxiosError.response?.data?.message;
+
+            if (maybeAxiosError.response?.status === 503) {
+                setOffer({
+                    betId: bet.id,
+                    status: 'SUSPENDED',
+                    reason: message || 'Sports cash out is temporarily unavailable due to maintenance.',
+                });
+                setPhase('SUSPENDED');
+            }
         }
     }, [bet.id]);
 
@@ -130,8 +140,8 @@ export default function SportsBetCashoutWidget({
     const partialValue = parseFloat((displayValue * fraction).toFixed(2));
     const restStake = parseFloat(((offer?.stake ?? bet.stake) * (1 - fraction)).toFixed(2));
     const containerCls = compact
-        ? 'rounded-xl bg-[#1c1f24] border border-amber-500/25 p-2.5 space-y-2.5'
-        : 'rounded-xl bg-[#1c1f24] border border-amber-500/30 p-3 space-y-3';
+        ? 'rounded-xl bg-bg-modal border border-warning/25 p-2.5 space-y-2.5'
+        : 'rounded-xl bg-bg-modal border border-warning/30 p-3 space-y-3';
     const textXsCls = compact ? 'text-[10px]' : 'text-[11px]';
 
     if (phase === 'LOADING') {
@@ -152,9 +162,6 @@ export default function SportsBetCashoutWidget({
                     <AlertCircle size={12} className="text-white/20" />
                     <span className="text-[11px] font-medium text-white/30">Cash Out Suspended</span>
                 </div>
-                {offer?.reason && (
-                    <p className="mt-1 text-[10px] leading-relaxed text-white/20">{offer.reason}</p>
-                )}
             </div>
         );
     }
@@ -164,14 +171,14 @@ export default function SportsBetCashoutWidget({
         const isPartial = result?.status === 'PARTIAL_CASHED_OUT';
 
         return (
-            <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5">
-                <CheckCircle2 size={14} className="shrink-0 text-emerald-400" />
+            <div className="flex items-center gap-2 rounded-xl border border-success-primary/20 bg-success-alpha-10 px-3 py-2.5">
+                <CheckCircle2 size={14} className="shrink-0 text-success-bright" />
                 <div className="text-xs">
-                    <p className="font-bold text-emerald-400">
+                    <p className="font-bold text-success-bright">
                         {isPartial ? 'Partial Cash Out Successful!' : 'Cashed Out!'}
                     </p>
                     {result?.cashoutValue && (
-                        <p className="mt-0.5 text-[10px] text-emerald-400/60">
+                        <p className="mt-0.5 text-[10px] text-success-bright/60">
                             {activeSymbol}{result.cashoutValue.toFixed(2)} added to wallet
                             {isFull ? '' : ` · ${activeSymbol}${result.remainingStake?.toFixed(2)} still active`}
                         </p>
@@ -188,14 +195,14 @@ export default function SportsBetCashoutWidget({
                     <div className="flex gap-2">
                         <button
                             onClick={handleFirstTap}
-                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/15 px-3 py-2.5 text-[11px] font-bold text-amber-400 transition-all hover:bg-amber-500/25 active:scale-[0.98]"
+                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-warning/30 bg-warning-alpha-12 px-3 py-2.5 text-[11px] font-bold text-warning-bright transition-all hover:bg-amber-500/25 active:scale-[0.98]"
                         >
                             <DollarSign size={12} />
                             Cash Out {activeSymbol}{displayValue.toFixed(2)}
                         </button>
                         <button
                             onClick={() => doExecute({ fraction: 1, fullRefund: true })}
-                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-3 py-2.5 text-[11px] font-bold text-emerald-400 transition-all hover:bg-emerald-500/25 active:scale-[0.98]"
+                            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-success-primary/30 bg-success-alpha-16 px-3 py-2.5 text-[11px] font-bold text-success-bright transition-all hover:bg-success-alpha-20 active:scale-[0.98]"
                         >
                             <RotateCcw size={12} />
                             Cancel Bet {activeSymbol}{offer?.fullRefundValue?.toFixed(2)}
@@ -211,10 +218,10 @@ export default function SportsBetCashoutWidget({
 
     if (phase === 'PRICE_CHANGED') {
         return (
-            <div className="space-y-3 rounded-xl border border-amber-500/40 bg-amber-500/[0.07] p-3">
+            <div className="space-y-3 rounded-xl border border-warning/40 bg-amber-500/[0.07] p-3">
                 <div className="flex items-center gap-2">
-                    <AlertCircle size={13} className="shrink-0 text-amber-400" />
-                    <p className="text-xs font-bold text-amber-400">Odds Changed</p>
+                    <AlertCircle size={13} className="shrink-0 text-warning-bright" />
+                    <p className="text-xs font-bold text-warning-bright">Odds Changed</p>
                 </div>
                 <p className="text-[11px] leading-relaxed text-white/50">
                     The market moved. New offer:{' '}
@@ -229,7 +236,7 @@ export default function SportsBetCashoutWidget({
                     </button>
                     <button
                         onClick={() => doExecute({ fraction, clientExpectedValue: priceChangedValue ?? undefined })}
-                        className="flex-1 rounded-lg bg-amber-500 py-2 text-[11px] font-bold text-black transition-all hover:bg-amber-400 active:scale-[0.98]"
+                        className="flex-1 rounded-lg bg-amber-500 py-2 text-[11px] font-bold text-text-inverse transition-all hover:bg-amber-400 active:scale-[0.98]"
                     >
                         Accept {activeSymbol}{priceChangedValue?.toFixed(2)}
                     </button>
@@ -240,9 +247,9 @@ export default function SportsBetCashoutWidget({
 
     if (phase === 'EXECUTING') {
         return (
-            <div className="flex items-center justify-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3">
-                <Loader2 size={14} className="animate-spin text-amber-400" />
-                <span className="text-xs font-bold text-amber-400">Processing...</span>
+            <div className="flex items-center justify-center gap-2 rounded-xl border border-amber-500/20 bg-warning-alpha-08 px-3 py-3">
+                <Loader2 size={14} className="animate-spin text-warning-bright" />
+                <span className="text-xs font-bold text-warning-bright">Processing...</span>
             </div>
         );
     }
@@ -252,7 +259,7 @@ export default function SportsBetCashoutWidget({
             <div className="space-y-1.5">
                 <button
                     onClick={handleFirstTap}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/15 px-3 py-2.5 text-xs font-bold text-amber-400 transition-all hover:border-amber-500/50 hover:bg-amber-500/25 active:scale-[0.98]"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-warning/30 bg-warning-alpha-12 px-3 py-2.5 text-xs font-bold text-warning-bright transition-all hover:border-amber-500/50 hover:bg-amber-500/25 active:scale-[0.98]"
                 >
                     <DollarSign size={13} />
                     Cash Out {activeSymbol}{displayValue.toFixed(2)}
@@ -262,7 +269,7 @@ export default function SportsBetCashoutWidget({
                     <span>Original: {offer?.originalOdds}</span>
                 </div>
                 {error && (
-                    <p className="flex items-center gap-1 text-[11px] text-red-400">
+                    <p className="flex items-center gap-1 text-[11px] text-danger">
                         <AlertCircle size={10} /> {error}
                     </p>
                 )}
@@ -297,7 +304,7 @@ export default function SportsBetCashoutWidget({
                     step={5}
                     value={Math.round(fraction * 100)}
                     onChange={(e) => setFraction(parseInt(e.target.value, 10) / 100)}
-                    className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/10 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber-400 [&::-webkit-slider-thumb]:cursor-pointer"
+                    className="h-1.5 w-full cursor-pointer appearance-none rounded-full bg-white/[0.08] [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber-400 [&::-webkit-slider-thumb]:cursor-pointer"
                     style={{
                         background: `linear-gradient(to right, #f59e0b ${Math.round(fraction * 100)}%, rgba(255,255,255,0.1) ${Math.round(fraction * 100)}%)`,
                     }}
@@ -309,7 +316,7 @@ export default function SportsBetCashoutWidget({
                             onClick={() => setFraction(pct / 100)}
                             className={`rounded-lg px-2.5 py-1 text-[10px] font-bold transition-all ${
                                 Math.round(fraction * 100) === pct
-                                    ? 'bg-amber-500 text-black'
+                                    ? 'bg-amber-500 text-text-inverse'
                                     : 'bg-white/[0.06] text-white/40 hover:text-white/70'
                             }`}
                         >
@@ -322,11 +329,11 @@ export default function SportsBetCashoutWidget({
             <div className="grid grid-cols-2 gap-2 text-[10px]">
                 <div className="rounded-lg bg-white/[0.03] p-2 text-center">
                     <p className="text-white/30">You receive</p>
-                    <p className="mt-0.5 text-xs font-bold text-amber-400">{activeSymbol}{partialValue.toFixed(2)}</p>
+                    <p className="mt-0.5 text-xs font-bold text-warning-bright">{activeSymbol}{partialValue.toFixed(2)}</p>
                 </div>
                 <div className="rounded-lg bg-white/[0.03] p-2 text-center">
                     <p className="text-white/30">{isFullCashout ? 'Bet closed' : 'Still active'}</p>
-                    <p className={`mt-0.5 text-xs font-bold ${isFullCashout ? 'text-white/30' : 'text-emerald-400'}`}>
+                    <p className={`mt-0.5 text-xs font-bold ${isFullCashout ? 'text-white/30' : 'text-success-bright'}`}>
                         {isFullCashout ? '—' : `${activeSymbol}${restStake.toFixed(2)} stake`}
                     </p>
                 </div>
@@ -340,7 +347,7 @@ export default function SportsBetCashoutWidget({
                         clientExpectedValue: partialValue,
                     });
                 }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-2.5 text-xs font-bold text-black transition-all hover:bg-amber-400 active:scale-[0.98]"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-amber-500 py-2.5 text-xs font-bold text-text-inverse transition-all hover:bg-amber-400 active:scale-[0.98]"
             >
                 <CheckCircle2 size={14} />
                 {isFullCashout
@@ -349,7 +356,7 @@ export default function SportsBetCashoutWidget({
             </button>
 
             {error && (
-                <p className="flex items-center justify-center gap-1 text-center text-[11px] text-red-400">
+                <p className="flex items-center justify-center gap-1 text-center text-[11px] text-danger">
                     <AlertCircle size={10} /> {error}
                 </p>
             )}

@@ -2,14 +2,10 @@ import { ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/com
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
 import { IS_PUBLIC_KEY } from './public.decorator';
-import { PrismaService } from '../prisma.service';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
-    constructor(
-        private reflector: Reflector,
-        private prisma: PrismaService,
-    ) {
+    constructor(private reflector: Reflector) {
         super();
     }
 
@@ -22,23 +18,19 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
             return true;
         }
 
+        // Skip JWT validation when x-admin-token is present —
+        // SecurityTokenGuard will handle authentication for admin endpoints.
+        const request = context.switchToHttp().getRequest();
+        if (request.headers?.['x-admin-token']) {
+            return true;
+        }
+
         // Run the standard JWT validation first
         const canActivate = await (super.canActivate(context) as Promise<boolean>);
         if (!canActivate) return false;
 
-        // After JWT is valid, check if the user has been banned since login
-        const request = context.switchToHttp().getRequest();
-        const userId = request.user?.userId ?? request.user?.sub;
-
-        if (userId) {
-            const user = await this.prisma.user.findUnique({
-                where: { id: userId },
-                select: { isBanned: true },
-            });
-
-            if (user?.isBanned) {
-                throw new UnauthorizedException('Your account has been suspended. Please contact support.');
-            }
+        if (request.user?.isBanned) {
+            throw new UnauthorizedException('Your account has been suspended. Please contact support.');
         }
 
         return true;

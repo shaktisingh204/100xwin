@@ -45,6 +45,35 @@ export class SignupDto {
     @IsOptional()
     @IsString()
     promoCode?: string;
+
+    /** UTM + referrer tracking — captured client-side on landing */
+    @IsOptional()
+    @IsString()
+    utm_source?: string;
+
+    @IsOptional()
+    @IsString()
+    utm_medium?: string;
+
+    @IsOptional()
+    @IsString()
+    utm_campaign?: string;
+
+    @IsOptional()
+    @IsString()
+    utm_content?: string;
+
+    @IsOptional()
+    @IsString()
+    utm_term?: string;
+
+    @IsOptional()
+    @IsString()
+    referrerUrl?: string;
+
+    @IsOptional()
+    @IsString()
+    landingPage?: string;
 }
 
 export class LoginDto {
@@ -55,6 +84,16 @@ export class LoginDto {
     @IsNotEmpty()
     @IsString()
     password: string;
+}
+
+export class LoginOtpDto {
+    @IsNotEmpty()
+    @IsString()
+    identifier: string;
+
+    @IsNotEmpty()
+    @IsString()
+    code: string;
 }
 
 export class ForgotPasswordDto {
@@ -82,8 +121,8 @@ export class SendOtpDto {
     phoneNumber: string;
 
     @IsNotEmpty()
-    @IsIn(['REGISTER', 'FORGOT_PASSWORD'])
-    purpose: 'REGISTER' | 'FORGOT_PASSWORD';
+    @IsIn(['REGISTER', 'FORGOT_PASSWORD', 'BIND_MOBILE', 'LOGIN'])
+    purpose: 'REGISTER' | 'FORGOT_PASSWORD' | 'BIND_MOBILE' | 'LOGIN';
 }
 
 export class VerifyOtpDto {
@@ -96,8 +135,8 @@ export class VerifyOtpDto {
     code: string;
 
     @IsNotEmpty()
-    @IsIn(['REGISTER', 'FORGOT_PASSWORD'])
-    purpose: 'REGISTER' | 'FORGOT_PASSWORD';
+    @IsIn(['REGISTER', 'FORGOT_PASSWORD', 'BIND_MOBILE', 'LOGIN'])
+    purpose: 'REGISTER' | 'FORGOT_PASSWORD' | 'BIND_MOBILE' | 'LOGIN';
 }
 
 export class PhoneForgotPasswordDto {
@@ -121,3 +160,49 @@ export class PhoneResetPasswordDto {
     newPassword: string;
 }
 
+// ─── Email OTP DTOs ────────────────────────────────────────────────────────────
+
+export class SendEmailOtpDto {
+    @IsNotEmpty()
+    @IsEmail({}, { message: 'Invalid email address' })
+    email: string;
+
+    @IsNotEmpty()
+    @IsIn(['REGISTER', 'FORGOT_PASSWORD', 'BIND_EMAIL', 'LOGIN'])
+    purpose: 'REGISTER' | 'FORGOT_PASSWORD' | 'BIND_EMAIL' | 'LOGIN';
+}
+
+export class VerifyEmailOtpDto {
+    @IsNotEmpty()
+    @IsEmail({}, { message: 'Invalid email address' })
+    email: string;
+
+    @IsNotEmpty()
+    @IsString()
+    code: string;
+
+    @IsNotEmpty()
+    @IsIn(['REGISTER', 'FORGOT_PASSWORD', 'BIND_EMAIL', 'LOGIN'])
+    purpose: 'REGISTER' | 'FORGOT_PASSWORD' | 'BIND_EMAIL' | 'LOGIN';
+}
+
+export class EmailForgotPasswordDto {
+    @IsNotEmpty()
+    @IsEmail({}, { message: 'Invalid email address' })
+    email: string;
+}
+
+export class EmailResetPasswordDto {
+    @IsNotEmpty()
+    @IsEmail({}, { message: 'Invalid email address' })
+    email: string;
+
+    @IsNotEmpty()
+    @IsString()
+    code: string;
+
+    @IsNotEmpty()
+    @IsString()
+    @MinLength(6, { message: 'Password must be at least 6 characters' })
+    newPassword: string;
+}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID || "ae6aabd73c9a3ddfb2f49419c0fbb69a";
-const CF_API_TOKEN  = process.env.CF_IMAGES_TOKEN || "QOCM2u9NAgrdxVgaeCIQUYDnLKnuQoeKqjh5oMlU";
+const CF_ACCOUNT_ID = process.env.CF_ACCOUNT_ID;
+const CF_API_TOKEN  = process.env.CF_IMAGES_TOKEN;
 const CF_BASE_URL   = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/images/v1`;
 const CF_DELIVERY   = "https://imagedelivery.net/l7vrHxYm1V8kfxard9QBnQ";
 
@@ -13,6 +13,9 @@ export async function POST(req: NextRequest) {
 
     if (!file) {
       return NextResponse.json({ success: false, error: "No file provided" }, { status: 400 });
+    }
+    if (!CF_ACCOUNT_ID || !CF_API_TOKEN) {
+      return NextResponse.json({ success: false, error: "Cloudflare credentials not configured" }, { status: 500 });
     }
 
     // Sanitize filename

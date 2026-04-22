@@ -1,11 +1,29 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { ReferralService, ReferralReward } from '@/services/referral.service';
+import {
+    getReferralRewards,
+    createReferralReward,
+    toggleReferralReward,
+    deleteReferralReward,
+} from '@/actions/internal-referral';
 import {
     Gift, Plus, Trash2, ToggleLeft, ToggleRight,
-    Loader2, Check, AlertTriangle, DollarSign, Users, TrendingUp, Zap
+    Loader2, Check, AlertTriangle, TrendingUp, Zap
 } from 'lucide-react';
+
+// ── Local type (mirrors Prisma ReferralReward shape) ─────────────────────────
+interface ReferralRewardRow {
+    id: number;
+    name: string;
+    description?: string | null;
+    conditionType: string;
+    conditionValue: number;
+    rewardType: string;
+    rewardAmount: number;
+    isActive: boolean;
+    createdAt?: string | Date;
+}
 
 const CONDITION_LABELS: Record<string, { label: string; desc: string; color: string }> = {
     SIGNUP: { label: 'On Sign Up', desc: 'Awarded when referee registers', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
@@ -14,7 +32,9 @@ const CONDITION_LABELS: Record<string, { label: string; desc: string; color: str
     BET_VOLUME: { label: 'Bet Volume ≥ ₹X', desc: 'Awarded when referee bets above threshold', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
 };
 
-const DEFAULT_FORM: Omit<ReferralReward, 'id' | 'createdAt'> = {
+type FormState = Omit<ReferralRewardRow, 'id' | 'createdAt'>;
+
+const DEFAULT_FORM: FormState = {
     name: '',
     description: '',
     conditionType: 'SIGNUP',
@@ -25,11 +45,11 @@ const DEFAULT_FORM: Omit<ReferralReward, 'id' | 'createdAt'> = {
 };
 
 export default function ReferralRewardsPage() {
-    const [rules, setRules] = useState<ReferralReward[]>([]);
+    const [rules, setRules] = useState<ReferralRewardRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [showForm, setShowForm] = useState(false);
-    const [form, setForm] = useState(DEFAULT_FORM);
+    const [form, setForm] = useState<FormState>(DEFAULT_FORM);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
 
@@ -38,8 +58,8 @@ export default function ReferralRewardsPage() {
     const fetchRules = async () => {
         setLoading(true);
         try {
-            const data = await ReferralService.getAllRewards();
-            setRules(data);
+            const result = await getReferralRewards();
+            if (result.success) setRules(result.rewards as ReferralRewardRow[]);
         } catch (e) {
             console.error('Failed to fetch reward rules', e);
         } finally {
@@ -57,21 +77,31 @@ export default function ReferralRewardsPage() {
         if (form.rewardAmount <= 0) { flash('Reward amount must be > 0', true); return; }
         setSaving(true);
         try {
-            await ReferralService.createReward(form);
+            const result = await createReferralReward({
+                name: form.name,
+                description: form.description || undefined,
+                conditionType: form.conditionType as 'SIGNUP' | 'DEPOSIT_FIRST' | 'DEPOSIT_RECURRING' | 'BET_VOLUME',
+                conditionValue: form.conditionValue,
+                rewardType: form.rewardType as 'FIXED' | 'PERCENTAGE',
+                rewardAmount: form.rewardAmount,
+                isActive: form.isActive,
+            });
+            if (!result.success) { flash(result.error || 'Failed to create rule', true); return; }
             setForm(DEFAULT_FORM);
             setShowForm(false);
             flash('Reward rule created!');
             fetchRules();
         } catch (e: any) {
-            flash(e?.response?.data?.message || 'Failed to create rule', true);
+            flash(e?.message || 'Failed to create rule', true);
         } finally {
             setSaving(false);
         }
     };
 
-    const handleToggle = async (rule: ReferralReward) => {
+    const handleToggle = async (rule: ReferralRewardRow) => {
         try {
-            await ReferralService.toggleReward(rule.id!);
+            const result = await toggleReferralReward(rule.id, !rule.isActive);
+            if (!result.success) { flash('Failed to toggle rule', true); return; }
             flash(`Rule ${rule.isActive ? 'disabled' : 'enabled'}`);
             fetchRules();
         } catch {
@@ -79,10 +109,11 @@ export default function ReferralRewardsPage() {
         }
     };
 
-    const handleDelete = async (rule: ReferralReward) => {
+    const handleDelete = async (rule: ReferralRewardRow) => {
         if (!confirm(`Delete "${rule.name}"? This cannot be undone.`)) return;
         try {
-            await ReferralService.deleteReward(rule.id!);
+            const result = await deleteReferralReward(rule.id);
+            if (!result.success) { flash(result.error || 'Failed to delete rule', true); return; }
             flash('Rule deleted');
             fetchRules();
         } catch {

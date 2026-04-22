@@ -3,9 +3,20 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import {
     type LucideIcon,
     Trophy, XCircle, Clock, TrendingUp, ChevronDown, ChevronUp,
-    DollarSign, Loader2, AlertCircle, CheckCircle2, RotateCcw,
+    DollarSign, Loader2, AlertCircle, CheckCircle2, RotateCcw, Copy,
 } from 'lucide-react';
-import { betsApi, Bet, CashoutOffer, CashoutResult } from '@/services/bets';
+import { betsApi, Bet as BaseBet, CashoutOffer, CashoutResult } from '@/services/bets';
+
+type Bet = BaseBet & {
+    oddsInfo?: {
+        provider: 'SPORTRADAR' | 'DIAMOND' | string;
+        acceptedOdds: number;
+        submittedOdds: number | null;
+        profit: number | null;
+        marketType: string | null;
+        oddsAdjusted: boolean;
+    };
+};
 import { useWallet } from '@/context/WalletContext';
 import {
     getBetNetPnL,
@@ -19,14 +30,22 @@ import { isLineBasedFancyMarket } from '@/utils/sportsBetPricing';
 
 // ─── Status display config ─────────────────────────────────────────────────────
 const statusConfig: Record<string, { label: string; icon: LucideIcon; color: string; bg: string; border: string }> = {
-    WON: { label: 'Won', icon: Trophy, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
-    LOST: { label: 'Lost', icon: XCircle, color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' },
-    PENDING: { label: 'Pending', icon: Clock, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
-    VOID: { label: 'Void', icon: TrendingUp, color: 'text-white/40', bg: 'bg-white/5', border: 'border-white/10' },
-    CASHED_OUT: { label: 'Cashed Out', icon: DollarSign, color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+    WON: { label: 'Won', icon: Trophy, color: 'text-success-bright', bg: 'bg-success-alpha-10', border: 'border-success-primary/20' },
+    LOST: { label: 'Lost', icon: XCircle, color: 'text-danger', bg: 'bg-danger-alpha-10', border: 'border-danger/20' },
+    PENDING: { label: 'Accepted', icon: Clock, color: 'text-warning-bright', bg: 'bg-warning-alpha-08', border: 'border-amber-500/20' },
+    VOID: { label: 'Void', icon: TrendingUp, color: 'text-white/40', bg: 'bg-white/[0.04]', border: 'border-white/[0.06]' },
+    CASHED_OUT: { label: 'Cashed Out', icon: DollarSign, color: 'text-warning', bg: 'bg-warning-alpha-08', border: 'border-orange-500/20' },
 };
 
 type FilterStatus = 'ALL' | 'PENDING' | 'WON' | 'LOST' | 'VOID' | 'CASHED_OUT';
+
+const getDisplayMarketName = (bet: Bet) =>
+    bet.srMarketName || bet.marketName || bet.srMarketFullId || bet.marketId || '';
+
+const getDisplaySelectionName = (bet: Bet) =>
+    bet.srRunnerName || bet.selectionName || bet.selectedTeam || bet.srRunnerId || bet.selectionId || '';
+
+
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 type CashoutPhase =
@@ -158,9 +177,6 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
                     <AlertCircle size={12} className="text-white/20" />
                     <span className="text-[11px] font-medium text-white/30">Cash Out Suspended</span>
                 </div>
-                {offer?.reason && (
-                    <p className="mt-1 text-[10px] leading-relaxed text-white/20">{offer.reason}</p>
-                )}
             </div>
         );
     }
@@ -169,14 +185,14 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
         const isFull = !result?.remainingStake || result.remainingStake === 0;
         const isPartial = result?.status === 'PARTIAL_CASHED_OUT';
         return (
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                <CheckCircle2 size={14} className="text-emerald-400 flex-shrink-0" />
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-success-alpha-10 border border-success-primary/20">
+                <CheckCircle2 size={14} className="text-success-bright flex-shrink-0" />
                 <div className="text-xs">
-                    <p className="font-bold text-emerald-400">
+                    <p className="font-bold text-success-bright">
                         {isPartial ? 'Partial Cash Out Successful!' : 'Cashed Out!'}
                     </p>
                     {result?.cashoutValue && (
-                        <p className="text-emerald-400/60 text-[10px] mt-0.5">
+                        <p className="text-success-bright/60 text-[10px] mt-0.5">
                             {activeSymbol}{result.cashoutValue.toFixed(2)} added to wallet
                             {isFull ? '' : ` · ${activeSymbol}${result.remainingStake?.toFixed(2)} still active`}
                         </p>
@@ -196,7 +212,7 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
                         <button
                             onClick={handleFirstTap}
                             className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl
-                                       bg-amber-500/15 border border-amber-500/30 text-amber-400 text-[11px] font-bold
+                                       bg-warning-alpha-12 border border-amber-500/30 text-warning-bright text-[11px] font-bold
                                        hover:bg-amber-500/25 transition-all active:scale-[0.98]"
                         >
                             <DollarSign size={12} />
@@ -205,8 +221,8 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
                         <button
                             onClick={() => doExecute({ fraction: 1, fullRefund: true })}
                             className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl
-                                       bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[11px] font-bold
-                                       hover:bg-emerald-500/25 transition-all active:scale-[0.98]"
+                                       bg-success-alpha-16 border border-success-primary/30 text-success-bright text-[11px] font-bold
+                                       hover:bg-success-alpha-20 transition-all active:scale-[0.98]"
                         >
                             <RotateCcw size={12} />
                             Cancel Bet {activeSymbol}{offer?.fullRefundValue?.toFixed(2)}
@@ -225,8 +241,8 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
         return (
             <div className="rounded-xl border border-amber-500/40 bg-amber-500/[0.07] p-3 space-y-3">
                 <div className="flex items-center gap-2">
-                    <AlertCircle size={13} className="text-amber-400 flex-shrink-0" />
-                    <p className="text-xs font-bold text-amber-400">Odds Changed</p>
+                    <AlertCircle size={13} className="text-warning-bright flex-shrink-0" />
+                    <p className="text-xs font-bold text-warning-bright">Odds Changed</p>
                 </div>
                 <p className="text-[11px] text-white/50 leading-relaxed">
                     The market moved. New offer:{' '}
@@ -242,7 +258,7 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
                     </button>
                     <button
                         onClick={() => doExecute({ fraction, clientExpectedValue: priceChangedValue! })}
-                        className="flex-1 py-2 rounded-lg bg-amber-500 text-black text-[11px] font-bold
+                        className="flex-1 py-2 rounded-lg bg-amber-500 text-text-inverse text-[11px] font-bold
                                    hover:bg-amber-400 transition-all active:scale-[0.98]"
                     >
                         Accept {activeSymbol}{priceChangedValue?.toFixed(2)}
@@ -255,9 +271,9 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
     // ── Executing spinner ──────────────────────────────────────────────────────
     if (phase === 'EXECUTING') {
         return (
-            <div className="flex items-center justify-center gap-2 px-3 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
-                <Loader2 size={14} className="animate-spin text-amber-400" />
-                <span className="text-xs font-bold text-amber-400">Processing…</span>
+            <div className="flex items-center justify-center gap-2 px-3 py-3 rounded-xl bg-warning-alpha-08 border border-amber-500/20">
+                <Loader2 size={14} className="animate-spin text-warning-bright" />
+                <span className="text-xs font-bold text-warning-bright">Processing…</span>
             </div>
         );
     }
@@ -269,7 +285,7 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
                 <button
                     onClick={handleFirstTap}
                     className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl
-                               bg-amber-500/15 border border-amber-500/30 text-amber-400
+                               bg-warning-alpha-12 border border-amber-500/30 text-warning-bright
                                hover:bg-amber-500/25 hover:border-amber-500/50 transition-all
                                text-xs font-bold active:scale-[0.98]"
                 >
@@ -281,7 +297,7 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
                     <span>Original: {offer?.originalOdds}</span>
                 </div>
                 {error && (
-                    <p className="text-[11px] text-red-400 flex items-center gap-1">
+                    <p className="text-[11px] text-danger flex items-center gap-1">
                         <AlertCircle size={10} /> {error}
                     </p>
                 )}
@@ -293,7 +309,7 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
     // (phase === 'CONFIRMING')
     const isFullCashout = fraction >= 0.99;
     return (
-        <div className="rounded-xl bg-[#1c1f24] border border-amber-500/30 p-3 space-y-3">
+        <div className="rounded-xl bg-bg-modal border border-amber-500/30 p-3 space-y-3">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <p className="text-[11px] font-bold text-white">Confirm Cash Out</p>
@@ -326,7 +342,7 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
                                [&::-webkit-slider-thumb]:rounded-full
                                [&::-webkit-slider-thumb]:bg-amber-400
                                [&::-webkit-slider-thumb]:cursor-pointer
-                               bg-white/10"
+                               bg-white/[0.08]"
                     style={{
                         background: `linear-gradient(to right, #f59e0b ${Math.round(fraction * 100)}%, rgba(255,255,255,0.1) ${Math.round(fraction * 100)}%)`,
                     }}
@@ -338,7 +354,7 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
                             key={pct}
                             onClick={() => setFraction(pct / 100)}
                             className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all ${Math.round(fraction * 100) === pct
-                                ? 'bg-amber-500 text-black'
+                                ? 'bg-amber-500 text-text-inverse'
                                 : 'bg-white/[0.06] text-white/40 hover:text-white/70'
                                 }`}
                         >
@@ -352,11 +368,11 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
             <div className="grid grid-cols-2 gap-2 text-[10px]">
                 <div className="bg-white/[0.03] rounded-lg p-2 text-center">
                     <p className="text-white/30">You receive</p>
-                    <p className="font-bold text-amber-400 text-xs mt-0.5">{activeSymbol}{partialValue.toFixed(2)}</p>
+                    <p className="font-bold text-warning-bright text-xs mt-0.5">{activeSymbol}{partialValue.toFixed(2)}</p>
                 </div>
                 <div className="bg-white/[0.03] rounded-lg p-2 text-center">
                     <p className="text-white/30">{isFullCashout ? 'Bet closed' : 'Still active'}</p>
-                    <p className={`font-bold text-xs mt-0.5 ${isFullCashout ? 'text-white/30' : 'text-emerald-400'}`}>
+                    <p className={`font-bold text-xs mt-0.5 ${isFullCashout ? 'text-white/30' : 'text-success-bright'}`}>
                         {isFullCashout ? '—' : `${activeSymbol}${restStake.toFixed(2)} stake`}
                     </p>
                 </div>
@@ -371,7 +387,7 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
                         clientExpectedValue: partialValue,
                     });
                 }}
-                className="w-full py-2.5 rounded-xl bg-amber-500 text-black text-xs font-bold
+                className="w-full py-2.5 rounded-xl bg-amber-500 text-text-inverse text-xs font-bold
                            hover:bg-amber-400 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
             >
                 <CheckCircle2 size={14} />
@@ -381,7 +397,7 @@ function CashoutButton({ bet, onSuccess }: { bet: Bet; onSuccess: () => void }) 
             </button>
 
             {error && (
-                <p className="text-[11px] text-red-400 text-center flex items-center justify-center gap-1">
+                <p className="text-[11px] text-danger text-center flex items-center justify-center gap-1">
                     <AlertCircle size={10} /> {error}
                 </p>
             )}
@@ -439,21 +455,21 @@ export default function BetHistoryPage() {
             {/* Summary strip */}
             {!loading && bets.length > 0 && (
                 <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-[#1a1d21] border border-white/[0.06] rounded-xl p-3 text-center">
+                    <div className="bg-bg-modal border border-white/[0.06] rounded-xl p-3 text-center">
                         <p className="text-[10px] text-white/30 mb-1">Total Bets</p>
                         <p className="text-base font-bold text-white">{bets.length}</p>
                     </div>
-                    <div className="bg-[#1a1d21] border border-white/[0.06] rounded-xl p-3 text-center">
+                    <div className="bg-bg-modal border border-white/[0.06] rounded-xl p-3 text-center">
                         <p className="text-[10px] text-white/30 mb-1">Win Rate</p>
-                        <p className="text-base font-bold text-emerald-400">
+                        <p className="text-base font-bold text-success-bright">
                             {counts.WON + counts.LOST > 0
                                 ? Math.round((counts.WON / (counts.WON + counts.LOST)) * 100)
                                 : 0}%
                         </p>
                     </div>
-                    <div className="bg-[#1a1d21] border border-white/[0.06] rounded-xl p-3 text-center">
+                    <div className="bg-bg-modal border border-white/[0.06] rounded-xl p-3 text-center">
                         <p className="text-[10px] text-white/30 mb-1">P&amp;L</p>
-                        <p className={`text-base font-bold ${totalPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        <p className={`text-base font-bold ${totalPnl >= 0 ? 'text-success-bright' : 'text-danger'}`}>
                             {totalPnl >= 0 ? '+' : '-'}{activeSymbol}{Math.abs(totalPnl).toFixed(0)}
                         </p>
                     </div>
@@ -467,11 +483,11 @@ export default function BetHistoryPage() {
                         key={s}
                         onClick={() => setFilter(s)}
                         className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === s
-                            ? 'bg-[#3BC117] text-black'
-                            : 'bg-[#1a1d21] text-white/40 hover:text-white/60 border border-white/[0.06]'
+                            ? 'bg-brand-gold text-white'
+                            : 'bg-bg-modal text-white/40 hover:text-white/60 border border-white/[0.06]'
                             }`}
                     >
-                        {s === 'CASHED_OUT' ? 'Cashed Out' : s}
+                        {s === 'CASHED_OUT' ? 'Cashed Out' : s === 'PENDING' ? 'Accepted' : s}
                         {counts[s] > 0 && <span className="ml-1 opacity-60">{counts[s]}</span>}
                     </button>
                 ))}
@@ -481,12 +497,12 @@ export default function BetHistoryPage() {
             {loading ? (
                 <div className="space-y-2">
                     {[1, 2, 3].map(i => (
-                        <div key={i} className="h-20 bg-[#1a1d21] rounded-xl animate-pulse border border-white/[0.06]" />
+                        <div key={i} className="h-20 bg-bg-modal rounded-xl animate-pulse border border-white/[0.06]" />
                     ))}
                 </div>
             ) : filtered.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 text-center">
-                    <div className="w-14 h-14 rounded-2xl bg-[#1a1d21] border border-white/[0.06] flex items-center justify-center mb-3">
+                    <div className="w-14 h-14 rounded-2xl bg-bg-modal border border-white/[0.06] flex items-center justify-center mb-3">
                         <TrendingUp size={24} className="text-white/20" />
                     </div>
                     <p className="text-sm font-bold text-white/40">No bets found</p>
@@ -503,11 +519,13 @@ export default function BetHistoryPage() {
                         const pendingMaxReturn = getBetPendingMaxReturn(bet);
                         const betNetPnl = getBetNetPnL(bet);
                         const partialCashoutTaken = hasPartialCashout(bet);
+                        const marketName = getDisplayMarketName(bet);
+                        const selectionName = getDisplaySelectionName(bet);
 
                         return (
                             <div
                                 key={bet.id}
-                                className={`bg-[#1a1d21] border rounded-xl overflow-hidden transition-all ${cfg.border}`}
+                                className={`bg-bg-modal border rounded-xl overflow-hidden transition-all ${cfg.border}`}
                             >
                                 {/* Main row */}
                                 <button
@@ -521,14 +539,18 @@ export default function BetHistoryPage() {
                                     <div className="flex-1 min-w-0">
                                         <p className="text-xs font-bold text-white truncate">{bet.eventName}</p>
                                         <p className="text-[11px] text-white/40 truncate">
-                                            {bet.selectionName} {isLineBasedFancyMarket({
+                                            {selectionName}{' '}
+                                            {isLineBasedFancyMarket({
                                                 marketType: bet.gtype,
-                                                marketName: bet.marketName,
-                                                selectionName: bet.selectionName,
-                                            }) ? `· Runs: ${bet.odds}` : `@ ${bet.odds}`}
+                                                marketName,
+                                                selectionName,
+                                            }) ? `· Runs: ${bet.oddsInfo?.acceptedOdds ?? bet.odds}` : `@ ${(bet.oddsInfo?.acceptedOdds ?? bet.odds as number).toFixed(2)}`}
+                                            {bet.oddsInfo?.oddsAdjusted && (
+                                                <span className="ml-1 text-[9px] text-warning-bright/80">⚡ adjusted</span>
+                                            )}
                                         </p>
                                         {partialCashoutTaken && (
-                                            <p className="text-[10px] text-orange-300/75 truncate">
+                                            <p className="text-[10px] text-warning-bright/75 truncate">
                                                 Realized via cash out: {activeSymbol}{partialCashoutValue.toFixed(2)}
                                             </p>
                                         )}
@@ -537,12 +559,12 @@ export default function BetHistoryPage() {
                                     <div className="text-right flex-shrink-0 mr-1">
                                         <p className="text-[11px] text-white/40">{activeSymbol}{bet.stake}</p>
                                         {bet.status === 'PENDING' && (
-                                            <p className="text-[11px] text-amber-400">
+                                            <p className="text-[11px] text-warning-bright">
                                                 Max {activeSymbol}{pendingMaxReturn.toFixed(0)}
                                             </p>
                                         )}
                                         {bet.status !== 'PENDING' && betNetPnl !== null && (
-                                            <p className={`text-xs font-bold ${betNetPnl >= 0 ? cfg.color : 'text-red-400'}`}>
+                                            <p className={`text-xs font-bold ${betNetPnl >= 0 ? cfg.color : 'text-danger'}`}>
                                                 {betNetPnl >= 0 ? '+' : '-'}{activeSymbol}{Math.abs(betNetPnl).toFixed(0)}
                                             </p>
                                         )}
@@ -565,8 +587,28 @@ export default function BetHistoryPage() {
                                     <div className="px-3.5 pb-3.5 pt-3 border-t border-white/[0.04] space-y-3">
                                         <div className="grid grid-cols-2 gap-2 text-xs">
                                             <div>
+                                                <p className="text-white/30">Bet ID</p>
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <p className="text-white/70 font-mono select-all truncate max-w-[120px]">{bet.id}</p>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            navigator.clipboard.writeText(bet.id || '');
+                                                        }}
+                                                        className="text-white/30 hover:text-success-bright transition-colors p-1"
+                                                        title="Copy Bet ID"
+                                                    >
+                                                        <Copy size={12} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div>
                                                 <p className="text-white/30">Market</p>
-                                                <p className="text-white/70 font-medium">{bet.marketName || '—'}</p>
+                                                <p className="text-white/70 font-medium mt-0.5">{marketName}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-white/30">Selection</p>
+                                                <p className="text-white/70 font-medium mt-0.5">{selectionName}</p>
                                             </div>
                                             <div>
                                                 <p className="text-white/30">Status</p>
@@ -596,7 +638,7 @@ export default function BetHistoryPage() {
                                             {partialCashoutTaken && (
                                                 <div>
                                                     <p className="text-white/30">Realized Cash Out</p>
-                                                    <p className="text-orange-300 font-medium">{activeSymbol}{partialCashoutValue.toFixed(2)}</p>
+                                                    <p className="text-warning-bright font-medium">{activeSymbol}{partialCashoutValue.toFixed(2)}</p>
                                                 </div>
                                             )}
                                             <div>
@@ -608,10 +650,40 @@ export default function BetHistoryPage() {
                                                     })}
                                                 </p>
                                             </div>
-                                            <div>
-                                                <p className="text-white/30">Type</p>
-                                                <p className="text-white/70 font-medium capitalize">{bet.betType || 'back'}</p>
-                                            </div>
+                                            {bet.oddsInfo && (
+                                                <div>
+                                                    <p className="text-white/30">Accepted Odds</p>
+                                                    <p className="text-warning-bright font-mono font-bold">
+                                                        {(bet.oddsInfo.acceptedOdds).toFixed(2)}
+                                                    </p>
+                                                </div>
+                                            )}
+                                            {bet.oddsInfo?.oddsAdjusted && bet.oddsInfo.submittedOdds != null && (
+                                                <div>
+                                                    <p className="text-white/30">Submitted Odds</p>
+                                                    <p className="text-warning/80 font-mono text-xs">
+                                                        {bet.oddsInfo.submittedOdds.toFixed(2)}
+                                                        <span className="ml-1 text-[9px] text-warning/60">⚡ price moved</span>
+                                                    </p>
+                                                </div>
+                                            )}
+                                            {/* Stake → Profit → Return */}
+                                            {bet.oddsInfo && (
+                                                <div className="col-span-2">
+                                                    <p className="text-white/30 mb-1">Stake → Profit → Total Return</p>
+                                                    <p className="font-mono text-xs">
+                                                        <span className="text-white/70">{bet.stake}</span>
+                                                        <span className="text-white/20 mx-1.5">→</span>
+                                                        <span className="text-success-bright">
+                                                            +{((bet.oddsInfo.acceptedOdds - 1) * bet.stake).toFixed(2)}
+                                                        </span>
+                                                        <span className="text-white/20 mx-1.5">→</span>
+                                                        <span className="text-brand-gold">
+                                                            {(bet.oddsInfo.acceptedOdds * bet.stake).toFixed(2)}
+                                                        </span>
+                                                    </p>
+                                                </div>
+                                            )}
                                             {bet.status === 'CASHED_OUT' && bet.cashedOutAt && (
                                                 <div className="col-span-2">
                                                     <p className="text-white/30">Cashed Out At</p>
@@ -634,12 +706,13 @@ export default function BetHistoryPage() {
                                                     </p>
                                                 </div>
                                             )}
+                                            {bet.settledReason && (
+                                                <div className="col-span-2">
+                                                    <p className="text-white/30">Settlement Note</p>
+                                                    <p className="text-white/70 leading-relaxed">{bet.settledReason}</p>
+                                                </div>
+                                            )}
                                         </div>
-                                        {bet.settledReason && (
-                                            <div className={`rounded-lg px-3 py-2 text-[10px] leading-relaxed ${cfg.bg} ${cfg.color}`}>
-                                                {bet.settledReason}
-                                            </div>
-                                        )}
                                     </div>
                                 )}
                             </div>

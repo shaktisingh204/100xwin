@@ -3,8 +3,9 @@
 import React from 'react';
 import {
     UserCheck, Ban, Wallet, CreditCard, Calendar, Globe, Coins,
-    TrendingUp, Gift, Shield, Edit2, BadgePercent
+    TrendingUp, Gift, Shield, Edit2, BadgePercent, AlertTriangle
 } from 'lucide-react';
+import { fmtUSD } from '@/utils/transactionCurrency';
 
 interface UserProfileHeaderProps {
     user: any;
@@ -64,6 +65,11 @@ export default function UserProfileHeader({ user, onEditClick, onBanToggle, banL
     const currency = user.currency || 'INR';
     const fmt = (n: number) => fmtCurrency(n, currency);
     const roleClass = ROLE_COLORS[user.role] || ROLE_COLORS.USER;
+    const totalFiatBonus =
+        Number(user.fiatBonus || 0) +
+        Number(user.casinoBonus || 0) +
+        Number(user.sportsBonus || 0);
+    const cryptoBonus = Number(user.cryptoBonus || 0);
 
     const hasWageringBonus = (user.wageringRequired ?? 0) > 0;
     const hasDepositWagering = (user.depositWageringRequired ?? 0) > 0;
@@ -109,8 +115,31 @@ export default function UserProfileHeader({ user, onEditClick, onBanToggle, banL
                             </span>
                         )}
                     </div>
-                    <p className="break-all text-sm text-slate-400 sm:truncate">{user.email} {user.phoneNumber && `• ${user.phoneNumber}`}</p>
-                    <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-slate-500">
+                    <p className="break-all text-sm text-slate-400 sm:truncate">
+                        {user.email || 'No email'} {user.phoneNumber && `• ${user.phoneNumber}`}
+                    </p>
+                    {(user.firstName || user.lastName || user.city) && (
+                        <p className="break-all text-sm text-slate-300 sm:truncate mt-0.5">
+                            {user.firstName || ''} {user.lastName || ''}
+                            {user.city && ` • ${user.city}`}
+                        </p>
+                    )}
+                    
+                    {user.signupIp && (
+                        <div className="flex flex-wrap gap-2 mt-1.5 mb-1.5">
+                            <span className="text-xs px-2 py-0.5 rounded border bg-slate-700/30 text-slate-300 border-slate-600/50 flex flex-wrap gap-1 items-center">
+                                IP: <span className="font-mono">{user.signupIp}</span>
+                            </span>
+                            {user.sharedIpUsers && user.sharedIpUsers.length > 0 && (
+                                <span className="text-xs px-2 py-0.5 rounded border bg-amber-500/10 text-amber-400 border-amber-500/20 flex flex-wrap gap-1 items-center">
+                                    <AlertTriangle size={12} className="text-amber-500 mr-0.5"/>
+                                    Multiple accounts on this IP: {user.sharedIpUsers.map((u: any) => u.username).join(', ')}
+                                </span>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="flex flex-wrap gap-3 mt-1 text-xs text-slate-500">
                         {user.country && (
                             <span className="flex items-center gap-1"><Globe size={11} />{user.country}</span>
                         )}
@@ -149,13 +178,20 @@ export default function UserProfileHeader({ user, onEditClick, onBanToggle, banL
             </div>
 
             {/* Stats grid */}
-            <div className="grid grid-cols-1 gap-4 border-t border-slate-700/60 px-4 py-4 sm:grid-cols-2 sm:gap-5 sm:px-6 lg:grid-cols-6">
+            <div className="grid grid-cols-2 gap-4 border-t border-slate-700/60 px-4 py-4 sm:grid-cols-3 sm:gap-5 sm:px-6 lg:grid-cols-4 xl:grid-cols-6">
                 <StatCard icon={Wallet} label="Fiat Balance" value={fmt(user.balance ?? 0)} color="text-white" />
-                <StatCard icon={Coins} label="Crypto Balance" value={fmt(user.cryptoBalance ?? 0)} color="text-amber-300" />
-                <StatCard icon={Shield} label="Exposure" value={fmt(user.exposure ?? 0)} color="text-red-400" />
+                <StatCard icon={Coins} label="Crypto Balance" value={fmtUSD(user.cryptoBalance ?? 0)} color="text-amber-300" />
+                <StatCard icon={Shield} label="Fiat Exposure" value={fmt(user.fiatExposure ?? user.exposure ?? 0)} color="text-red-400" />
+                <StatCard icon={Shield} label="Crypto Exposure" value={fmtUSD(user.cryptoExposure ?? 0)} color="text-rose-400" />
                 <StatCard icon={Gift} label="Fiat Bonus" value={fmt(user.fiatBonus ?? 0)} color="text-emerald-400" />
-                <StatCard icon={TrendingUp} label="Total Deposited" value={fmt(user.totalDeposited ?? 0)} color="text-indigo-400" />
-                <StatCard icon={CreditCard} label="Total Wagered" value={fmt(user.totalWagered ?? 0)} color="text-purple-400" />
+                <StatCard icon={Gift} label="Casino Bonus" value={fmt(user.casinoBonus ?? 0)} color="text-fuchsia-400" />
+                <StatCard icon={Gift} label="Sports Bonus" value={fmt(user.sportsBonus ?? 0)} color="text-sky-400" />
+                <StatCard icon={Gift} label="Crypto Bonus" value={fmtUSD(cryptoBonus)} color="text-violet-400" />
+                <StatCard icon={Gift} label="Total Fiat Bonus" value={fmt(totalFiatBonus)} color="text-violet-300" />
+                <StatCard icon={TrendingUp} label="Fiat Deposited" value={fmt(user.totalFiatDeposited ?? user.totalDeposited ?? 0)} color="text-emerald-400" />
+                <StatCard icon={TrendingUp} label="Crypto Deposited" value={fmtUSD(user.totalCryptoDeposited ?? 0)} color="text-emerald-300" />
+                <StatCard icon={TrendingUp} label="Fiat Withdrawn" value={fmt(user.totalFiatWithdrawn ?? user.totalWithdrawn ?? 0)} color="text-red-400" />
+                <StatCard icon={TrendingUp} label="Crypto Withdrawn" value={fmtUSD(user.totalCryptoWithdrawn ?? 0)} color="text-rose-400" />
             </div>
 
             {/* Wagering bars */}

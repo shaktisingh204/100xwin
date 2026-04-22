@@ -1,11 +1,11 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { PrismaService } from '../prisma.service';
 import { Bet, BetDocument } from '../bets/schemas/bet.schema';
 
 @Injectable()
-export class WageringBackfillService implements OnModuleInit {
+export class WageringBackfillService {
     private readonly logger = new Logger(WageringBackfillService.name);
     private isRunning = false;
 
@@ -13,27 +13,6 @@ export class WageringBackfillService implements OnModuleInit {
         private readonly prisma: PrismaService,
         @InjectModel(Bet.name) private readonly betModel: Model<BetDocument>,
     ) { }
-
-    /**
-     * Runs automatically on every backend restart.
-     * Re-computes totalWagered for every user from scratch by summing:
-     *   1. Sports bets (MongoDB Bet collection, all statuses except VOID/CASHOUT)
-     *   2. Casino BET transactions (PostgreSQL casinoTransaction table, type = 'BET')
-     */
-    async onModuleInit() {
-        if (this.isRunning) return;
-        this.isRunning = true;
-        this.logger.log('[WageringBackfill] Running on startup...');
-        const startTime = Date.now();
-        try {
-            await this.runBackfill();
-        } catch (err) {
-            this.logger.error(`[WageringBackfill] Startup backfill failed: ${err.message}`, err.stack);
-        } finally {
-            this.isRunning = false;
-            this.logger.log(`[WageringBackfill] Done in ${Date.now() - startTime}ms`);
-        }
-    }
 
     /**
      * Can also be triggered manually via the admin API endpoint.

@@ -1,56 +1,48 @@
-"use client";
+import { getSliderConfig } from "@/lib/siteConfig";
+import HomeShell from "./HomeShell";
 
-import { useState, Suspense, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
-import Header from "@/components/layout/Header";
-import Footer from "@/components/layout/Footer";
-import PremiumHomeContent from "@/components/home/PremiumHomeContent";
-import LeftSidebar from "@/components/layout/LeftSidebar";
-import RightSidebar from "@/components/layout/RightSidebar"; // Keep for mobile/betslip usage if needed
+// ─── Homepage ─────────────────────────────────────────────────────────────────
+//
+// This is an async server component — it fetches the hero slider config
+// from the backend during SSR so the rendered HTML can include the
+// first slide directly. Without this, the page renders a loading
+// spinner that gets replaced by the real slider after hydration + a
+// separate client-side fetch, which accounted for most of the desktop
+// FCP → LCP gap (2.9 s in CrUX data).
+//
+// The fetch is wrapped in React.cache() + Next.js Data Cache, so
+// multiple renders within the 60 s revalidate window hit memory, not
+// origin.
+//
+// All interactivity lives in HomeShell (a client component that
+// receives initialSliderConfig as a prop and forwards it to
+// DynamicHeroSlider). This split is what lets the SSR of the client
+// subtree emit real HTML for the hero instead of a spinner.
 
-function HomeContent() {
-  const searchParams = useSearchParams();
-  const urlSportId = searchParams.get('sport_id');
-  const [selectedSportId, setSelectedSportId] = useState<string | null>(urlSportId || null);
-  const [activeTab, setActiveTab] = useState<'live' | 'line'>('live');
+type HomePageSearchParams =
+  | Promise<{ sport_id?: string | string[] }>
+  | { sport_id?: string | string[] }
+  | undefined;
 
-  useEffect(() => {
-    if (urlSportId !== selectedSportId) {
-      setSelectedSportId(urlSportId || null);
-    }
-  }, [urlSportId]);
+export default async function Home({
+  searchParams,
+}: {
+  searchParams?: HomePageSearchParams;
+}) {
+  const [sliderConfig, resolvedSearchParams] = await Promise.all([
+    getSliderConfig("HOME"),
+    Promise.resolve(searchParams),
+  ]);
+
+  const rawSportId = (await resolvedSearchParams)?.sport_id;
+  const initialSportId = Array.isArray(rawSportId)
+    ? (rawSportId[0] ?? null)
+    : (rawSportId ?? null);
 
   return (
-    <div className="h-screen overflow-hidden bg-bg-base font-[family-name:var(--font-poppins)] flex flex-col">
-      <Header />
-      <div className="flex flex-1 overflow-hidden pt-[56px] md:pt-[60px] pb-[80px] md:pb-0 max-w-[1920px] mx-auto w-full">
-        {/* Left Sidebar - Static */}
-        <LeftSidebar
-          selectedSportId={selectedSportId}
-          onSelectSport={setSelectedSportId}
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-        />
-
-        {/* Main Content Area - Scrollable */}
-        <main className="flex-1 min-w-0 bg-bg-base overflow-y-auto overflow-x-hidden xl:max-w-[75%] mx-auto">
-          <PremiumHomeContent selectedSportId={selectedSportId} />
-          <Footer />
-        </main>
-
-        {/* Global Chat / Right Sidebar - Static on desktop */}
-        <div className="hidden xl:block">
-          <RightSidebar />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function Home() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-bg-base flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-gold"></div></div>}>
-      <HomeContent />
-    </Suspense>
+    <HomeShell
+      initialSliderConfig={sliderConfig}
+      initialSportId={initialSportId}
+    />
   );
 }

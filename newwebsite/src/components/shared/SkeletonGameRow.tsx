@@ -1,39 +1,30 @@
 'use client';
 
-import SkeletonGameCard from './SkeletonGameCard';
-
 interface SkeletonGameRowProps {
-    /** How many cards to show — default 10 */
     count?: number;
-    /** Optional section header label */
     label?: string;
 }
 
-/**
- * SkeletonGameRow — a full horizontal-scroll row of shimmer game cards.
- * Matches the exact layout produced by HomeGameList.
- */
-export default function SkeletonGameRow({ count = 10, label }: SkeletonGameRowProps) {
+export default function SkeletonGameRow({ count = 8 }: SkeletonGameRowProps) {
     return (
         <div>
-            {/* Optional header skeleton */}
-            {label !== undefined && (
-                <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                        {/* Icon placeholder */}
-                        <div className="w-5 h-5 rounded skeleton-block" />
-                        {/* Title placeholder */}
-                        <div className="w-32 h-5 rounded skeleton-block" />
-                    </div>
-                    {/* "All" button placeholder */}
-                    <div className="w-16 h-7 rounded-lg skeleton-block" />
+            {/* Header skeleton — matches px-3 of real header */}
+            <div className="flex items-center justify-between mb-3 px-3">
+                <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded skeleton-block" />
+                    <div className="w-28 h-4 rounded skeleton-block" />
+                    <div className="w-8 h-4 rounded-md skeleton-block" />
                 </div>
-            )}
+                <div className="w-14 h-8 rounded-xl skeleton-block" />
+            </div>
 
-            {/* Horizontal card row */}
-            <div className="flex gap-2.5 overflow-x-hidden pb-2">
+            {/* Cards row — matches pl-3 + same sizing as real GameCard row */}
+            <div className="flex gap-1.5 overflow-x-hidden pb-2 pl-3">
                 {Array.from({ length: count }).map((_, i) => (
-                    <SkeletonGameCard key={i} />
+                    <div
+                        key={i}
+                        className="flex-shrink-0 w-[calc((100vw-40px)/3.1)] md:w-[155px] aspect-[3/4] rounded-[10px] skeleton-block"
+                    />
                 ))}
             </div>
         </div>

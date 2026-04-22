@@ -11,7 +11,6 @@ import {
     Copy,
     Loader2,
     CheckCircle2,
-    Upload,
     MessageCircle,
     Send,
     ShieldCheck,
@@ -24,6 +23,9 @@ import {
 import toast from 'react-hot-toast';
 
 interface ManualConfig {
+    accountId: string;
+    accountTag: string;
+    accountCount: number;
     upiId: string;
     qrImageUrl: string;
     whatsappNumber: string;
@@ -53,8 +55,6 @@ export default function ManualDepositScreen({ isOpen, onClose, onBackToGateway, 
 
     const [amount, setAmount] = useState('');
     const [utr, setUtr] = useState('');
-    const [screenshot, setScreenshot] = useState<File | null>(null);
-    const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [success, setSuccess] = useState(false);
     const [upiCopied, setUpiCopied] = useState(false);
@@ -89,8 +89,6 @@ export default function ManualDepositScreen({ isOpen, onClose, onBackToGateway, 
         if (!isOpen) {
             setAmount('');
             setUtr('');
-            setScreenshot(null);
-            setScreenshotPreview(null);
             setSuccess(false);
             setError('');
             setUpiCopied(false);
@@ -102,18 +100,6 @@ export default function ManualDepositScreen({ isOpen, onClose, onBackToGateway, 
     }, [isOpen]);
 
     if (!isOpen) return null;
-
-    const handleScreenshot = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0] || null;
-        setScreenshot(file);
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = ev => setScreenshotPreview(ev.target?.result as string);
-            reader.readAsDataURL(file);
-        } else {
-            setScreenshotPreview(null);
-        }
-    };
 
     const handleSaveQr = async () => {
         if (!config) return;
@@ -173,22 +159,20 @@ export default function ManualDepositScreen({ isOpen, onClose, onBackToGateway, 
         if (!utr.trim()) { setError('Please enter your UTR / Transaction ID.'); return; }
         setSubmitting(true);
         try {
-            let screenshotUrl: string | undefined;
-            if (screenshot) {
-                const fd = new FormData();
-                fd.append('file', screenshot);
-                const up = await api.post('/upload/screenshot', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-                screenshotUrl = up.data?.url;
-            }
             await api.post('/manual-deposit/submit', {
                 amount: numAmt,
                 utr: utr.trim().toUpperCase(),
-                screenshotUrl,
+                accountId: config?.accountId || undefined,
+                upiId: config?.upiId || undefined,
+                accountTag: config?.accountTag || undefined,
                 bonusCode: bonusCode || undefined,
             });
             if (bonusCode) {
                 api.delete('/bonus/pending').catch(() => {});
             }
+            // Pre-refresh retry state so DepositModal knows the gateway flow is unlocked
+            // on the NEXT deposit attempt (backend auto-cancelled stale PENDING gateway txns)
+            api.get('/manual-deposit/retry-state').catch(() => {});
             setSuccess(true);
             toast.success('Payment submitted! Approval usually within 5–15 minutes.');
         } catch (error: unknown) {
@@ -221,8 +205,8 @@ export default function ManualDepositScreen({ isOpen, onClose, onBackToGateway, 
             {/* Sheet */}
             <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 pointer-events-none">
                 <div
-                    className="pointer-events-auto w-full sm:max-w-lg flex flex-col overflow-hidden shadow-2xl max-h-[95dvh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-2xl"
-                    style={{ background: 'linear-gradient(160deg, #0d1b2a 0%, #0f1923 60%, #12131a 100%)' }}
+                    className="pointer-events-auto w-full sm:max-w-lg flex flex-col overflow-hidden shadow-xl max-h-[95dvh] sm:max-h-[88vh] rounded-t-3xl sm:rounded-2xl"
+                    style={{ background: 'linear-gradient(160deg, #0C0D12 0%, #0F1016 60%, #12141C 100%)' }}
                 >
                     {/* ── HEADER ── */}
                     <div className="relative flex items-center justify-between px-5 pt-5 pb-4 shrink-0">
@@ -255,7 +239,7 @@ export default function ManualDepositScreen({ isOpen, onClose, onBackToGateway, 
                                 style={{ background: 'rgba(249,115,22,0.12)', borderColor: 'rgba(249,115,22,0.35)', color: '#fb923c' }}>
                                 Manual UPI
                             </span>
-                            <button onClick={onClose} className="p-2 rounded-xl text-gray-500 hover:text-white hover:bg-white/8 transition-all">
+                            <button onClick={onClose} className="p-2 rounded-xl text-gray-500 hover:text-white hover:bg-white/[0.06] transition-all">
                                 <X className="w-4 h-4" />
                             </button>
                         </div>
@@ -269,7 +253,7 @@ export default function ManualDepositScreen({ isOpen, onClose, onBackToGateway, 
                                 <div className="relative">
                                     <div className="w-20 h-20 rounded-full flex items-center justify-center"
                                         style={{ background: 'radial-gradient(circle,rgba(16,185,129,0.25) 0%,transparent 70%)' }}>
-                                        <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+                                        <CheckCircle2 className="w-10 h-10 text-success-bright" />
                                     </div>
                                     <div className="absolute inset-0 rounded-full animate-ping opacity-20"
                                         style={{ background: 'rgba(16,185,129,0.4)' }} />
@@ -304,8 +288,25 @@ export default function ManualDepositScreen({ isOpen, onClose, onBackToGateway, 
                                 </div>
 
                                 <button onClick={onClose}
-                                    className="w-full py-3 rounded-xl text-sm font-semibold text-gray-400 hover:text-white border border-white/8 hover:border-white/20 transition-all">
+                                    className="w-full py-3 rounded-xl text-sm font-semibold text-gray-400 hover:text-white border border-white/[0.05] hover:border-white/[0.12] transition-all">
                                     Close
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        setSuccess(false);
+                                        setAmount('');
+                                        setUtr('');
+                                        onBackToGateway();
+                                    }}
+                                    className="w-full py-3 rounded-xl text-sm font-semibold transition-all border"
+                                    style={{
+                                        background: 'rgba(245,196,81,0.08)',
+                                        borderColor: 'rgba(245,196,81,0.25)',
+                                        color: '#f5c451',
+                                    }}
+                                >
+                                    ⚡ Make Another Deposit
                                 </button>
                             </div>
                         ) : (
@@ -317,7 +318,7 @@ export default function ManualDepositScreen({ isOpen, onClose, onBackToGateway, 
                                     style={{ background: 'linear-gradient(135deg,rgba(249,115,22,0.06) 0%,rgba(255,255,255,0.02) 100%)', borderColor: 'rgba(249,115,22,0.18)' }}>
                                     {configLoading ? (
                                         <div className="flex items-center justify-center h-40">
-                                            <Loader2 className="w-6 h-6 text-orange-400/50 animate-spin" />
+                                            <Loader2 className="w-6 h-6 text-warning/50 animate-spin" />
                                         </div>
                                     ) : config?.upiId ? (
                                         <div className="flex flex-col sm:flex-row items-center gap-4 p-4">
@@ -334,25 +335,31 @@ export default function ManualDepositScreen({ isOpen, onClose, onBackToGateway, 
                                                             style={{ width: 120, height: 120 }}
                                                         />
                                                     ) : (
-                                                        <QRCode value={config.upiId} size={120} bgColor="#FFFFFF" fgColor="#0d1b2a" />
+                                                        <QRCode value={config.upiId} size={120} bgColor="#FFFFFF" fgColor="#0C0D12" />
                                                     )}
                                                 </div>
                                                 <p className="text-[9px] text-gray-500">Scan with any UPI app</p>
                                                 <button
                                                     onClick={handleSaveQr}
-                                                    className="flex items-center gap-1 text-[10px] font-semibold text-orange-400 hover:text-orange-300 transition-colors px-2 py-1 rounded-lg hover:bg-orange-500/10"
+                                                    className="flex items-center gap-1 text-[10px] font-semibold text-warning hover:text-warning-bright transition-colors px-2 py-1 rounded-lg hover:bg-warning-alpha-08"
                                                 >
                                                     <Download className="w-3 h-3" /> Save QR
                                                 </button>
                                             </div>
 
                                             {/* Divider */}
-                                            <div className="hidden sm:block w-px self-stretch bg-white/8" />
-                                            <div className="sm:hidden w-full h-px bg-white/8" />
+                                            <div className="hidden sm:block w-px self-stretch bg-white/[0.06]" />
+                                            <div className="sm:hidden w-full h-px bg-white/[0.06]" />
 
                                             {/* UPI details */}
                                             <div className="flex-1 w-full flex flex-col gap-3">
                                                 <div>
+                                                    {config.accountTag && (
+                                                        <div className="mb-2 inline-flex max-w-full items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold"
+                                                            style={{ background: 'rgba(249,115,22,0.12)', borderColor: 'rgba(249,115,22,0.35)', color: '#fb923c' }}>
+                                                            <span className="truncate">{config.accountTag}</span>
+                                                        </div>
+                                                    )}
                                                     <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Pay to UPI ID</p>
                                                     <div className="flex items-center gap-2 p-2.5 rounded-xl"
                                                         style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
@@ -361,10 +368,15 @@ export default function ManualDepositScreen({ isOpen, onClose, onBackToGateway, 
                                                             className="shrink-0 p-1.5 rounded-lg transition-all"
                                                             style={{ background: upiCopied ? 'rgba(16,185,129,0.15)' : 'rgba(249,115,22,0.15)' }}>
                                                             {upiCopied
-                                                                ? <Check className="w-3.5 h-3.5 text-emerald-400" />
-                                                                : <Copy className="w-3.5 h-3.5 text-orange-400" />}
+                                                                ? <Check className="w-3.5 h-3.5 text-success-bright" />
+                                                                : <Copy className="w-3.5 h-3.5 text-warning" />}
                                                         </button>
                                                     </div>
+                                                    {config.accountCount > 1 && (
+                                                        <p className="mt-2 text-[10px] text-gray-500">
+                                                            Randomly selected from {config.accountCount} configured manual UPI accounts.
+                                                        </p>
+                                                    )}
                                                 </div>
 
                                                 {/* Steps */}
@@ -449,36 +461,6 @@ export default function ManualDepositScreen({ isOpen, onClose, onBackToGateway, 
                                     <p className="text-[9px] text-gray-600 mt-1">Find this in your UPI app under payment history</p>
                                 </div>
 
-                                {/* ── Screenshot upload ── */}
-                                <div>
-                                    <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">
-                                        Payment Screenshot <span className="text-gray-600 font-normal normal-case">(optional but speeds up approval)</span>
-                                    </label>
-                                    <label className="relative flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border border-dashed cursor-pointer transition-all group"
-                                        style={{ background: 'rgba(255,255,255,0.02)', borderColor: screenshotPreview ? 'rgba(249,115,22,0.4)' : 'rgba(255,255,255,0.1)' }}>
-                                        <input type="file" accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleScreenshot} />
-                                        {screenshotPreview ? (
-                                            <div className="relative">
-                                                <img src={screenshotPreview} alt="Screenshot" className="max-h-28 rounded-xl object-contain" />
-                                                <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
-                                                    <Check className="w-3 h-3 text-white" />
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div className="w-10 h-10 rounded-xl flex items-center justify-center transition-colors group-hover:bg-orange-500/20"
-                                                    style={{ background: 'rgba(249,115,22,0.1)' }}>
-                                                    <Upload className="w-5 h-5 text-orange-400" />
-                                                </div>
-                                                <p className="text-xs text-gray-500 group-hover:text-gray-300 transition-colors text-center">
-                                                    Tap to upload payment screenshot
-                                                </p>
-                                                <p className="text-[9px] text-gray-700">JPG, PNG, WebP — max 8 MB</p>
-                                            </>
-                                        )}
-                                    </label>
-                                </div>
-
                                 {/* Error */}
                                 {error && (
                                     <div className="flex items-start gap-2.5 p-3 rounded-xl text-xs border"
@@ -491,8 +473,8 @@ export default function ManualDepositScreen({ isOpen, onClose, onBackToGateway, 
                                 {/* Security badge */}
                                 <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
                                     style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.15)' }}>
-                                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                                    <p className="text-[10px] text-emerald-400/80">SSL encrypted · Admin-verified · Credited within 15 min</p>
+                                    <ShieldCheck className="w-3.5 h-3.5 text-success-bright shrink-0" />
+                                    <p className="text-[10px] text-success-bright/80">SSL encrypted · Admin-verified · Credited within 15 min</p>
                                 </div>
 
                                 {/* ── Submit ── */}

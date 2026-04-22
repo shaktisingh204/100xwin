@@ -1,9 +1,57 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { sportsService, Sport, Competition } from '../../../services/sports.service';
-import { Search, ChevronDown, ChevronRight, Eye, EyeOff, Trophy, Medal } from 'lucide-react';
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+    getSports, getAllCompetitions,
+    toggleSportVisibility, toggleCompetitionEvents,
+} from '@/actions/sports';
+import {
+    Search, ChevronDown, ChevronRight,
+    Eye, EyeOff, Trophy, Medal, Loader2, RefreshCcw,
+    ToggleLeft, ToggleRight, Layers, LayoutTemplate
+} from 'lucide-react';
 import Link from 'next/link';
+
+// ── Sportradar sport emoji map ──────────────────────────────────────────────
+const SPORT_EMOJI: Record<string, string> = {
+    'sr:sport:21':  '🏏', // Cricket
+    'sr:sport:1':   '⚽', // Soccer
+    'sr:sport:5':   '🎾', // Tennis
+    'sr:sport:2':   '🏀', // Basketball
+    'sr:sport:12':  '🏉', // Rugby
+    'sr:sport:4':   '🏒', // Ice Hockey
+    'sr:sport:3':   '⚾', // Baseball
+    'sr:sport:16':  '🏈', // American Football
+    'sr:sport:138': '🤼', // Kabaddi
+    'sr:sport:31':  '🏸', // Badminton
+    'sr:sport:20':  '🏓', // Table Tennis
+    'sr:sport:23':  '🏐', // Volleyball
+    'sr:sport:29':  '⚽', // Futsal
+    'sr:sport:19':  '🎱', // Snooker
+    'sr:sport:22':  '🎯', // Darts
+    'sr:sport:117': '🥊', // MMA
+};
+
+type Sport = {
+    _id: string;
+    sportId: string;
+    name: string;
+    isActive: boolean;
+    isTab: boolean;
+    isDefault: boolean;
+    sortOrder: number;
+};
+
+type Competition = {
+    _id: string;
+    competitionId: string;
+    competitionName: string;
+    sportId: string;
+    eventCount: number;
+    liveCount: number;
+};
+
+type Toast = { msg: string; type: 'success' | 'error' };
 
 export default function SportsbookPage() {
     const [sports, setSports] = useState<Sport[]>([]);
@@ -11,57 +59,128 @@ export default function SportsbookPage() {
     const [loading, setLoading] = useState(true);
     const [expandedSport, setExpandedSport] = useState<string | null>(null);
     const [search, setSearch] = useState('');
+    const [toggling, setToggling] = useState<string | null>(null);
+    const [toast, setToast] = useState<Toast | null>(null);
 
-    const fetchData = async () => {
+    const showToast = (msg: string, type: 'success' | 'error') => {
+        setToast({ msg, type });
+        setTimeout(() => setToast(null), 3000);
+    };
+
+    const fetchData = useCallback(async () => {
+        setLoading(true);
         try {
-            const [sportsData, competitionsData] = await Promise.all([
-                sportsService.getSports(),
-                sportsService.getCompetitions()
+            const [sportsRes, compsRes] = await Promise.all([
+                getSports(),
+                getAllCompetitions(),
             ]);
-            setSports(sportsData);
-            setCompetitions(competitionsData);
+            if (sportsRes.success) setSports(sportsRes.data as Sport[]);
+            if (compsRes.success) setCompetitions(compsRes.data as Competition[]);
         } catch (error) {
-            console.error("Failed to fetch sports data", error);
+            console.error('Failed to fetch sports data', error);
+            showToast('Failed to load data', 'error');
         } finally {
             setLoading(false);
         }
-    };
-
-    useEffect(() => {
-        fetchData();
     }, []);
 
-    const handleToggleSport = async (id: string, currentStatus: boolean, e: React.MouseEvent) => {
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    const handleToggleSport = async (sportId: string, current: boolean, e: React.MouseEvent) => {
         e.stopPropagation();
+        setToggling(`sport_${sportId}`);
         try {
-            await sportsService.toggleSport(id, !currentStatus);
-            setSports(sports.map(s => s.sport_id === id ? { ...s, isVisible: !currentStatus } : s));
-        } catch (error) {
-            console.error("Failed to toggle sport", error);
+            const res = await toggleSportVisibility(sportId, !current);
+            if (res.success) {
+                setSports(prev => prev.map(s =>
+                    s.sportId === sportId ? { ...s, isActive: !current } : s
+                ));
+                showToast(!current ? 'Sport enabled' : 'Sport disabled', 'success');
+            } else {
+                showToast('Failed to update sport', 'error');
+            }
+        } catch {
+            showToast('Error updating sport', 'error');
+        } finally {
+            setToggling(null);
         }
     };
 
-    const handleToggleCompetition = async (id: string, currentStatus: boolean, e: React.MouseEvent) => {
+    const handleToggleCompetition = async (competitionId: string, currentVisible: boolean, e: React.MouseEvent) => {
         e.stopPropagation();
+        setToggling(`comp_${competitionId}`);
         try {
-            await sportsService.toggleCompetition(id, !currentStatus);
-            setCompetitions(competitions.map(c => c.competition_id === id ? { ...c, isVisible: !currentStatus } : c));
-        } catch (error) {
-            console.error("Failed to toggle competition", error);
+            const res = await toggleCompetitionEvents(competitionId, !currentVisible);
+            if (res.success) {
+                showToast(!currentVisible ? 'Competition events shown' : 'Competition events hidden', 'success');
+            } else {
+                showToast('Failed to update competition', 'error');
+            }
+        } catch {
+            showToast('Error updating competition', 'error');
+        } finally {
+            setToggling(null);
         }
     };
 
-    if (loading) return <div className="p-8 text-center text-slate-500">Loading sports data...</div>;
-
-    const filteredSports = sports.filter(s => s.sport_name.toLowerCase().includes(search.toLowerCase()));
+    const filteredSports = sports.filter(s =>
+        s.name.toLowerCase().includes(search.toLowerCase())
+    );
 
     return (
-        <div className="space-y-6">
-            <div>
-                <h1 className="text-3xl font-bold text-white">Sportsbook Management</h1>
-                <p className="text-slate-400 mt-1">Manage visibility of sports and competitions.</p>
+        <div className="space-y-6 relative">
+            {/* Toast */}
+            {toast && (
+                <div className={`fixed top-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-xl shadow-xl border text-sm font-medium animate-in slide-in-from-top-4 ${toast.type === 'success' ? 'bg-emerald-900/90 border-emerald-500/40 text-emerald-200' : 'bg-red-900/90 border-red-500/40 text-red-200'}`}>
+                    {toast.msg}
+                </div>
+            )}
+
+            {/* Header */}
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold text-white">Sportsbook Management</h1>
+                    <p className="text-slate-400 mt-1 text-sm">
+                        Manage Sportradar sports and competitions.&nbsp;
+                        <span className="text-amber-400 font-semibold">{sports.length} sports</span>
+                        &nbsp;·&nbsp;
+                        <span className="text-indigo-400 font-semibold">{competitions.length} competitions</span>
+                        &nbsp;·&nbsp;
+                        <span className="text-emerald-400 font-semibold">
+                            {sports.filter(s => s.isActive).length} active
+                        </span>
+                    </p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Link
+                        href="/dashboard/sports/live-builder"
+                        className="flex items-center gap-2 rounded-lg border border-indigo-500/40 bg-indigo-500/15 px-4 py-2 text-sm text-indigo-300 hover:bg-indigo-500/25 transition-colors font-medium"
+                    >
+                        <LayoutTemplate size={14} /> Live Builder
+                    </Link>
+                    <Link
+                        href="/dashboard/sports/events"
+                        className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                    >
+                        <Trophy size={14} /> Manage Events
+                    </Link>
+                    <Link
+                        href="/dashboard/sports/leagues"
+                        className="flex items-center gap-2 rounded-lg border border-indigo-700/50 bg-indigo-900/30 px-4 py-2 text-sm text-indigo-300 hover:bg-indigo-900/60 transition-colors"
+                    >
+                        <Layers size={14} /> Leagues &amp; Images
+                    </Link>
+                    <button
+                        onClick={fetchData}
+                        disabled={loading}
+                        className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                    >
+                        <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
+                    </button>
+                </div>
             </div>
 
+            {/* Search */}
             <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
                 <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
@@ -75,83 +194,125 @@ export default function SportsbookPage() {
                 </div>
             </div>
 
-            <div className="space-y-4">
-                {filteredSports.map(sport => {
-                    const sportCompetitions = competitions.filter(c => c.sport_id === sport.sport_id);
-                    const isExpanded = expandedSport === sport.sport_id;
+            {loading ? (
+                <div className="flex items-center justify-center py-20">
+                    <Loader2 className="animate-spin text-indigo-400" size={32} />
+                    <p className="ml-3 text-slate-400">Loading Sportradar sports…</p>
+                </div>
+            ) : (
+                <div className="space-y-3">
+                    {filteredSports.map(sport => {
+                        const sportComps = competitions.filter(c => c.sportId === sport.sportId);
+                        const isExpanded = expandedSport === sport.sportId;
+                        const emoji = SPORT_EMOJI[sport.sportId] || '🏟️';
 
-                    return (
-                        <div key={sport.sport_id} className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-                            <div
-                                className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-700/50 transition-colors"
-                                onClick={() => setExpandedSport(isExpanded ? null : sport.sport_id)}
-                            >
-                                <div className="flex items-center gap-4">
-                                    <button className="p-1 rounded hover:bg-slate-600 text-slate-400">
-                                        {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-                                    </button>
+                        return (
+                            <div key={sport.sportId} className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+                                <div
+                                    className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-slate-700/50 transition-colors"
+                                    onClick={() => setExpandedSport(isExpanded ? null : sport.sportId)}
+                                >
                                     <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-indigo-500/20 rounded text-indigo-400">
-                                            <Trophy size={20} />
-                                        </div>
+                                        <button className="p-1 rounded hover:bg-slate-600 text-slate-400">
+                                            {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                        </button>
+                                        <span className="text-xl">{emoji}</span>
                                         <div>
-                                            <h3 className="font-bold text-white text-lg">{sport.sport_name}</h3>
-                                            <p className="text-xs text-slate-400">{sportCompetitions.length} Competitions • {sport.market_count || 0} Events</p>
+                                            <div className="flex items-center gap-2">
+                                                <h3 className="font-bold text-white">{sport.name}</h3>
+                                                {sport.isDefault && (
+                                                    <span className="text-[10px] px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-full font-bold">DEFAULT</span>
+                                                )}
+                                                {sport.isTab && (
+                                                    <span className="text-[10px] px-2 py-0.5 bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 rounded-full font-bold">TAB</span>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-slate-500">
+                                                {sportComps.length} competitions
+                                                {sportComps.some(c => c.liveCount > 0) && (
+                                                    <span className="ml-1 text-red-400">
+                                                        · 🔴 {sportComps.reduce((a, c) => a + c.liveCount, 0)} live
+                                                    </span>
+                                                )}
+                                                &nbsp;· <span className="text-slate-600 font-mono text-[10px]">{sport.sportId}</span>
+                                            </p>
                                         </div>
                                     </div>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <Link
-                                        href={`/dashboard/sports/events?sportId=${sport.sport_id}`}
-                                        className="text-sm text-indigo-400 hover:text-indigo-300 hover:underline px-3 py-1"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        Manage Events
-                                    </Link>
-                                    <button
-                                        onClick={(e) => handleToggleSport(sport.sport_id, sport.isVisible, e)}
-                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${sport.isVisible
+                                    <div className="flex items-center gap-2">
+                                        <Link
+                                            href={`/dashboard/sports/events?sportId=${encodeURIComponent(sport.sportId)}`}
+                                            className="text-xs text-indigo-400 hover:text-indigo-300 hover:underline px-3 py-1"
+                                            onClick={(e) => e.stopPropagation()}
+                                        >
+                                            Events
+                                        </Link>
+                                        <button
+                                            onClick={(e) => handleToggleSport(sport.sportId, sport.isActive, e)}
+                                            disabled={toggling === `sport_${sport.sportId}`}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors disabled:opacity-50 ${sport.isActive
                                                 ? 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                                                : 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
-                                            }`}
-                                    >
-                                        {sport.isVisible ? <Eye size={14} /> : <EyeOff size={14} />}
-                                        {sport.isVisible ? 'Visible' : 'Hidden'}
-                                    </button>
+                                                : 'bg-red-500/10 text-red-400 hover:bg-red-500/20'}`}
+                                        >
+                                            {toggling === `sport_${sport.sportId}`
+                                                ? <Loader2 size={12} className="animate-spin" />
+                                                : sport.isActive
+                                                    ? <><ToggleRight size={14} /> Active</>
+                                                    : <><ToggleLeft size={14} /> Disabled</>}
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
 
-                            {isExpanded && (
-                                <div className="border-t border-slate-700 bg-slate-900/30 p-4 space-y-2">
-                                    {sportCompetitions.length === 0 ? (
-                                        <p className="text-slate-500 text-sm text-center py-2">No competitions found.</p>
-                                    ) : (
-                                        sportCompetitions.map(comp => (
-                                            <div key={comp.competition_id} className="flex items-center justify-between p-3 bg-slate-800 border border-slate-700/50 rounded hover:bg-slate-700/30 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    <Medal size={16} className="text-slate-500" />
-                                                    <div>
-                                                        <p className="text-slate-200 font-medium">{comp.competition_name}</p>
-                                                        <p className="text-xs text-slate-500">{comp.country_code || 'International'} • {comp.market_count || 0} Events</p>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    onClick={(e) => handleToggleCompetition(comp.competition_id, comp.isVisible, e)}
-                                                    className={`p-2 rounded hover:bg-slate-700 transition-colors ${comp.isVisible ? 'text-emerald-400' : 'text-slate-600'
-                                                        }`}
-                                                    title={comp.isVisible ? 'Hide Competition' : 'Show Competition'}
+                                {isExpanded && (
+                                    <div className="border-t border-slate-700 bg-slate-900/30 p-3 space-y-1.5">
+                                        {sportComps.length === 0 ? (
+                                            <p className="text-slate-500 text-sm text-center py-3">
+                                                No competitions found. Events may still be syncing.
+                                            </p>
+                                        ) : (
+                                            sportComps.map(comp => (
+                                                <div
+                                                    key={comp.competitionId}
+                                                    className="flex items-center justify-between p-2.5 bg-slate-800 border border-slate-700/50 rounded hover:bg-slate-700/30 transition-colors"
                                                 >
-                                                    {comp.isVisible ? <Eye size={16} /> : <EyeOff size={16} />}
-                                                </button>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            )}
+                                                    <div className="flex items-center gap-2.5">
+                                                        <Medal size={13} className="text-slate-500 flex-shrink-0" />
+                                                        <div>
+                                                            <p className="text-slate-200 text-sm font-medium leading-snug">{comp.competitionName}</p>
+                                                            <p className="text-xs text-slate-500">
+                                                                {comp.eventCount} events
+                                                                {comp.liveCount > 0 && (
+                                                                    <span className="text-red-400 ml-1 animate-pulse">· 🔴 {comp.liveCount} live</span>
+                                                                )}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => handleToggleCompetition(comp.competitionId, true, e)}
+                                                        disabled={!!toggling}
+                                                        className="p-1.5 rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-red-400 disabled:opacity-50"
+                                                        title="Hide all events in this competition"
+                                                    >
+                                                        {toggling === `comp_${comp.competitionId}`
+                                                            ? <Loader2 size={14} className="animate-spin" />
+                                                            : <EyeOff size={14} />}
+                                                    </button>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+
+                    {filteredSports.length === 0 && !loading && (
+                        <div className="text-center py-16 text-slate-500">
+                            <Trophy size={40} className="mx-auto mb-3 opacity-20" />
+                            <p>No sports found. Check the Sportradar sync to populate data.</p>
                         </div>
-                    );
-                })}
-            </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }

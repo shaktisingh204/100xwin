@@ -5,29 +5,41 @@ import {
     getCasinoGames, getCasinoCategories, getCasinoProviders, getCasinoGameStats,
     toggleCasinoGame, toggleCasinoGamePopular, toggleCasinoGameNew,
     toggleSectionGame, getAllSectionGameCodes, clearSection,
+    updateCasinoGame
 } from '@/actions/casino';
 import { uploadCasinoGameImage } from '@/actions/upload';
 import {
     Gamepad2, Search, RefreshCcw, Star, Home, Trophy,
     Sparkles, Loader2, ChevronLeft, ChevronRight, X, LayoutGrid, List,
     Zap, Flame, Monitor, BookOpen, Rocket, Check, Trash2, Upload,
+    Tv, Coffee, PlayCircle,
 } from 'lucide-react';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SECTIONS = [
-    // ── Home Page sections (shown on landing page) ──
-    { key: 'exclusive', label: '🏠 Exclusive Games', icon: Star, color: 'text-pink-400', border: 'border-pink-500/30', bg: 'bg-pink-500/10' },
-    { key: 'home', label: '🏠 Popular (Home)', icon: Home, color: 'text-sky-400', border: 'border-sky-500/30', bg: 'bg-sky-500/10' },
-    { key: 'top', label: '🏠 Top Games (Home)', icon: Trophy, color: 'text-amber-400', border: 'border-amber-500/30', bg: 'bg-amber-500/10' },
-    // ── Casino Page sections (shown in casino lobby rows) ──
-    { key: 'popular', label: '🎰 Popular', icon: Flame, color: 'text-orange-400', border: 'border-orange-500/30', bg: 'bg-orange-500/10' },
-    { key: 'new', label: '🎰 New Games', icon: Sparkles, color: 'text-emerald-400', border: 'border-emerald-500/30', bg: 'bg-emerald-500/10' },
-    { key: 'trending', label: '🎰 Trending', icon: Rocket, color: 'text-fuchsia-400', border: 'border-fuchsia-500/30', bg: 'bg-fuchsia-500/10' },
-    { key: 'slots', label: '🎰 Top Slots', icon: Zap, color: 'text-yellow-400', border: 'border-yellow-500/30', bg: 'bg-yellow-500/10' },
-    { key: 'live', label: '🎰 Live Casino', icon: Monitor, color: 'text-rose-400', border: 'border-rose-500/30', bg: 'bg-rose-500/10' },
-    { key: 'table', label: '🎰 Table Games', icon: BookOpen, color: 'text-blue-400', border: 'border-blue-500/30', bg: 'bg-blue-500/10' },
-    { key: 'crash', label: '🎰 Crash Games', icon: Rocket, color: 'text-violet-400', border: 'border-violet-500/30', bg: 'bg-violet-500/10' },
+    // ── Home Page sections ──
+    { key: 'exclusive',  label: '⭐ Exclusive Games',      icon: Star,       color: 'text-pink-400',    border: 'border-pink-500/30',    bg: 'bg-pink-500/10'    },
+    { key: 'home',       label: '🏠 Popular (Home)',       icon: Home,       color: 'text-sky-400',     border: 'border-sky-500/30',     bg: 'bg-sky-500/10'     },
+    { key: 'top',        label: '🏆 Top Picks',            icon: Trophy,     color: 'text-amber-400',   border: 'border-amber-500/30',   bg: 'bg-amber-500/10'   },
+    // ── Casino Lobby rows ──
+    { key: 'popular',    label: '🔥 Hot Games',            icon: Flame,      color: 'text-orange-400',  border: 'border-orange-500/30',  bg: 'bg-orange-500/10'  },
+    { key: 'new',        label: '✨ New Arrivals',          icon: Sparkles,   color: 'text-emerald-400', border: 'border-emerald-500/30', bg: 'bg-emerald-500/10' },
+    { key: 'trending',   label: '📈 Trending Now',         icon: Rocket,     color: 'text-fuchsia-400', border: 'border-fuchsia-500/30', bg: 'bg-fuchsia-500/10' },
+    { key: 'slots',      label: '🎰 Slots',                icon: Zap,        color: 'text-yellow-400',  border: 'border-yellow-500/30',  bg: 'bg-yellow-500/10'  },
+    { key: 'table',      label: '🃏 Table Games',          icon: BookOpen,   color: 'text-blue-400',    border: 'border-blue-500/30',    bg: 'bg-blue-500/10'    },
+    { key: 'crash',      label: '💥 Crash Games',          icon: Rocket,     color: 'text-violet-400',  border: 'border-violet-500/30',  bg: 'bg-violet-500/10'  },
+    { key: 'top-slots',  label: '🎯 Top Slots',            icon: Star,       color: 'text-rose-400',    border: 'border-rose-500/30',    bg: 'bg-rose-500/10'    },
+    { key: 'fishing',    label: '🐟 Fishing',              icon: Flame,      color: 'text-green-400',   border: 'border-green-500/30',   bg: 'bg-green-500/10'   },
+    { key: 'arcade',     label: '🕹️ Arcade',               icon: Gamepad2,   color: 'text-indigo-400',  border: 'border-indigo-500/30',  bg: 'bg-indigo-500/10'  },
+    { key: 'virtual',    label: '🏅 Virtual Sports',       icon: Trophy,     color: 'text-cyan-400',    border: 'border-cyan-500/30',    bg: 'bg-cyan-500/10'    },
+    // ── Live Casino Groups ──
+    { key: 'live',       label: '📡 Live — Popular',       icon: Monitor,    color: 'text-rose-400',    border: 'border-rose-500/30',    bg: 'bg-rose-500/10'    },
+    { key: 'roulette',   label: '🎡 Live — Roulette',      icon: PlayCircle, color: 'text-orange-400',  border: 'border-orange-500/30',  bg: 'bg-orange-500/10'  },
+    { key: 'blackjack',  label: '🃏 Live — Blackjack',     icon: Zap,        color: 'text-blue-400',    border: 'border-blue-500/30',    bg: 'bg-blue-500/10'    },
+    { key: 'baccarat',   label: '💜 Live — Baccarat',      icon: Coffee,     color: 'text-purple-400',  border: 'border-purple-500/30',  bg: 'bg-purple-500/10'  },
+    { key: 'shows',      label: '🎬 Live — Game Shows',    icon: Tv,         color: 'text-pink-400',    border: 'border-pink-500/30',    bg: 'bg-pink-500/10'    },
+    { key: 'poker',      label: '🃏 Live — Poker',         icon: Gamepad2,   color: 'text-teal-400',    border: 'border-teal-500/30',    bg: 'bg-teal-500/10'    },
 ] as const;
 
 type SectionKey = typeof SECTIONS[number]['key'];
@@ -319,6 +331,16 @@ export default function CasinoGamesPage() {
         const [src, setSrc] = useState(() => getCFImageUrl(game));
         const [imgErr, setImgErr] = useState(false);
         const [uploading, setUploading] = useState(false);
+        const [catg, setCatg] = useState(game.category);
+        const isCatSpin = toggling[`cat_${game._id}`];
+
+        const handleCategoryChange = async (newCat: string) => {
+            const key = `cat_${game._id}`;
+            setToggling(t => ({ ...t, [key]: true }));
+            setCatg(newCat);
+            await updateCasinoGame(game._id, { category: newCat });
+            setToggling(t => ({ ...t, [key]: false }));
+        };
 
         const handleUpload = async (file: File) => {
             setUploading(true);
@@ -370,9 +392,27 @@ export default function CasinoGamesPage() {
                 )}
 
                 {/* Footer */}
-                <div className="p-2 space-y-1.5">
-                    <div className="text-[11px] font-bold text-white truncate">{game.name}</div>
-                    <div className="text-[9px] text-slate-500 truncate">{game.provider}</div>
+                <div className="p-2 space-y-1.5 flex flex-col justify-between" style={{ minHeight: '110px' }}>
+                    <div>
+                        <div className="text-[11px] font-bold text-white truncate">{game.name}</div>
+                        <div className="text-[9px] text-slate-500 truncate">{game.provider}</div>
+                    </div>
+
+                    <div className="relative">
+                        {isCatSpin ? <SpinLoader /> : (
+                            <select 
+                                value={catg || ''}
+                                onChange={e => handleCategoryChange(e.target.value)}
+                                disabled={isCatSpin}
+                                className="w-full bg-slate-900 border border-slate-700 rounded px-1 py-1 text-[9px] text-slate-400 outline-none hover:border-slate-500 transition-colors"
+                            >
+                                <option value="" disabled>Select Category</option>
+                                {categories.map((c: any) => (
+                                    <option key={c._id} value={c.slug || c.name}>{c.name}</option>
+                                ))}
+                            </select>
+                        )}
+                    </div>
 
                     {/* Pin to section */}
                     <button
@@ -399,6 +439,16 @@ export default function CasinoGamesPage() {
         const spinPop = toggling[`pop_${game.gameCode}`];
         const spinNew = toggling[`new_${game.gameCode}`];
         const spinAct = toggling[`active_${game._id}`];
+        const isCatSpin = toggling[`cat_${game._id}`];
+        const [catg, setCatg] = useState(game.category);
+
+        const handleCategoryChange = async (newCat: string) => {
+            const key = `cat_${game._id}`;
+            setToggling(t => ({ ...t, [key]: true }));
+            setCatg(newCat);
+            await updateCasinoGame(game._id, { category: newCat });
+            setToggling(t => ({ ...t, [key]: false }));
+        };
 
         return (
             <tr className={`border-t border-slate-700/50 hover:bg-slate-700/20 transition-colors text-sm ${!game.isActive ? 'opacity-50' : ''}`}>
@@ -407,7 +457,22 @@ export default function CasinoGamesPage() {
                         <GameThumb game={game} size="sm" />
                         <div>
                             <div className="text-white font-semibold text-xs">{game.name}</div>
-                            <div className="text-slate-500 text-[10px]">{game.provider} · {game.category}</div>
+                            <div className="text-slate-500 text-[10px] mt-0.5">{game.provider}</div>
+                            <div className="mt-1">
+                                {isCatSpin ? <SpinLoader /> : (
+                                    <select 
+                                        value={catg || ''}
+                                        onChange={e => handleCategoryChange(e.target.value)}
+                                        disabled={isCatSpin}
+                                        className="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-slate-400 outline-none hover:border-slate-500 transition-colors"
+                                    >
+                                        <option value="" disabled>Select Category</option>
+                                        {categories.map((c: any) => (
+                                            <option key={c._id} value={c.slug || c.name}>{c.name}</option>
+                                        ))}
+                                    </select>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </td>

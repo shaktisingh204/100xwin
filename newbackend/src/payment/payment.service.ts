@@ -82,7 +82,17 @@ export class PaymentService {
         }
 
         const calculatedSign = this.generateSignature(callbackData, mchKey);
-        return calculatedSign === receivedSign.toLowerCase();
+        return this.constantTimeEqual(calculatedSign, String(receivedSign).toLowerCase());
+    }
+
+    private constantTimeEqual(a: string, b: string): boolean {
+        if (typeof a !== 'string' || typeof b !== 'string') return false;
+        if (a.length !== b.length) return false;
+        try {
+            return crypto.timingSafeEqual(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
+        } catch {
+            return false;
+        }
     }
 
     /**
@@ -136,6 +146,6 @@ export class PaymentService {
         }
 
         const calculatedSign = this.generateSignature(callbackData, payoutKey);
-        return calculatedSign === receivedSign.toLowerCase();
+        return this.constantTimeEqual(calculatedSign, String(receivedSign).toLowerCase());
     }
 }

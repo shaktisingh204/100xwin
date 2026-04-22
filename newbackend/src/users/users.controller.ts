@@ -5,6 +5,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
 import { TransactionsService } from '../transactions/transactions.service';
+import { AdminUpdateUserDto } from './dto/admin-update-user.dto';
 
 @Controller('user')
 @UseGuards(JwtAuthGuard)
@@ -34,6 +35,11 @@ export class UsersController {
     @Patch('username')
     async updateUsername(@Req() req: any, @Body() body: { username: string }) {
         return this.usersService.updateUsername(req.user.userId, body.username);
+    }
+
+    @Patch('profile')
+    async updateProfile(@Req() req: any, @Body() body: { firstName?: string; lastName?: string; country?: string; city?: string }) {
+        return this.usersService.updateProfile(req.user.userId, body);
     }
 
     @Patch('change-password')
@@ -85,8 +91,10 @@ export class UsersController {
     @Patch(':id')
     @UseGuards(RolesGuard)
     @Roles(Role.TECH_MASTER, Role.SUPER_ADMIN)
-    async updateUser(@Param('id') id: string, @Body() userData: any) {
-        return this.usersService.update(parseInt(id), userData);
+    async updateUser(@Param('id') id: string, @Body() userData: AdminUpdateUserDto) {
+        // Whitelist-based DTO strips any field not declared in AdminUpdateUserDto
+        // (role, password, balance, managerId, partnershipSettings, etc.).
+        return this.usersService.update(parseInt(id), userData as any);
     }
 
     @Delete(':id')
@@ -114,8 +122,17 @@ export class UsersController {
     @Post('add-funds')
     @UseGuards(RolesGuard)
     @Roles(Role.TECH_MASTER, Role.SUPER_ADMIN, Role.MANAGER)
-    async addFunds(@Req() req, @Body() body: { userId: number; amount: number; type: 'credit' | 'debit' }) {
-        return this.usersService.addFunds(body.userId, body.amount, body.type, req.user.userId);
+    async addFunds(
+        @Req() req,
+        @Body() body: { userId: number; amount: number; type: 'credit' | 'debit'; wallet?: 'fiat' | 'crypto' },
+    ) {
+        return this.usersService.addFunds(
+            body.userId,
+            body.amount,
+            body.type,
+            req.user.userId,
+            body.wallet === 'crypto' ? 'crypto' : 'fiat',
+        );
     }
 
     // KYC & RG Endpoints

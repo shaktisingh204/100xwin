@@ -3,12 +3,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     getBonuses, createBonus, updateBonus, deleteBonus, toggleBonus,
-    getBonusStats, getBonusRedemptions, adminForfeitBonus, adminCompleteBonus, adminGiveBonus
+    getBonusStats, getBonusRedemptions, adminForfeitBonus, adminCompleteBonus, adminGiveBonus,
+    purgeBackfillRepairBonuses
 } from '@/actions/marketing';
 import {
     Gift, Plus, Trash2, Edit3, ToggleLeft, ToggleRight, Search,
     ChevronLeft, ChevronRight, RefreshCcw, X, Check,
-    Loader2, DollarSign, Ban, Zap, AlertTriangle, Info, UserPlus
+    Loader2, DollarSign, Ban, Zap, AlertTriangle, Info, UserPlus, Eraser
 } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -24,6 +25,8 @@ interface Bonus {
     amount: number;
     percentage: number;
     minDeposit: number;
+    minDepositFiat?: number;
+    minDepositCrypto?: number;
     maxBonus: number;
     wageringRequirement: number;
     expiryDays: number;   // days user has after activation to complete wagering
@@ -65,13 +68,62 @@ const BONUS_CURRENCIES = [
 
 const defaultForm = {
     code: '', type: 'CASINO', applicableTo: 'CASINO', currency: 'INR', title: '', description: '',
-    amount: 0, percentage: 0, minDeposit: 0, maxBonus: 0,
+    amount: 0, percentage: 0, minDeposit: 0, minDepositFiat: 0, minDepositCrypto: 0, maxBonus: 0,
     wageringRequirement: 10, expiryDays: 30, usageLimit: 0,
     isActive: true, showOnSignup: false, forFirstDepositOnly: true,
     validFrom: '', validUntil: '',
 };
 
 const fmt = (n: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n);
+
+const toSafeNumber = (value: unknown) => {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : 0;
+};
+
+const getResolvedMinimumDeposit = (
+    bonus: Pick<Bonus, 'minDeposit' | 'minDepositFiat' | 'minDepositCrypto'>,
+    currency: 'INR' | 'CRYPTO',
+) => {
+    if (currency === 'CRYPTO' && bonus.minDepositCrypto != null) return toSafeNumber(bonus.minDepositCrypto);
+    if (currency === 'INR' && bonus.minDepositFiat != null) return toSafeNumber(bonus.minDepositFiat);
+    return toSafeNumber(bonus.minDeposit);
+};
+
+const getMinimumDepositDetails = (bonus: Pick<Bonus, 'currency' | 'minDeposit' | 'minDepositFiat' | 'minDepositCrypto'>) => {
+    const fiatMinimum = getResolvedMinimumDeposit(bonus, 'INR');
+    const cryptoMinimum = getResolvedMinimumDeposit(bonus, 'CRYPTO');
+
+    if (bonus.currency === 'CRYPTO') {
+        return {
+            signupText: cryptoMinimum > 0 ? `$${cryptoMinimum}` : 'any crypto amount',
+            previewRows: cryptoMinimum > 0 ? [{ label: 'Crypto Min Deposit', value: `$${cryptoMinimum}` }] : [],
+            tableRows: cryptoMinimum > 0 ? [`Crypto: $${cryptoMinimum}`] : [],
+        };
+    }
+
+    if (bonus.currency === 'BOTH') {
+        return {
+            signupText: fiatMinimum > 0 || cryptoMinimum > 0
+                ? `${fiatMinimum > 0 ? `₹${fiatMinimum} fiat` : 'no fiat minimum'} / ${cryptoMinimum > 0 ? `$${cryptoMinimum} crypto` : 'no crypto minimum'}`
+                : 'any amount',
+            previewRows: [
+                ...(fiatMinimum > 0 ? [{ label: 'Fiat Min Deposit', value: `₹${fiatMinimum}` }] : []),
+                ...(cryptoMinimum > 0 ? [{ label: 'Crypto Min Deposit', value: `$${cryptoMinimum}` }] : []),
+            ],
+            tableRows: [
+                ...(fiatMinimum > 0 ? [`Fiat: ₹${fiatMinimum}`] : []),
+                ...(cryptoMinimum > 0 ? [`Crypto: $${cryptoMinimum}`] : []),
+            ],
+        };
+    }
+
+    return {
+        signupText: fiatMinimum > 0 ? `₹${fiatMinimum}` : 'any amount',
+        previewRows: fiatMinimum > 0 ? [{ label: 'Fiat Min Deposit', value: `₹${fiatMinimum}` }] : [],
+        tableRows: fiatMinimum > 0 ? [`Fiat: ₹${fiatMinimum}`] : [],
+    };
+};
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -106,6 +158,7 @@ export default function BonusesPage() {
     const [giveError, setGiveError] = useState('');
     const [giveLoading, setGiveLoading] = useState(false);
     const [giveSuccess, setGiveSuccess] = useState<string | null>(null);
+    const [purging, setPurging] = useState(false);
 
     const LIMIT = 20;
 
@@ -142,11 +195,15 @@ export default function BonusesPage() {
 
     const openCreate = () => { setForm({ ...defaultForm }); setFormError(''); setModal({ open: false, editing: null }); setTimeout(() => setModal({ open: true, editing: null }), 0); };
     const openEdit = (b: Bonus) => {
+        const currency = (b as any).currency || 'INR';
+        const legacyMinDeposit = toSafeNumber(b.minDeposit);
         setForm({
             code: b.code, type: b.type, applicableTo: (b as any).applicableTo || 'BOTH',
-            currency: (b as any).currency || 'INR',
+            currency,
             title: b.title, description: b.description || '',
-            amount: b.amount, percentage: b.percentage, minDeposit: b.minDeposit,
+            amount: b.amount, percentage: b.percentage, minDeposit: legacyMinDeposit,
+            minDepositFiat: b.minDepositFiat ?? (currency === 'CRYPTO' ? 0 : legacyMinDeposit),
+            minDepositCrypto: b.minDepositCrypto ?? (currency === 'INR' ? 0 : legacyMinDeposit),
             maxBonus: b.maxBonus, wageringRequirement: b.wageringRequirement,
             expiryDays: (b as any).expiryDays ?? 30,
             isActive: b.isActive, showOnSignup: b.showOnSignup, forFirstDepositOnly: b.forFirstDepositOnly,
@@ -165,9 +222,15 @@ export default function BonusesPage() {
         if (form.wageringRequirement < 1) { setFormError('Wagering requirement must be at least 1x'); return; }
 
         setSaving(true);
+        const minDepositFiat = toSafeNumber((form as any).minDepositFiat);
+        const minDepositCrypto = toSafeNumber((form as any).minDepositCrypto);
+        const legacyMinDeposit = (form as any).currency === 'CRYPTO' ? minDepositCrypto : minDepositFiat;
         const payload = {
             ...form,
             code: form.code.trim().toUpperCase(),
+            minDeposit: legacyMinDeposit,
+            minDepositFiat,
+            minDepositCrypto,
             validFrom: form.validFrom || undefined,
             validUntil: form.validUntil || undefined,
         };
@@ -203,6 +266,23 @@ export default function BonusesPage() {
         await adminForfeitBonus(id);
         fetchRedemptions();
         fetchStats();
+    };
+
+    const handlePurge = async () => {
+        if (!confirm(
+            '⚠️ DANGER: This will permanently delete ALL BACKFILL_ and REPAIR_ user bonus records from the database.\n\n' +
+            'This cannot be undone. Continue?'
+        )) return;
+        setPurging(true);
+        const res = await purgeBackfillRepairBonuses();
+        setPurging(false);
+        if (res.success) {
+            alert(`✅ Purge complete — ${res.deletedCount} records deleted.`);
+            fetchStats();
+            if (activeTab === 'redemptions') fetchRedemptions();
+        } else {
+            alert('❌ Purge failed: ' + res.error);
+        }
     };
 
     const handleComplete = async (id: number) => {
@@ -282,8 +362,9 @@ export default function BonusesPage() {
             ACTIVE: 'bg-blue-500/15 text-blue-400',
             COMPLETED: 'bg-emerald-500/15 text-emerald-400',
             FORFEITED: 'bg-red-500/15 text-red-400',
+            PENDING_CONVERSION: 'bg-amber-500/15 text-amber-400',
         };
-        return <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${map[status] || 'bg-slate-700 text-slate-400'}`}>{status}</span>;
+        return <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${map[status] || 'bg-slate-700 text-slate-400'}`}>{status.replace('_', ' ')}</span>;
     };
 
     const f = (key: keyof typeof form, val: any) => setForm(prev => ({ ...prev, [key]: val }));
@@ -302,6 +383,12 @@ export default function BonusesPage() {
                     <button onClick={() => { fetchBonuses(); fetchStats(); if (activeTab === 'redemptions') fetchRedemptions(); }}
                         className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-400 border border-slate-700 transition-colors">
                         <RefreshCcw size={16} />
+                    </button>
+                    <button onClick={handlePurge} disabled={purging}
+                        title="Permanently delete all BACKFILL and REPAIR bonus records from DB"
+                        className="flex items-center gap-2 px-4 py-2 bg-red-900/50 hover:bg-red-800/60 disabled:opacity-50 text-red-400 border border-red-700/50 rounded-lg text-sm font-semibold transition-colors">
+                        {purging ? <Loader2 size={16} className="animate-spin" /> : <Eraser size={16} />}
+                        Purge Backfill/Repair
                     </button>
                     <button onClick={() => { setGiveModal(true); setGiveError(''); setGiveSuccess(null); }}
                         className="flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold transition-colors">
@@ -373,7 +460,9 @@ export default function BonusesPage() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-700/50">
-                                    {bonuses.map(b => (
+                                    {bonuses.map(b => {
+                                        const minimumDepositDetails = getMinimumDepositDetails(b);
+                                        return (
                                         <tr key={b._id} className="hover:bg-slate-700/20 transition-colors">
                                             <td className="px-4 py-3">
                                                 <div className="font-mono font-bold text-indigo-300 text-xs">{b.code}</div>
@@ -386,7 +475,11 @@ export default function BonusesPage() {
                                                     : `₹${b.amount}`}
                                             </td>
                                             <td className="px-4 py-3 text-slate-300 text-xs">
-                                                {b.minDeposit > 0 ? `₹${b.minDeposit}` : <span className="text-slate-600">—</span>}
+                                                {minimumDepositDetails.tableRows.length > 0 ? (
+                                                    <div className="flex flex-col gap-0.5">
+                                                        {minimumDepositDetails.tableRows.map(row => <span key={row}>{row}</span>)}
+                                                    </div>
+                                                ) : <span className="text-slate-600">—</span>}
                                             </td>
                                             <td className="px-4 py-3 text-slate-300 text-xs">{b.wageringRequirement}x</td>
                                             <td className="px-4 py-3 text-center">
@@ -420,7 +513,7 @@ export default function BonusesPage() {
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))}
+                                    )})}
                                 </tbody>
                             </table>
                         </div>
@@ -441,7 +534,7 @@ export default function BonusesPage() {
                         </div>
                         <select value={redemptionStatus} onChange={e => { setRedemptionStatus(e.target.value); setRedemptionPage(1); }}
                             className="px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white outline-none focus:border-indigo-500">
-                            {['ALL', 'ACTIVE', 'COMPLETED', 'FORFEITED'].map(s => <option key={s} value={s}>{s}</option>)}
+                            {['ALL', 'PENDING_CONVERSION', 'ACTIVE', 'COMPLETED', 'FORFEITED'].map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
                         </select>
                         <button onClick={fetchRedemptions} className="p-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors"><RefreshCcw size={15} /></button>
                     </div>
@@ -509,15 +602,15 @@ export default function BonusesPage() {
                                                     <td className="px-4 py-3">{statusBadge(r.status)}</td>
                                                     <td className="px-4 py-3 text-slate-400 text-xs">{new Date(r.createdAt).toLocaleDateString('en-IN')}</td>
                                                     <td className="px-4 py-3">
-                                                        {r.status === 'ACTIVE' && (
+                                                    {(r.status === 'ACTIVE' || r.status === 'PENDING_CONVERSION') && (
                                                             <div className="flex justify-center gap-1">
                                                                 <button onClick={() => handleComplete(r.id)}
                                                                     className="px-2 py-1 bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 rounded text-xs font-semibold transition-colors">
-                                                                    Complete
+                                                        {r.status === 'PENDING_CONVERSION' ? 'Approve' : 'Complete'}
                                                                 </button>
                                                                 <button onClick={() => handleForfeit(r.id)}
                                                                     className="px-2 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded text-xs font-semibold transition-colors">
-                                                                    Forfeit
+                                                                    {r.status === 'PENDING_CONVERSION' ? 'Reject' : 'Forfeit'}
                                                                 </button>
                                                             </div>
                                                         )}
@@ -662,16 +755,26 @@ export default function BonusesPage() {
                             {/* ── SECTION 3: Conditions ── */}
                             <section>
                                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">3. Conditions</h3>
-                                <div className="grid grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                                     <div>
-                                        <label className="block text-xs font-semibold text-slate-400 mb-1.5">Minimum Deposit ₹ <span className="text-slate-600">(0 = none)</span></label>
+                                        <label className="block text-xs font-semibold text-slate-400 mb-1.5">Minimum Fiat Deposit ₹ <span className="text-slate-600">(0 = none)</span></label>
                                         <div className="relative">
                                             <input type="number" min={0}
                                                 className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 pr-7 text-white text-sm outline-none focus:border-indigo-500"
-                                                value={form.minDeposit} onChange={e => f('minDeposit', +e.target.value)} />
+                                                value={(form as any).minDepositFiat} onChange={e => f('minDepositFiat' as any, +e.target.value)} />
                                             <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs">₹</span>
                                         </div>
-                                        <p className="text-[10px] text-slate-600 mt-1">User must deposit at least this amount</p>
+                                        <p className="text-[10px] text-slate-600 mt-1">Used for INR / UPI / fiat deposits</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-slate-400 mb-1.5">Minimum Crypto Deposit $ <span className="text-slate-600">(0 = none)</span></label>
+                                        <div className="relative">
+                                            <input type="number" min={0}
+                                                className="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2.5 pr-7 text-white text-sm outline-none focus:border-indigo-500"
+                                                value={(form as any).minDepositCrypto} onChange={e => f('minDepositCrypto' as any, +e.target.value)} />
+                                            <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs">$</span>
+                                        </div>
+                                        <p className="text-[10px] text-slate-600 mt-1">Used for crypto deposits</p>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-400 mb-1.5">Wagering Requirement <span className="text-red-400">*</span></label>
@@ -754,7 +857,7 @@ export default function BonusesPage() {
                                                 }`}>
                                                 <Info size={13} className="shrink-0 mt-0.5" />
                                                 {form.forFirstDepositOnly
-                                                    ? <span><strong>On Deposit:</strong> User selects this bonus during registration. When they deposit ₹{form.minDeposit > 0 ? form.minDeposit : 'any amount'} or more for the first time, the bonus is automatically applied. Best for DEPOSIT type.</span>
+                                                    ? <span><strong>On Deposit:</strong> User selects this bonus during registration. When they deposit {getMinimumDepositDetails(form as any).signupText} or more for the first time, the bonus is automatically applied. Best for DEPOSIT type.</span>
                                                     : <span><strong>Instant:</strong> Bonus balance is credited immediately after registration — no deposit needed. Requires type NO_DEPOSIT with a flat ₹ amount set above.</span>
                                                 }
                                             </div>
@@ -770,7 +873,12 @@ export default function BonusesPage() {
                                     <div className="text-sm space-y-1">
                                         <div className="flex justify-between"><span className="text-slate-400">Code</span><span className="font-mono font-bold text-indigo-300">{form.code || '—'}</span></div>
                                         <div className="flex justify-between"><span className="text-slate-400">Value</span><span className="text-white">{form.percentage > 0 ? `${form.percentage}% match${form.maxBonus > 0 ? ` (max ₹${form.maxBonus})` : ''}` : form.amount > 0 ? `₹${form.amount} flat` : '—'}</span></div>
-                                        {form.minDeposit > 0 && <div className="flex justify-between"><span className="text-slate-400">Min Deposit</span><span className="text-white">₹{form.minDeposit}</span></div>}
+                                        {getMinimumDepositDetails(form as any).previewRows.map(row => (
+                                            <div key={row.label} className="flex justify-between">
+                                                <span className="text-slate-400">{row.label}</span>
+                                                <span className="text-white">{row.value}</span>
+                                            </div>
+                                        ))}
                                         <div className="flex justify-between"><span className="text-slate-400">Wagering</span><span className="text-white">{form.percentage > 0 ? `${form.percentage}% of deposit × ${form.wageringRequirement}x` : `₹${form.amount} × ${form.wageringRequirement}x = ₹${form.amount * form.wageringRequirement} total to wager`}</span></div>
                                         {form.showOnSignup && <div className="flex justify-between"><span className="text-slate-400">Signup trigger</span><span className={form.forFirstDepositOnly ? 'text-blue-400' : 'text-emerald-400'}>{form.forFirstDepositOnly ? 'First deposit' : 'Instantly after register'}</span></div>}
                                     </div>

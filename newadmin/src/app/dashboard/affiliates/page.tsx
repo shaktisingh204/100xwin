@@ -2,12 +2,7 @@
 
 import Link from "next/link";
 import React, { FormEvent, useCallback, useEffect, useState } from "react";
-import { crmService, AffiliateStats } from "@/services/crm.service";
-import {
-    AdminReferralHistoryItem,
-    AdminReferralUser,
-    ReferralService,
-} from "@/services/referral.service";
+import { getReferralStats, getReferralHistory, getAdminReferralUsers } from "@/actions/internal-referral";
 import {
     ArrowRight,
     BadgeIndianRupee,
@@ -102,9 +97,23 @@ function PaginationControls({
 }
 
 export default function AffiliatesPage() {
-    const [stats, setStats] = useState<AffiliateStats | null>(null);
-    const [users, setUsers] = useState<AdminReferralUser[]>([]);
-    const [history, setHistory] = useState<AdminReferralHistoryItem[]>([]);
+    // ── Local stats shape from internal action ─────────────────────────────────
+    const [stats, setStats] = useState<{
+        totalReferrals: number;
+        completedReferrals: number;
+        pendingReferrals: number;
+        failedReferrals: number;
+        totalPaidOut: number;
+    } | null>(null);
+    const [topReferrers, setTopReferrers] = useState<{
+        referrerId: number;
+        username: string;
+        email: string;
+        referralCount: number;
+        totalEarned: number;
+    }[]>([]);
+    const [users, setUsers] = useState<any[]>([]);
+    const [history, setHistory] = useState<any[]>([]);
     const [usersPage, setUsersPage] = useState(1);
     const [historyPage, setHistoryPage] = useState(1);
     const [usersTotalPages, setUsersTotalPages] = useState(1);
@@ -120,10 +129,15 @@ export default function AffiliatesPage() {
     const loadStats = useCallback(async () => {
         setStatsLoading(true);
         try {
-            const data = await crmService.getAffiliateStats();
-            setStats(data);
+            const result = await getReferralStats();
+            if (result.success) {
+                setStats(result.stats);
+                setTopReferrers(result.topReferrers);
+            } else {
+                setError("Unable to load referral overview right now.");
+            }
         } catch (loadError) {
-            console.error("Failed to fetch affiliate stats", loadError);
+            console.error("Failed to fetch referral stats", loadError);
             setError("Unable to load referral overview right now.");
         } finally {
             setStatsLoading(false);
@@ -133,8 +147,8 @@ export default function AffiliatesPage() {
     const loadUsers = useCallback(async (page: number, search: string) => {
         setUsersLoading(true);
         try {
-            const data = await ReferralService.getAdminUsers(page, USER_PAGE_SIZE, search);
-            setUsers(data.users);
+            const data = await getAdminReferralUsers(page, USER_PAGE_SIZE, search);
+            setUsers(data.users as any[]);
             setUsersTotalPages(data.pagination.totalPages);
         } catch (loadError) {
             console.error("Failed to fetch referral users", loadError);
@@ -147,9 +161,13 @@ export default function AffiliatesPage() {
     const loadHistory = useCallback(async (page: number) => {
         setHistoryLoading(true);
         try {
-            const data = await ReferralService.getAdminHistory(page, HISTORY_PAGE_SIZE);
-            setHistory(data.history);
-            setHistoryTotalPages(data.pagination.totalPages);
+            const result = await getReferralHistory(page, HISTORY_PAGE_SIZE);
+            if (result.success) {
+                setHistory(result.history);
+                setHistoryTotalPages(result.pagination.totalPages);
+            } else {
+                setError("Unable to load referral reward history right now.");
+            }
         } catch (loadError) {
             console.error("Failed to fetch referral history", loadError);
             setError("Unable to load referral reward history right now.");
@@ -189,10 +207,10 @@ export default function AffiliatesPage() {
         setRefreshing(false);
     };
 
-    const totalCommission = stats?.totalCommission || 0;
+    const totalCommission = stats?.totalPaidOut || 0;
     const totalReferrals = stats?.totalReferrals || 0;
     const averageCommission = totalReferrals > 0 ? totalCommission / totalReferrals : 0;
-    const topAffiliate = stats?.topAffiliates?.[0] || null;
+    const topAffiliate = topReferrers[0] || null;
 
     if (statsLoading && usersLoading && historyLoading) {
         return (
@@ -268,7 +286,7 @@ export default function AffiliatesPage() {
                     {
                         label: "Top Performer",
                         value: topAffiliate?.username || "No data yet",
-                        sub: topAffiliate ? `${topAffiliate.referralCount} referrals • ${formatCurrency(topAffiliate.totalCommission)}` : "Waiting for first payout",
+                        sub: topAffiliate ? `${topAffiliate.referralCount} referrals • ${formatCurrency(topAffiliate.totalEarned)}` : "Waiting for first payout",
                         icon: Trophy,
                         shell: "bg-amber-500/10 text-amber-400",
                     },
@@ -311,15 +329,15 @@ export default function AffiliatesPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-700">
-                                {stats?.topAffiliates?.length ? (
-                                    stats.topAffiliates.map((affiliate) => (
+                                {topReferrers.length ? (
+                                    topReferrers.map((affiliate) => (
                                         <tr key={affiliate.referrerId} className="hover:bg-slate-700/20">
                                             <td className="px-5 py-4">
                                                 <div className="font-semibold text-white">{affiliate.username}</div>
                                                 <div className="text-xs text-slate-500">{affiliate.email || "No email on file"}</div>
                                             </td>
                                             <td className="px-5 py-4 text-slate-300">{affiliate.referralCount.toLocaleString("en-IN")}</td>
-                                            <td className="px-5 py-4 font-semibold text-emerald-400">{formatCurrency(affiliate.totalCommission)}</td>
+                                            <td className="px-5 py-4 font-semibold text-emerald-400">{formatCurrency(affiliate.totalEarned)}</td>
                                             <td className="px-5 py-4 text-right">
                                                 <Link
                                                     href={`/dashboard/users/${affiliate.referrerId}`}
@@ -369,15 +387,15 @@ export default function AffiliatesPage() {
                                     </thead>
                                     <tbody className="divide-y divide-slate-700">
                                         {history.length ? (
-                                            history.map((item) => (
+                                            history.map((item: any) => (
                                                 <tr key={item.id} className="hover:bg-slate-700/20">
                                                     <td className="px-5 py-4">
-                                                        <div className="font-semibold text-white">{item.rewardName || "Referral Reward"}</div>
-                                                        <div className="text-xs text-slate-500">{getConditionLabel(item.condition)}</div>
+                                                        <div className="font-semibold text-white">{item.reward?.name || item.rewardName || "Referral Reward"}</div>
+                                                        <div className="text-xs text-slate-500">{getConditionLabel(item.reward?.conditionType || item.condition || null)}</div>
                                                     </td>
                                                     <td className="px-5 py-4">
-                                                        <div className="text-slate-200">{item.referrer || "Unknown referrer"}</div>
-                                                        <div className="text-xs text-slate-500">for {item.referee || "Unknown user"}</div>
+                                                        <div className="text-slate-200">{item.referrer?.username || item.referrer || "Unknown referrer"}</div>
+                                                        <div className="text-xs text-slate-500">for {item.referredUser?.username || item.referee || "Unknown user"}</div>
                                                     </td>
                                                     <td className="px-5 py-4 font-semibold text-emerald-400">{formatCurrency(item.amount)}</td>
                                                     <td className="px-5 py-4">

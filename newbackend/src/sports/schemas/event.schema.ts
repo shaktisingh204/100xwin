@@ -55,6 +55,9 @@ export class Event {
 
     @Prop({ default: 0 })
     iscc: number;
+
+    @Prop({ type: Object })
+    sr_markets?: any;
 }
 
 export const EventSchema = SchemaFactory.createForClass(Event);

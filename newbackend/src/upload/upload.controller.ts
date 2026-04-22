@@ -28,11 +28,23 @@ export class UploadController {
             filename: (req, file, cb) => {
                 const randomName = Array(32).fill(null)
                     .map(() => (Math.round(Math.random() * 16)).toString(16)).join('');
-                return cb(null, `${randomName}${extname(file.originalname)}`);
+                // Normalize extension from MIME type to avoid trusting
+                // user-supplied filename. Accepted MIME types are gated below.
+                const extFromMime: Record<string, string> = {
+                    'image/jpeg': '.jpg',
+                    'image/png': '.png',
+                    'image/gif': '.gif',
+                    'image/webp': '.webp',
+                };
+                const ext = extFromMime[file.mimetype] || '.bin';
+                return cb(null, `${randomName}${ext}`);
             },
         }),
+        limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
         fileFilter: (req, file, cb) => {
-            if (!file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+            // SECURITY: validate by MIME type, not filename extension.
+            // Attackers can set arbitrary filenames like `pwn.php.jpg`.
+            if (!/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype)) {
                 return cb(new BadRequestException('Only image files are allowed!'), false);
             }
             cb(null, true);
@@ -59,12 +71,20 @@ export class UploadController {
             filename: (req, file, cb) => {
                 const randomName = Array(32).fill(null)
                     .map(() => (Math.round(Math.random() * 16)).toString(16)).join('');
-                return cb(null, `screenshot_${randomName}${extname(file.originalname)}`);
+                const extFromMime: Record<string, string> = {
+                    'image/jpeg': '.jpg',
+                    'image/png': '.png',
+                    'image/gif': '.gif',
+                    'image/webp': '.webp',
+                };
+                const ext = extFromMime[file.mimetype] || '.bin';
+                return cb(null, `screenshot_${randomName}${ext}`);
             },
         }),
         limits: { fileSize: 8 * 1024 * 1024 }, // 8 MB
         fileFilter: (req, file, cb) => {
-            if (!file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+            // SECURITY: MIME-type based validation.
+            if (!/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype)) {
                 return cb(new BadRequestException('Only image files are allowed!'), false);
             }
             cb(null, true);

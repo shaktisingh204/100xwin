@@ -33,17 +33,17 @@ const BetsSection = ({ gameCode }: { gameCode?: string }) => {
     }, [user, gameCode]);
 
     return (
-        <div className="w-full bg-[#0b1521] rounded-xl border border-[#1b2b40] overflow-hidden">
+        <div className="w-full bg-bg-deep rounded-xl border border-[#1b2b40] overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-[#1b2b40]">
                 <h3 className="text-white font-bold text-lg">Latest bet & Race</h3>
 
-                <div className="flex bg-[#162032] rounded-lg p-1">
+                <div className="flex bg-bg-well rounded-lg p-1">
                     {/* User requested ONLY "My bets" essentially. 
                         We can show others as disabled or just show My Bets.
                         "only show my bets" -> implies hiding others or making it the only option.
                     */}
-                    <button className="px-4 py-1.5 rounded-md bg-[#2f4553] text-white text-sm font-bold shadow-sm">
+                    <button className="px-4 py-1.5 rounded-md bg-bg-well text-white text-sm font-bold shadow-sm">
                         My bets
                     </button>
                     {/* 
@@ -71,7 +71,7 @@ const BetsSection = ({ gameCode }: { gameCode?: string }) => {
                         </div>
                         <span className="text-gray-400 font-medium">No bets yet</span>
                         {/* "show play 1 bet" - sounds like a CTA button? */}
-                        <button className="px-6 py-2 bg-brand-green text-black font-bold rounded-lg hover:bg-opacity-90 transition-all">
+                        <button className="px-6 py-2 bg-brand-green text-text-inverse font-bold rounded-lg hover:bg-opacity-90 transition-all">
                             Play 1 bet
                         </button>
                     </div>
@@ -88,7 +88,7 @@ const BetsSection = ({ gameCode }: { gameCode?: string }) => {
                             </thead>
                             <tbody>
                                 {bets.map((bet) => (
-                                    <tr key={bet.id} className="border-b border-[#1b2b40]/50 hover:bg-[#162032] transition-colors">
+                                    <tr key={bet.id} className="border-b border-[#1b2b40]/50 hover:bg-bg-well transition-colors">
                                         <td className="px-4 py-3">
                                             <div className="flex flex-col">
                                                 <span className="text-white font-medium">{bet.game_code || 'Unknown Game'}</span>

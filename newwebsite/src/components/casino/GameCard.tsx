@@ -1,7 +1,8 @@
 "use client";
 
 import React from 'react';
-import { Play } from 'lucide-react';
+import { Play, Users } from 'lucide-react';
+import { cfImage, cfImageSrcSet } from '@/utils/cfImages';
 
 interface GameCardProps {
     name: string;
@@ -13,22 +14,13 @@ interface GameCardProps {
     onError?: () => void;
 }
 
-const GameCard: React.FC<GameCardProps> = ({
-    name,
-    image,
-    provider,
-    tag,
-    layout = 'row',
-    onClick,
-    onError
-}) => {
+const GameCard: React.FC<GameCardProps> = ({ name, image, provider, tag, layout = 'row', onClick, onError }) => {
     const CF_BASE = 'https://imagedelivery.net/l7vrHxYm1V8kfxard9QBnQ';
     const FALLBACK_IMG = 'https://images.unsplash.com/photo-1605218427306-022ba8c15661?q=80&w=600&auto=format&fit=crop';
 
     const resolveUrl = React.useCallback((src: string) => {
         if (!src) return FALLBACK_IMG;
         if (src.startsWith('http')) return src;
-        // icon may already be '{provider}/{filename}.ext' or just '{filename}.ext'
         const iconNoExt = src.replace(/\.[^.]+$/, '');
         const iconPath = iconNoExt.includes('/')
             ? iconNoExt.split('/').map(encodeURIComponent).join('/')
@@ -38,6 +30,10 @@ const GameCard: React.FC<GameCardProps> = ({
 
     const [imgSrc, setImgSrc] = React.useState(() => resolveUrl(image));
     const [hasError, setHasError] = React.useState(false);
+    const playerCount = React.useMemo(() => {
+        const seed = `${name}-${provider}`.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+        return (seed % 190) + 12;
+    }, [name, provider]);
 
     React.useEffect(() => {
         setImgSrc(resolveUrl(image));
@@ -45,53 +41,49 @@ const GameCard: React.FC<GameCardProps> = ({
     }, [image, resolveUrl]);
 
     const handleError = () => {
-        if (!hasError) {
-            setHasError(true);
-            setImgSrc(FALLBACK_IMG);
-        }
+        if (!hasError) { setHasError(true); setImgSrc(FALLBACK_IMG); }
         onError?.();
     };
 
+    // Row: show 3 full cards + 10% peek of 4th on mobile
     const sizeClasses = layout === 'grid'
-        ? 'w-full min-w-0 aspect-[167/208]'
-        : 'flex-shrink-0 w-[123px] h-[163px] md:w-[167px] md:h-[208px]';
+        ? 'w-full flex-shrink-0 aspect-[3/4]'
+        : 'flex-shrink-0 w-[calc((100vw-40px)/3.1)] md:w-[155px] aspect-[3/4]';
 
     return (
         <div
             onClick={onClick}
-            className={`group relative bg-bg-card rounded-xl overflow-hidden cursor-pointer hover:-translate-y-1 transition-all duration-300 shadow-lg hover:shadow-glow-gold ${sizeClasses}`}
+            className={`group relative rounded-[10px] overflow-hidden cursor-pointer bg-bg-card border border-white/[0.04] transition-all duration-200 hover:-translate-y-1 hover:border-brand-gold/40 ${sizeClasses}`}
         >
-            {/* Image */}
             <img
-                src={imgSrc}
+                src={cfImage(imgSrc, { width: 400 })}
+                srcSet={cfImageSrcSet(imgSrc, [200, 400, 600])}
+                sizes="(max-width: 768px) 33vw, 155px"
                 alt={name}
                 onError={handleError}
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                 loading="lazy"
+                decoding="async"
             />
 
-            {/* Tag */}
             {tag && (
-                <div className="absolute top-2 left-2 z-10 bg-jackpot text-black text-[10px] font-black px-2 py-0.5 rounded shadow">
+                <span className="absolute left-2 top-2 z-10 rounded-md bg-brand-gold px-2 py-1 text-[9px] font-black uppercase tracking-wide text-bg-base shadow">
                     {tag}
-                </div>
+                </span>
             )}
 
-            {/* Overlay on Hover */}
-            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-4">
-                <button className="w-12 h-12 bg-brand-gold rounded-full flex items-center justify-center transform scale-0 group-hover:scale-100 transition-transform duration-300 mb-2 shadow-lg shadow-brand-gold/40">
-                    <Play size={20} fill="white" className="ml-1" />
-                </button>
-                <span className="text-text-primary font-bold text-sm text-center transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                    {name}
-                </span>
-                {provider && (
-                    <span className="text-text-muted text-[10px] uppercase tracking-wide transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 delay-50">
-                        {provider}
-                    </span>
-                )}
-            </div>
+            {/* Player count pill — bottom right, always visible */}
+            <span className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-full bg-white/[0.16] backdrop-blur-md px-1.5 py-0.5 text-[9px] font-bold text-white">
+                <Users size={9} />
+                {playerCount}
+            </span>
 
+            {/* Hover: light shimmer + gold play button */}
+            <div className="absolute inset-0 bg-white/[0.08] opacity-0 transition-opacity duration-200 group-hover:opacity-100 flex items-center justify-center">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-gold shadow-glow-gold scale-75 group-hover:scale-100 transition-transform duration-200">
+                    <Play size={16} fill="currentColor" className="ml-0.5 text-bg-deep" />
+                </div>
+            </div>
         </div>
     );
 };

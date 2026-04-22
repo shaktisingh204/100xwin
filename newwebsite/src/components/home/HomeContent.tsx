@@ -66,7 +66,7 @@ export default function HomeContent() {
     }, []);
 
     return (
-        <main className="flex-1 bg-bg-base pt-[64px] min-h-screen pb-20 w-full max-w-[1600px] mx-auto px-4 md:px-6 lg:px-8">
+        <main className="flex-1 bg-bg-base pt-[60px] md:pt-[64px] min-h-screen pb-20 w-full max-w-[1600px] mx-auto px-4 md:px-6 lg:px-8">
             <HomeHero />
             <RecentWinsTicker />
             <CategoryGrid />
@@ -98,7 +98,7 @@ export default function HomeContent() {
                 <HomeGameList
                     title="Top Games"
                     games={topGames}
-                    icon={<Trophy size={20} className="text-amber-400" fill="currentColor" />}
+                    icon={<Trophy size={20} className="text-warning-bright" fill="currentColor" />}
                 />
             )}
 

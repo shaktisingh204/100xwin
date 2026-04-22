@@ -1,13 +1,18 @@
 import axios from 'axios';
 
+// On the client we always go through Next.js /api so that src/middleware.ts
+// can inject the server-only admin token (ADMIN_API_TOKEN). On the server
+// (SSR / server actions) we can call the backend directly using a server-only
+// env var (BACKEND_URL) and the admin token is likewise server-side only.
 const api = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_BACKEND_URL || '/api',
+    baseURL:
+        typeof window === 'undefined'
+            ? process.env.BACKEND_URL || 'http://localhost:9828/api'
+            : '/api',
     headers: {
         'Content-Type': 'application/json',
     },
 });
-
-console.log('API Base URL:', api.defaults.baseURL);
 
 api.interceptors.request.use((config) => {
     // Ensure headers exist
@@ -19,13 +24,14 @@ api.interceptors.request.use((config) => {
         config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // Add Admin Token
-    const adminToken = process.env.NEXT_PUBLIC_ADMIN_API_TOKEN;
-    if (adminToken) {
-        config.headers['x-admin-token'] = adminToken;
-    } else {
-        if (typeof window !== 'undefined') {
-            console.warn('⚠️ Admin API Token is missing in environment variables (NEXT_PUBLIC_ADMIN_API_TOKEN). Some admin actions may fail.');
+    // NOTE: The admin API token is NO LONGER read from NEXT_PUBLIC_ADMIN_API_TOKEN
+    // and is NOT sent from the client bundle. On the client, requests hit /api/*
+    // and src/middleware.ts injects the token server-side from ADMIN_API_TOKEN.
+    // On the server (SSR/server actions), inject it directly here.
+    if (typeof window === 'undefined') {
+        const adminToken = process.env.ADMIN_API_TOKEN;
+        if (adminToken) {
+            config.headers['x-admin-token'] = adminToken;
         }
     }
 

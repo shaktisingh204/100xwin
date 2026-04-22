@@ -3,11 +3,27 @@
 import React, { useState } from 'react';
 import { approveWithdrawal, rejectWithdrawal } from '@/actions/finance';
 import { ArrowUpRight, ArrowDownLeft, Clock, CheckCircle, XCircle, Check, X } from 'lucide-react';
+import { formatTransactionAmount } from '@/utils/transactionCurrency';
 
 interface TransactionsTableProps {
-    transactions: any[];
+    transactions: TransactionRow[];
     loading: boolean;
     onRefresh: () => void;
+}
+
+interface TransactionRow {
+    id: number;
+    type: string;
+    amount: number;
+    status: string;
+    paymentMethod?: string | null;
+    utr?: string | null;
+    paymentDetails?: Record<string, unknown> | null;
+    createdAt: Date | string;
+    user?: {
+        username?: string | null;
+        email?: string | null;
+    } | null;
 }
 
 export default function TransactionsTable({ transactions, loading, onRefresh }: TransactionsTableProps) {
@@ -72,7 +88,7 @@ export default function TransactionsTable({ transactions, loading, onRefresh }: 
                                 </span>
                             </td>
                             <td className="px-4 py-4 font-mono text-white sm:px-6">
-                                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(tx.amount)}
+                                {formatTransactionAmount(tx.amount, tx)}
                             </td>
                             <td className="px-4 py-4 sm:px-6">
                                 {tx.paymentMethod}

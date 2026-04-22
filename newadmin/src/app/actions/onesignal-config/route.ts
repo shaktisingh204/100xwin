@@ -17,11 +17,13 @@ export async function GET() {
             return NextResponse.json({
                 success: true,
                 appId: parsed.appId || "",
-                restApiKey: parsed.restApiKey || "",
+                // SECURITY: never expose the REST API key to the client.
+                // Show only whether it is configured.
+                restApiKeySet: !!parsed.restApiKey,
             });
         }
 
-        return NextResponse.json({ success: true, appId: "", restApiKey: "" });
+        return NextResponse.json({ success: true, appId: "", restApiKeySet: false });
     } catch (err: any) {
         console.error("[OneSignal Config] GET error:", err);
         return NextResponse.json(
@@ -64,7 +66,8 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({
             success: true,
             appId: merged.appId,
-            restApiKey: merged.restApiKey,
+            // SECURITY: never return the REST API key to the client
+            restApiKeySet: !!merged.restApiKey,
         });
     } catch (err: any) {
         console.error("[OneSignal Config] PATCH error:", err);

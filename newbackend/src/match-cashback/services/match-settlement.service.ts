@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma.service';
 import { BetRepository } from '../repositories/bet.repository';
 import { MatchRepository } from '../repositories/match.repository';
@@ -20,10 +20,32 @@ export class MatchSettlementService {
         private readonly refundService: MatchCashbackRefundService,
     ) { }
 
+    /**
+     * Statuses that indicate a match was dismissed, abandoned, or otherwise
+     * did not complete normally. Bets must be voided, not settled.
+     */
+    private static readonly DISMISSED_STATUSES = new Set([
+        'ABANDONED', 'DISMISSED', 'CANCELLED', 'CANCELED', 'POSTPONED',
+        'WALKOVER', 'NO_RESULT', 'VOID', 'VOIDED', 'RETIRED', 'INTERRUPTED',
+    ]);
+
+    private isDismissedStatus(value: string | undefined | null): boolean {
+        const normalized = String(value ?? '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+        return MatchSettlementService.DISMISSED_STATUSES.has(normalized);
+    }
+
     async settleMatch(dto: SettleMatchDto) {
         const match = await this.matchRepository.ensureMatch({ matchId: dto.matchId });
         if (!match) {
             throw new NotFoundException('Match not found.');
+        }
+
+        // Guard: refuse to settle if the underlying event was dismissed/abandoned
+        const eventStatus = await this.matchRepository.getEventMatchStatus(dto.matchId);
+        if (this.isDismissedStatus(eventStatus)) {
+            throw new BadRequestException(
+                `Cannot settle match ${dto.matchId} — event status is "${eventStatus}". Use void-event to refund bets on dismissed/abandoned matches.`,
+            );
         }
 
         let totalBets = 0;
@@ -37,7 +59,11 @@ export class MatchSettlementService {
 
             const userWins = this.didUserWinBet(bet, dto.winningTeam);
             const settledReason = this.buildSettlementReason(bet, dto.winningTeam, userWins, dto.note);
-            const payoutWalletField = this.resolvePayoutWalletField(bet);
+            const payoutAllocations = this.buildAllocations(bet, userWins ? bet.potentialWin : 0);
+            const payoutPaymentMethod =
+                payoutAllocations.length === 1
+                    ? this.mapWalletFieldToPaymentMethod(payoutAllocations[0].walletField)
+                    : 'MULTI_WALLET';
 
             await this.prisma.$transaction(async (prismaTx) => {
                 const updateData: any = {
@@ -45,7 +71,9 @@ export class MatchSettlementService {
                 };
 
                 if (userWins) {
-                    updateData[payoutWalletField] = { increment: bet.potentialWin };
+                    for (const allocation of payoutAllocations) {
+                        updateData[allocation.walletField] = { increment: allocation.amount };
+                    }
                 }
 
                 await this.walletRepository.updateWithinTransaction(prismaTx, bet.userId, updateData);
@@ -55,9 +83,14 @@ export class MatchSettlementService {
                     amount: userWins ? bet.potentialWin : bet.stake,
                     type: userWins ? 'BET_WIN' : 'BET_LOSS',
                     status: 'COMPLETED',
-                    paymentMethod: userWins ? this.mapWalletFieldToPaymentMethod(payoutWalletField) : null,
+                    paymentMethod: userWins ? payoutPaymentMethod : null,
                     paymentDetails: {
                         source: 'MATCH_SETTLEMENT',
+                        walletField:
+                            userWins && payoutAllocations.length === 1
+                                ? payoutAllocations[0].walletField
+                                : null,
+                        allocations: userWins ? payoutAllocations : [],
                         matchId: dto.matchId,
                         betId: String(bet._id),
                         winningTeam: dto.winningTeam,
@@ -105,13 +138,62 @@ export class MatchSettlementService {
         return isBackBet ? isSelectionWinner : !isSelectionWinner;
     }
 
-    private resolvePayoutWalletField(bet: any): 'balance' | 'sportsBonus' | 'cryptoBalance' {
-        const betSource = String(bet.betSource || '');
-        if (betSource.includes('sportsBonus')) {
-            return 'sportsBonus';
+    private roundCurrency(value: number): number {
+        return parseFloat(Number(value || 0).toFixed(2));
+    }
+
+    private getPrimaryWalletField(walletType: string | null | undefined): 'balance' | 'sportsBonus' | 'cryptoBalance' {
+        return walletType === 'crypto' ? 'cryptoBalance' : 'balance';
+    }
+
+    private getBetOriginalStake(bet: any): number {
+        return this.roundCurrency(bet?.originalStake ?? bet?.stake ?? 0);
+    }
+
+    private getBetBonusStakeAmount(bet: any): number {
+        const storedBonusStake = this.roundCurrency(Number(bet?.bonusStakeAmount ?? 0));
+        if (storedBonusStake > 0) {
+            return storedBonusStake;
         }
 
-        return bet.walletType === 'crypto' ? 'cryptoBalance' : 'balance';
+        const betSource = String(bet?.betSource || '');
+        return betSource.includes('sportsBonus') ? this.getBetOriginalStake(bet) : 0;
+    }
+
+    private buildAllocations(
+        bet: any,
+        amount: number,
+    ): Array<{ walletField: 'balance' | 'sportsBonus' | 'cryptoBalance'; amount: number }> {
+        const payoutAmount = this.roundCurrency(amount);
+        if (payoutAmount <= 0) {
+            return [];
+        }
+
+        const primaryWalletField = this.getPrimaryWalletField(bet?.walletType);
+        const originalStake = this.getBetOriginalStake(bet);
+        const bonusStakeAmount = Math.min(originalStake, this.getBetBonusStakeAmount(bet));
+        const walletStakeAmount = this.roundCurrency(Math.max(0, originalStake - bonusStakeAmount));
+
+        if (bonusStakeAmount <= 0 || originalStake <= 0) {
+            return [{ walletField: primaryWalletField, amount: payoutAmount }];
+        }
+
+        if (walletStakeAmount <= 0) {
+            return [{ walletField: 'sportsBonus', amount: payoutAmount }];
+        }
+
+        const bonusPayout = this.roundCurrency((payoutAmount * bonusStakeAmount) / originalStake);
+        const walletPayout = this.roundCurrency(payoutAmount - bonusPayout);
+
+        const allocations: Array<{
+            walletField: 'balance' | 'sportsBonus' | 'cryptoBalance';
+            amount: number;
+        }> = [
+            { walletField: 'sportsBonus', amount: bonusPayout },
+            { walletField: primaryWalletField, amount: walletPayout },
+        ];
+
+        return allocations.filter((allocation) => allocation.amount > 0);
     }
 
     private mapWalletFieldToPaymentMethod(walletField: 'balance' | 'sportsBonus' | 'cryptoBalance') {

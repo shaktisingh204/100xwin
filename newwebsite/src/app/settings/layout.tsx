@@ -33,7 +33,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     return (
         <div className="h-screen overflow-hidden bg-bg-base font-[family-name:var(--font-poppins)] flex flex-col">
             <Header />
-            <div className="flex flex-1 overflow-hidden pt-[64px] pb-[80px] md:pb-0 max-w-[1920px] mx-auto w-full">
+            <div className="flex flex-1 overflow-hidden pt-[60px] md:pt-[64px] pb-[80px] md:pb-0 max-w-[1920px] mx-auto w-full">
                 <LeftSidebar collapsedOnly />
                 <main className="flex-1 min-w-0 bg-bg-base overflow-y-auto overflow-x-hidden">
                     <div className="max-w-[860px] mx-auto px-4 md:px-8 py-6">

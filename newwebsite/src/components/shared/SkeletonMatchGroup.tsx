@@ -14,7 +14,7 @@ export default function SkeletonMatchGroup({ cards = 3 }: SkeletonMatchGroupProp
     return (
         <div className="flex flex-col gap-3 md:gap-4">
             {/* Tournament header */}
-            <div className="flex items-center gap-2 px-1 border-b border-white/5 pb-2">
+            <div className="flex items-center gap-2 px-1 border-b border-white/[0.04] pb-2">
                 <div className="w-1 h-5 rounded-full skeleton-block flex-shrink-0" />
                 <div className="w-40 h-3 rounded skeleton-block" />
                 <div className="ml-auto w-6 h-4 rounded-full skeleton-block" />

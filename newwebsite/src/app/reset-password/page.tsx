@@ -22,8 +22,8 @@ function ResetPasswordForm() {
     if (!token) {
         return (
             <div className="text-center py-4">
-                <div className="w-16 h-16 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center mx-auto mb-4">
-                    <AlertCircle size={32} className="text-red-400" />
+                <div className="w-16 h-16 rounded-full bg-danger-alpha-10 border border-red-500/30 flex items-center justify-center mx-auto mb-4">
+                    <AlertCircle size={32} className="text-danger" />
                 </div>
                 <h2 className="text-text-primary text-xl font-bold mb-2">Invalid Link</h2>
                 <p className="text-text-secondary text-sm mb-6">
@@ -139,9 +139,9 @@ function ResetPasswordForm() {
 
                 {/* Error */}
                 {error && (
-                    <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
-                        <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
-                        <p className="text-red-400 text-[13px] font-medium leading-snug">{error}</p>
+                    <div className="flex items-start gap-2.5 bg-danger-alpha-10 border border-red-500/30 rounded-xl px-4 py-3">
+                        <AlertCircle size={16} className="text-danger shrink-0 mt-0.5" />
+                        <p className="text-danger text-[13px] font-medium leading-snug">{error}</p>
                     </div>
                 )}
 
@@ -180,7 +180,7 @@ export default function ResetPasswordPage() {
                     Back to Home
                 </Link>
 
-                <div className="bg-auth-base border border-divider rounded-2xl p-8 shadow-2xl">
+                <div className="bg-auth-base border border-divider rounded-2xl p-8 shadow-xl">
                     <div className="text-center mb-8">
                         <span className="text-3xl font-extrabold italic">
                             <span className="text-brand-gold">Ze</span>ero

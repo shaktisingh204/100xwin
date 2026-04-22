@@ -39,17 +39,52 @@ export class ReferralService {
 
         if (referrer.id === userId) throw new BadRequestException('Cannot refer yourself');
 
+        // Block if user already has a referrer (prevent referrer switching)
+        const currentUser = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (currentUser?.referrerId) throw new BadRequestException('Referral code already applied');
+
+        // Block circular referral (A→B then B→A)
+        if (referrer.referrerId === userId) throw new BadRequestException('Circular referral not allowed');
+
+        // Block if user already made deposits (prevent retroactive referral abuse)
+        const depositCount = await this.prisma.transaction.count({
+            where: { userId, type: 'DEPOSIT', status: 'APPROVED' },
+        });
+        if (depositCount > 0) throw new BadRequestException('Referral code must be applied before first deposit');
+
         // Link user
         await this.prisma.user.update({
             where: { id: userId },
             data: { referrerId: referrer.id },
         });
 
-        // Check for SIGNUP rewards
-        await this.checkAndAward(userId, 'SIGNUP', 0);
+        // Check for SIGNUP rewards (use synthetic key — one signup per user ever)
+        await this.checkAndAward(userId, 'SIGNUP', 0, `signup_${userId}`);
     }
 
-    async checkAndAward(userId: number, eventType: string, amount: number) {
+    // ── Security limits ────────────────────────────────────────────────────
+    // Hard caps to prevent abuse even if an admin misconfigures a reward rule.
+    private static readonly MAX_SINGLE_REWARD  = 500;   // ₹500 max per single referral payout
+    private static readonly MAX_DAILY_PER_REFERRER = 2000; // ₹2000/day cap per referrer
+
+    async checkAndAward(userId: number, eventType: string, amount: number, sourceTransactionId?: string) {
+        // Sanitize: amount must be a positive finite number
+        if (!Number.isFinite(amount) || amount < 0) return;
+
+        // ── Absolute duplicate guard via sourceTransactionId ────────────
+        // If a sourceTransactionId is provided, check if it's already been
+        // rewarded. The DB has a unique constraint on this column, so even
+        // if this check passes, the INSERT will fail on a race — belt & braces.
+        if (sourceTransactionId) {
+            const alreadyRewarded = await this.prisma.referralHistory.findUnique({
+                where: { sourceTransactionId },
+            });
+            if (alreadyRewarded) {
+                console.log(`[Referral] Skipping — already rewarded for txn ${sourceTransactionId}`);
+                return;
+            }
+        }
+
         // Find user and their referrer
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
@@ -57,6 +92,23 @@ export class ReferralService {
         });
 
         if (!user || !user.referrerId) return;
+
+        // ── Daily cap check for the referrer ────────────────────────────
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const dailyTotal = await this.prisma.referralHistory.aggregate({
+            where: {
+                referrerId: user.referrerId,
+                status: 'COMPLETED',
+                createdAt: { gte: todayStart },
+            },
+            _sum: { amount: true },
+        });
+        const alreadyEarnedToday = dailyTotal._sum.amount || 0;
+        if (alreadyEarnedToday >= ReferralService.MAX_DAILY_PER_REFERRER) {
+            console.log(`[Referral] Daily cap reached for referrer #${user.referrerId} (₹${alreadyEarnedToday}). Skipping.`);
+            return;
+        }
 
         // For flat-trigger events (SIGNUP, DEPOSIT_FIRST), don't filter by conditionValue.
         // For volume-based events, filter where conditionValue <= amount.
@@ -82,21 +134,41 @@ export class ReferralService {
             }
 
             // Calculate Reward
+            // For PERCENTAGE rules on flat events (SIGNUP / DEPOSIT_FIRST) the deposit
+            // amount is 0 — use conditionValue as the base if it is set, otherwise skip.
             let rewardAmount = 0;
             if (rule.rewardType === 'FIXED') {
                 rewardAmount = rule.rewardAmount;
             } else if (rule.rewardType === 'PERCENTAGE') {
-                rewardAmount = (amount * rule.rewardAmount) / 100;
+                const baseAmount =
+                    amount > 0
+                        ? amount
+                        : (rule.conditionValue > 0 ? rule.conditionValue : 0);
+                rewardAmount = (baseAmount * rule.rewardAmount) / 100;
             }
 
+            // ── Hard cap per single payout ──────────────────────────────
+            rewardAmount = Math.min(rewardAmount, ReferralService.MAX_SINGLE_REWARD);
+            // Respect remaining daily budget
+            const remainingDaily = ReferralService.MAX_DAILY_PER_REFERRER - alreadyEarnedToday;
+            rewardAmount = Math.min(rewardAmount, remainingDaily);
+            rewardAmount = parseFloat(rewardAmount.toFixed(2));
+
             if (rewardAmount > 0) {
-                // Give reward to referrer
+                // Credit to casinoBonus wallet with 3x wagering requirement
+                // to prevent instant withdrawal of referral bonuses.
+                const wageringMultiplier = 3;
+                const wageringRequired = parseFloat((rewardAmount * wageringMultiplier).toFixed(2));
+                const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
                 await this.prisma.$transaction([
+                    // Credit to casinoBonus wallet (not main balance)
                     this.prisma.user.update({
                         where: { id: user.referrerId },
                         data: {
-                            balance: { increment: rewardAmount },
-                            fiatBonus: { increment: rewardAmount }, // Referral bonus credited to fiat bonus wallet
+                            casinoBonus: { increment: rewardAmount },
+                            wageringRequired: { increment: wageringRequired },
+                            casinoBonusWageringRequired: { increment: wageringRequired },
                         } as any,
                     }),
                     this.prisma.referralHistory.create({
@@ -104,12 +176,51 @@ export class ReferralService {
                             referrerId: user.referrerId,
                             referredUserId: userId,
                             rewardId: rule.id,
+                            sourceTransactionId: sourceTransactionId || null,
                             amount: rewardAmount,
                             status: 'COMPLETED',
                         },
                     }),
+                    // Transaction log so the credit appears in the user's history
+                    this.prisma.transaction.create({
+                        data: {
+                            userId: user.referrerId,
+                            amount: rewardAmount,
+                            type: 'REFERRAL_BONUS',
+                            status: 'APPROVED',
+                            paymentMethod: 'BONUS_WALLET',
+                            remarks: `Referral bonus: ${rule.name} — ${rule.rewardType === 'FIXED' ? `₹${rewardAmount}` : `${rule.rewardAmount}% (₹${rewardAmount})`} for ${eventType} of user #${userId} (${wageringMultiplier}x wagering required)`,
+                            paymentDetails: {
+                                source: 'REFERRAL',
+                                walletLabel: 'Casino Bonus',
+                                bonusType: 'CASINO',
+                                wageringRequired,
+                                wageringMultiplier,
+                                expiresAt: expiresAt.toISOString(),
+                            } as any,
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                        },
+                    }),
+                    // Create a UserBonus record so the wagering system tracks this correctly
+                    (this.prisma as any).userBonus.create({
+                        data: {
+                            userId: user.referrerId,
+                            bonusId: `referral_${rule.id}`,
+                            bonusCode: `REFERRAL_${eventType}`,
+                            bonusTitle: rule.name,
+                            bonusCurrency: 'INR',
+                            applicableTo: 'CASINO',
+                            depositAmount: 0,
+                            bonusAmount: rewardAmount,
+                            wageringRequired,
+                            wageringDone: 0,
+                            status: 'ACTIVE',
+                            expiresAt,
+                        },
+                    }),
                 ]);
-                console.log(`Awarded ${rewardAmount} to user ${user.referrerId} for ${eventType} of user ${userId}`);
+                console.log(`[Referral] Awarded ₹${rewardAmount} casino bonus to user #${user.referrerId} for ${eventType} of user #${userId} (rule: ${rule.name}) — ${wageringMultiplier}x wagering required`);
             }
         }
     }

@@ -10,6 +10,10 @@ import { UsersModule } from './users/users.module';
 import { ReferralModule } from './referral/referral.module';
 import { EmailModule } from './email/email.module';
 import { SmsModule } from './sms/sms.module';
+import { BruteForceGuard } from './auth/brute-force.guard';
+import { RedisModule } from './redis/redis.module';
+import { MongooseModule } from '@nestjs/mongoose';
+import { UserTrafficEvent, UserTrafficEventSchema } from './auth/schemas/user-traffic-event.schema';
 
 @Module({
     imports: [
@@ -18,17 +22,21 @@ import { SmsModule } from './sms/sms.module';
         EmailModule,
         SmsModule,
         PassportModule,
+        RedisModule,
+        MongooseModule.forFeature([
+            { name: UserTrafficEvent.name, schema: UserTrafficEventSchema },
+        ]),
         JwtModule.registerAsync({
             imports: [ConfigModule],
             useFactory: async (configService: ConfigService) => ({
                 secret: configService.get<string>('JWT_SECRET'),
-                signOptions: { expiresIn: '7d' },
+                signOptions: { expiresIn: '24h' },
             }),
             inject: [ConfigService],
         }),
     ],
-    providers: [AuthService, JwtStrategy],
+    providers: [AuthService, JwtStrategy, BruteForceGuard],
     controllers: [AuthController],
-    exports: [AuthService],
+    exports: [AuthService, BruteForceGuard],
 })
 export class AuthModule { }

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Header from "@/components/layout/Header";
 import LeftSidebar from "@/components/layout/LeftSidebar";
-import { Bomb, ChevronRight, Zap, Star, Lock, Plane } from "lucide-react";
+import { Bomb, ChevronRight, CircleDot, Coins, Crown, Disc3, Hash, Layers, Lock, Plane, RefreshCcw, Target, Tickets, TrendingUp, Zap, Star } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useOriginalsAccess } from "@/hooks/useOriginalsAccess";
 
@@ -62,6 +62,136 @@ const ORIGINALS_GAMES = [
     glowColor: "rgba(129,140,248,0.3)",
     available: true,
   },
+  {
+    id: "plinko",
+    name: "Zeero Plinko",
+    description: "Drop the ball and chase riskier multiplier slots.",
+    icon: <Target size={48} />,
+    href: "/zeero-games/plinko",
+    badge: "LIVE",
+    badgeColor: "bg-amber-500",
+    gradient: "from-[#2b1705] via-[#1b1206] to-[#100904]",
+    accentColor: "#fbbf24",
+    glowColor: "rgba(251,191,36,0.22)",
+    available: true,
+  },
+  {
+    id: "keno",
+    name: "Zeero Keno",
+    description: "Pick your lucky numbers and hit the board.",
+    icon: <Hash size={48} />,
+    href: "/zeero-games/keno",
+    badge: "LIVE",
+    badgeColor: "bg-rose-500",
+    gradient: "from-[#2a0d16] via-[#1a0b11] to-[#10060a]",
+    accentColor: "#fb7185",
+    glowColor: "rgba(251,113,133,0.22)",
+    available: true,
+  },
+  {
+    id: "hilo",
+    name: "Zeero Hi-Lo",
+    description: "Guess whether the next card goes higher or lower.",
+    icon: <TrendingUp size={48} />,
+    href: "/zeero-games/hilo",
+    badge: "LIVE",
+    badgeColor: "bg-cyan-500",
+    gradient: "from-[#082028] via-[#07161d] to-[#040d12]",
+    accentColor: "#22d3ee",
+    glowColor: "rgba(34,211,238,0.22)",
+    available: true,
+  },
+  {
+    id: "roulette",
+    name: "Zeero Roulette",
+    description: "Cover your numbers and let the wheel decide.",
+    icon: <Disc3 size={48} />,
+    href: "/zeero-games/roulette",
+    badge: "LIVE",
+    badgeColor: "bg-red-500",
+    gradient: "from-[#2b0a10] via-[#1c090d] to-[#110507]",
+    accentColor: "#f87171",
+    glowColor: "rgba(248,113,113,0.22)",
+    available: true,
+  },
+  {
+    id: "wheel",
+    name: "Zeero Wheel",
+    description: "Spin a fast bonus wheel for instant multipliers.",
+    icon: <RefreshCcw size={48} />,
+    href: "/zeero-games/wheel",
+    badge: "LIVE",
+    badgeColor: "bg-sky-500",
+    gradient: "from-[#0a1d31] via-[#081521] to-[#050c14]",
+    accentColor: "#38bdf8",
+    glowColor: "rgba(56,189,248,0.22)",
+    available: true,
+  },
+  {
+    id: "coinflip",
+    name: "Zeero Coinflip",
+    description: "Call heads or tails and settle each round instantly.",
+    icon: <Coins size={48} />,
+    href: "/zeero-games/coinflip",
+    badge: "LIVE",
+    badgeColor: "bg-yellow-500",
+    gradient: "from-[#241804] via-[#181004] to-[#0f0902]",
+    accentColor: "#fde047",
+    glowColor: "rgba(253,224,71,0.22)",
+    available: true,
+  },
+  {
+    id: "towers",
+    name: "Zeero Towers",
+    description: "Climb one floor at a time and cash out before you fall.",
+    icon: <Layers size={48} />,
+    href: "/zeero-games/towers",
+    badge: "LIVE",
+    badgeColor: "bg-stone-400",
+    gradient: "from-[#201912] via-[#17120d] to-[#0c0906]",
+    accentColor: "#d6d3d1",
+    glowColor: "rgba(214,211,209,0.18)",
+    available: true,
+  },
+  {
+    id: "color",
+    name: "Zeero Color",
+    description: "Pick a color lane and ride short, fast multiplier rounds.",
+    icon: <CircleDot size={48} />,
+    href: "/zeero-games/color",
+    badge: "LIVE",
+    badgeColor: "bg-pink-500",
+    gradient: "from-[#2a0917] via-[#1a0810] to-[#10040a]",
+    accentColor: "#f472b6",
+    glowColor: "rgba(244,114,182,0.22)",
+    available: true,
+  },
+  {
+    id: "lotto",
+    name: "Zeero Lotto",
+    description: "Choose your ticket line and chase oversized payout grids.",
+    icon: <Tickets size={48} />,
+    href: "/zeero-games/lotto",
+    badge: "LIVE",
+    badgeColor: "bg-teal-500",
+    gradient: "from-[#08201c] via-[#071713] to-[#04100d]",
+    accentColor: "#2dd4bf",
+    glowColor: "rgba(45,212,191,0.22)",
+    available: true,
+  },
+  {
+    id: "jackpot",
+    name: "Zeero Jackpot",
+    description: "Snap into boosted prize pots with a high-volatility hit chase.",
+    icon: <Crown size={48} />,
+    href: "/zeero-games/jackpot",
+    badge: "LIVE",
+    badgeColor: "bg-orange-500",
+    gradient: "from-[#2a1404] via-[#1b0d03] to-[#100702]",
+    accentColor: "#fb923c",
+    glowColor: "rgba(251,146,60,0.22)",
+    available: true,
+  },
 ];
 
 export default function ZeeroGamesPage() {
@@ -76,19 +206,19 @@ export default function ZeeroGamesPage() {
   }, [token, loading, accessLoading, canAccessOriginals, router]);
 
   if (loading || accessLoading || !token || !canAccessOriginals) {
-    return <div className="h-screen flex items-center justify-center bg-bg-base"><div className="animate-spin w-8 h-8 border-2 border-white/20 border-t-white rounded-full" /></div>;
+    return <div className="h-screen flex items-center justify-center bg-bg-base"><div className="animate-spin w-8 h-8 border-2 border-white/[0.12] border-t-white rounded-full" /></div>;
   }
 
   return (
     <div className="h-screen overflow-hidden bg-bg-base flex flex-col">
       <Header />
-      <div className="flex flex-1 overflow-hidden pt-[110px] md:pt-[64px] pb-[80px] md:pb-0 max-w-[1920px] mx-auto w-full">
+      <div className="flex flex-1 overflow-hidden pt-[100px] md:pt-[64px] pb-[80px] md:pb-0 max-w-[1920px] mx-auto w-full">
         <LeftSidebar />
-        <main className="flex-1 min-w-0 bg-bg-base overflow-y-auto overflow-x-hidden border-l border-white/5 border-r border-white/5">
+        <main className="flex-1 min-w-0 bg-bg-base overflow-y-auto overflow-x-hidden border-l border-white/[0.04] border-r border-white/[0.04]">
           <div className="p-4 md:p-8 space-y-10 max-w-5xl mx-auto">
 
             {/* Hero Banner */}
-            <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#1a1208] via-[#201910] to-[#2a1e14] p-8 md:p-12">
+            <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-[#1a1208] via-[#201910] to-[#2a1e14] p-8 md:p-12">
               {/* Background decoration */}
               <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full blur-3xl opacity-20 bg-brand-gold" />
@@ -122,19 +252,19 @@ export default function ZeeroGamesPage() {
                   verifiable. Every bet is transparent.
                 </p>
                 <div className="flex flex-wrap gap-3">
-                  <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2">
                     <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
                       <span className="text-[8px] font-black text-white">✓</span>
                     </div>
                     <span className="text-text-secondary text-xs font-bold">Provably Fair</span>
                   </div>
-                  <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2">
                     <div className="w-4 h-4 rounded-full bg-brand-gold flex items-center justify-center">
                       <span className="text-[8px] font-black text-black">₿</span>
                     </div>
                     <span className="text-text-secondary text-xs font-bold">Fiat & Crypto</span>
                   </div>
-                  <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2">
                     <div className="w-4 h-4 rounded-full bg-purple-500 flex items-center justify-center">
                       <span className="text-[8px] font-black text-white">%</span>
                     </div>
@@ -148,7 +278,7 @@ export default function ZeeroGamesPage() {
             <div>
               <div className="flex items-center gap-3 mb-5">
                 <h2 className="text-text-primary font-black text-xl">All Games</h2>
-                <span className="text-xs text-text-muted bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
+                <span className="text-xs text-text-muted bg-white/[0.04] px-2 py-0.5 rounded-full border border-white/[0.06]">
                   {ORIGINALS_GAMES.filter((g) => g.available).length} Live
                 </span>
               </div>
@@ -161,7 +291,7 @@ export default function ZeeroGamesPage() {
             </div>
 
             {/* Why Originals */}
-            <div className="border-t border-white/10 pt-8">
+            <div className="border-t border-white/[0.06] pt-8">
               <h2 className="text-text-primary font-black text-xl mb-5">Why Zeero Originals?</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {[
@@ -183,7 +313,7 @@ export default function ZeeroGamesPage() {
                 ].map((item) => (
                   <div
                     key={item.title}
-                    className="bg-bg-card rounded-xl border border-white/10 p-5 hover:border-brand-gold/30 transition-all"
+                    className="bg-bg-card rounded-xl border border-white/[0.06] p-5 hover:border-brand-gold/30 transition-all"
                   >
                     <div className="text-3xl mb-3">{item.icon}</div>
                     <h3 className="text-text-primary font-bold text-sm mb-1">{item.title}</h3>
@@ -204,8 +334,8 @@ function GameCard({ game }: { game: (typeof ORIGINALS_GAMES)[0] }) {
     <div
       className={`relative group rounded-2xl border overflow-hidden transition-all duration-300 cursor-pointer
       ${game.available
-          ? "border-white/10 hover:border-white/30 hover:scale-[1.02]"
-          : "border-white/5 opacity-60"
+          ? "border-white/[0.06] hover:border-white/30 hover:scale-[1.02]"
+          : "border-white/[0.04] opacity-60"
         }
       `}
       style={{
@@ -236,7 +366,7 @@ function GameCard({ game }: { game: (typeof ORIGINALS_GAMES)[0] }) {
         {/* Badge */}
         <div className="flex items-start justify-between mb-4">
           <div
-            className="p-3 rounded-xl bg-black/30 border border-white/10"
+            className="p-3 rounded-xl bg-black/30 border border-white/[0.06]"
             style={{ color: game.accentColor }}
           >
             {game.icon}

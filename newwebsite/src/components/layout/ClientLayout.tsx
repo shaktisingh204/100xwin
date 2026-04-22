@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import { ModalProvider, useModal } from "@/context/ModalContext";
 import LoginModal from "@/components/LoginModal/LoginModal";
 import RegisterModal from "@/components/RegisterModal/RegisterModal";
@@ -18,6 +18,14 @@ import MobileBottomNav from "./MobileBottomNav";
 import MobileCategoryBar from "./MobileCategoryBar";
 import { Toaster } from "react-hot-toast";
 import AnnouncementBanner from "./AnnouncementBanner";
+import NotificationPermissionPrompt from "@/components/NotificationPermissionPrompt";
+import { captureUtm } from "@/lib/utm";
+import DailyCheckInAutoPrompt from "@/components/DailyCheckIn/DailyCheckInAutoPrompt";
+import SignupDepositPrompt from "@/components/SignupDepositPrompt";
+import RightSidebar from "@/components/layout/RightSidebar";
+import WagerProgressWidget from "@/components/layout/WagerProgressWidget";
+import PendingDepositWidget from "@/components/layout/PendingDepositWidget";
+import PlatformMaintenanceGuard from "@/components/maintenance/PlatformMaintenanceGuard";
 
 const ModalContainer = () => {
     const {
@@ -36,10 +44,12 @@ const ModalContainer = () => {
 
             {/* Deposit chooser — entry point */}
             <DepositChooserSheet
+                key={isDepositChooserOpen ? 'deposit-chooser-open' : 'deposit-chooser-closed'}
                 isOpen={isDepositChooserOpen}
                 onClose={closeDeposit}
-                onChooseUPI={openUPIDeposit}
-                onChooseManual={openManualDeposit}
+                onChooseDeposit={openUPIDeposit}
+                onChooseCrypto={() => openUPIDeposit({ initialTab: 'crypto', allowFiatTab: false })}
+                onChooseManual={() => openManualDeposit({ allowBack: false })}
             />
 
             {/* UPI gateway deposit — separate full modal */}
@@ -58,7 +68,14 @@ const ModalContainer = () => {
     );
 };
 
-export default function ClientLayout({ children }: { children: React.ReactNode }) {
+export default function ClientLayout({ children, maintenanceConfig }: { children: React.ReactNode; maintenanceConfig?: any }) {
+    // Capture UTM params on every page load — first attribution wins
+    useEffect(() => { captureUtm(); }, []);
+
+    const isBlocked = maintenanceConfig?.platformBlocked ?? false;
+    const message = maintenanceConfig?.platformMessage ?? '';
+    const allowedUsers = maintenanceConfig?.allowedUsers ?? [];
+
     return (
         <AuthProvider>
             <SocketProvider>
@@ -66,20 +83,34 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     <WalletProvider>
                         <BetProvider>
                             <LayoutProvider>
-                                <AnnouncementBanner />
-                                <React.Suspense fallback={<div className="h-[50px] md:hidden bg-[#1A1D21]" />}>
-                                    <MobileCategoryBar />
-                                </React.Suspense>
+                                <PlatformMaintenanceGuard isBlocked={isBlocked} message={message} allowedUsers={allowedUsers}>
+                                    <AnnouncementBanner />
+                                    <React.Suspense fallback={<div className="h-[50px] md:hidden bg-bg-modal" />}>
+                                        <MobileCategoryBar />
+                                    </React.Suspense>
 
-                                <PageTransition>
-                                    {children}
-                                </PageTransition>
-                                <MobileBottomNav />
+                                    <div className="flex flex-row w-full h-[100dvh]">
+                                        <div className="flex-1 min-w-0 flex flex-col relative">
+                                            <PageTransition>
+                                                {children}
+                                            </PageTransition>
+                                        </div>
+                                        <RightSidebar />
+                                    </div>
+                                    <MobileBottomNav />
+                                </PlatformMaintenanceGuard>
                                 <ModalContainer />
+                                <NotificationPermissionPrompt />
+                                <DailyCheckInAutoPrompt />
+                                <SignupDepositPrompt />
+                                <WagerProgressWidget />
+                                <PendingDepositWidget />
                                 <Toaster position="top-center" toastOptions={{
                                     style: {
-                                        background: '#333',
-                                        color: '#fff',
+                                        background: '#171921',
+                                        color: '#E8ECF4',
+                                        border: '1px solid rgba(255,255,255,0.06)',
+                                        borderRadius: '12px',
                                     },
                                 }} />
 

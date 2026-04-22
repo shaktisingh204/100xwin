@@ -216,37 +216,69 @@ export class MatchCashbackRefundService {
             }
         }
 
-        if (promotionType === 'FIRST_OVER_SIX_CASHBACK' && !this.isPlacedBeforeTrigger(bet, promotion)) {
-            return false;
+        if (promotionType === 'FIRST_OVER_SIX_CASHBACK') {
+            if (!this.isPreMatchBet(bet, match)) {
+                return false;
+            }
+            if (!this.isMatchOddsMarket(bet)) {
+                return false;
+            }
+            if (!this.isPlacedBeforeTrigger(bet, promotion)) {
+                return false;
+            }
         }
 
         return true;
     }
 
+    private isMatchOddsMarket(bet: any): boolean {
+        const marketName = String(bet.marketName || bet.computedMarketName || '').toLowerCase();
+        const gtype = String(bet.gtype || '').toLowerCase();
+        const mname = String(bet.mname || '').toLowerCase();
+
+        // Explicitly exclude fancy/session/bookmaker/khado markets
+        const isFancyGtype = ['session', 'fancy', 'fancy2', 'khado', 'meter', 'oddeven', 'other fancy'].includes(gtype);
+        if (isFancyGtype) return false;
+
+        // Bookmaker (mname === 'BHAV' or gtype includes 'bookmaker')
+        if (gtype.includes('bookmaker') || mname === 'bhav') return false;
+
+        // Market name must contain 'match' and not be session/fancy
+        const isMatchInName =
+            marketName.includes('match odds') ||
+            marketName.includes('match winner') ||
+            marketName.includes('match') && !marketName.includes('session') && !marketName.includes('fancy');
+
+        // If gtype is 'match' it's unambiguously Match Odds
+        if (gtype === 'match') return true;
+
+        return isMatchInName;
+    }
+
     private isPreMatchBet(bet: any, match: any) {
         if (!match?.matchDate || !bet?.createdAt) {
-            return true;
+            return false;
         }
 
         const betPlacedAt = new Date(bet.createdAt).getTime();
         const matchStart = new Date(match.matchDate).getTime();
 
         return Number.isFinite(betPlacedAt) && Number.isFinite(matchStart)
-            ? betPlacedAt <= matchStart
-            : true;
+            ? betPlacedAt < matchStart
+            : false;
     }
 
     private isPlacedBeforeTrigger(bet: any, promotion: any) {
         if (!promotion?.triggerConfig?.triggeredAt || !bet?.createdAt) {
-            return true;
+            return false;
         }
 
         const betPlacedAt = new Date(bet.createdAt).getTime();
         const triggeredAt = new Date(promotion.triggerConfig.triggeredAt).getTime();
 
         return Number.isFinite(betPlacedAt) && Number.isFinite(triggeredAt)
-            ? betPlacedAt <= triggeredAt
-            : true;
+            ? betPlacedAt < triggeredAt
+            : false;
     }
 
     private buildPromotionDescription(promotion: any) {

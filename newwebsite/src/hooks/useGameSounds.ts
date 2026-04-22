@@ -110,7 +110,7 @@ export function useGameSounds() {
   /** Short coin click — bet placed */
   const playBet = useCallback(() => {
     const c = ctx(); if (!c) return;
-    const out = makeGain(c, 0.4);
+    const out = makeGain(c, 0.8);
     playTone(c, 880, "sine", 0, 0.05, 0.4, 0.001, out);
     playTone(c, 1200, "sine", 0.04, 0.04, 0.2, 0.001, out);
   }, [ctx]);
@@ -120,14 +120,14 @@ export function useGameSounds() {
     const c = ctx(); if (!c) return;
     // Frequency rises with multiplier (200-1600 Hz range)
     const freq = Math.min(200 + (multiplier - 1) * 80, 1600);
-    const out = makeGain(c, 0.12);
+    const out = makeGain(c, 0.25);
     playTone(c, freq, "sine", 0, 0.06, 0.12, 0.001, out);
   }, [ctx]);
 
   /** Ascending arpeggio — cashout win */
   const playWin = useCallback(() => {
     const c = ctx(); if (!c) return;
-    const out = makeGain(c, 0.5);
+    const out = makeGain(c, 1.0);
     const notes = [523, 659, 784, 1047];
     notes.forEach((f, i) => playTone(c, f, "sine", i * 0.09, 0.12, 0.45, 0.001, out));
   }, [ctx]);
@@ -135,7 +135,7 @@ export function useGameSounds() {
   /** Multi-note fanfare — big win */
   const playBigWin = useCallback(() => {
     const c = ctx(); if (!c) return;
-    const out = makeGain(c, 0.55);
+    const out = makeGain(c, 1.1);
     const phrases = [523, 659, 784, 1047, 1319, 1047, 1319, 1568];
     phrases.forEach((f, i) => playTone(c, f, "sine", i * 0.1, 0.15, 0.5, 0.001, out));
     playNoise(c, 0.2, 0.08, 3000, out);
@@ -144,7 +144,7 @@ export function useGameSounds() {
   /** Low rumble + descending wail — crash */
   const playCrash = useCallback(() => {
     const c = ctx(); if (!c) return;
-    const out = makeGain(c, 0.6);
+    const out = makeGain(c, 1.2);
     // Descending siren
     const osc = c.createOscillator();
     const g = c.createGain();
@@ -162,7 +162,7 @@ export function useGameSounds() {
   /** High sparkling chime — gem reveal */
   const playGemReveal = useCallback(() => {
     const c = ctx(); if (!c) return;
-    const out = makeGain(c, 0.35);
+    const out = makeGain(c, 0.7);
     playTone(c, 2093, "sine", 0, 0.1, 0.3, 0.001, out);
     playTone(c, 2637, "sine", 0.05, 0.1, 0.2, 0.001, out);
   }, [ctx]);
@@ -170,7 +170,7 @@ export function useGameSounds() {
   /** Low boom — mine explosion */
   const playMineExplosion = useCallback(() => {
     const c = ctx(); if (!c) return;
-    const out = makeGain(c, 0.7);
+    const out = makeGain(c, 1.4);
     playNoise(c, 0.6, 0.7, 400, out);
     playTone(c, 80, "sine", 0, 0.3, 0.5, 0.001, out);
   }, [ctx]);
@@ -178,7 +178,7 @@ export function useGameSounds() {
   /** Rapid staccato ticks — dice roll */
   const playDiceRoll = useCallback(() => {
     const c = ctx(); if (!c) return;
-    const out = makeGain(c, 0.25);
+    const out = makeGain(c, 0.5);
     for (let i = 0; i < 10; i++) {
       const freq = 300 + Math.random() * 400;
       playNoise(c, 0.03, 0.25, freq, out);
@@ -190,7 +190,7 @@ export function useGameSounds() {
   const playLimboRise = useCallback((mult: number) => {
     const c = ctx(); if (!c) return;
     const freq = Math.min(150 + (mult - 1) * 60, 1200);
-    const out = makeGain(c, 0.1);
+    const out = makeGain(c, 0.2);
     playTone(c, freq, "sine", 0, 0.08, 0.1, 0.001, out);
   }, [ctx]);
 

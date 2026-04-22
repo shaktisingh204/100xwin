@@ -18,7 +18,10 @@ import { Public } from '../auth/public.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { BonusService } from '../bonus/bonus.service';
 import { UsersService } from '../users/users.service';
+import { ReferralService } from '../referral/referral.service';
+import { EmailService } from '../email/email.service';
 import { buildGatewayRetryContext } from './payment-retry.util';
+import { assertMinDeposit } from './payment-limits.util';
 
 @Controller('payment')
 export class PaymentController {
@@ -30,6 +33,8 @@ export class PaymentController {
     private configService: ConfigService,
     private readonly bonusService: BonusService,
     private readonly usersService: UsersService,
+    private readonly referralService: ReferralService,
+    private readonly emailService: EmailService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -53,6 +58,15 @@ export class PaymentController {
         return res
           .status(HttpStatus.UNAUTHORIZED)
           .json({ success: false, message: 'Not authenticated' });
+      }
+
+      const minErr = await assertMinDeposit(
+        this.prisma,
+        parseFloat(orderData.trade_amount),
+        { gatewayKey: 'MIN_DEPOSIT' },
+      );
+      if (minErr) {
+        return res.status(HttpStatus.BAD_REQUEST).json({ success: false, message: minErr });
       }
 
       const retryContext = await buildGatewayRetryContext(
@@ -262,6 +276,29 @@ export class PaymentController {
           .json({ success: false, message: 'Invalid userId or amount' });
       }
 
+      // ── Server-side minimum withdrawal enforcement ────────────────
+      try {
+        const cfg = await this.prisma.systemConfig.findUnique({
+          where: { key: 'MIN_WITHDRAWAL' },
+        });
+        const parsed = cfg ? parseFloat(cfg.value) : NaN;
+        const minWithdrawal = !isNaN(parsed) && parsed > 0 ? parsed : 500;
+        if (amount < minWithdrawal) {
+          return res.status(HttpStatus.BAD_REQUEST).json({
+            success: false,
+            message: `Minimum withdrawal amount is ₹${minWithdrawal}`,
+          });
+        }
+      } catch {
+        /* fall through with default enforced below */
+        if (amount < 500) {
+          return res.status(HttpStatus.BAD_REQUEST).json({
+            success: false,
+            message: 'Minimum withdrawal amount is ₹500',
+          });
+        }
+      }
+
       // Check balance
       const user = await this.prisma.user.findUnique({ where: { id: userId } });
       if (!user || user.balance < amount) {
@@ -403,23 +440,52 @@ export class PaymentController {
         return;
       }
 
-      const creditAmount = gatewayAmount > 0 ? gatewayAmount : txn.amount;
+      // SECURITY: credit amount is pinned to the stored PENDING txn amount,
+      // not the webhook body. Even with a valid HMAC, accepting body.amount
+      // would let a valid signed payload for a small deposit be re-played
+      // or mirror-posted with an inflated amount field to over-credit.
+      // If the gateway reports a mismatched amount we log and refuse.
+      if (
+        gatewayAmount > 0 &&
+        Math.abs(gatewayAmount - txn.amount) > 0.01
+      ) {
+        this.logger.warn(
+          `[UPI1] Amount mismatch — stored ₹${txn.amount}, gateway reported ₹${gatewayAmount}. Refusing credit.`,
+        );
+        return;
+      }
+      const creditAmount = txn.amount;
 
       // Check if this is the user's first deposit (for referral + bonus purposes)
       const previousDeposits = await this.prisma.transaction.count({
         where: { userId: txn.userId, type: 'DEPOSIT', status: 'APPROVED' },
       });
 
-      await this.prisma.$transaction([
-        this.prisma.user.update({
+      // ── Atomic credit with PENDING→APPROVED guard ─────────────────────
+      // Use updateMany with a status predicate so that only ONE caller can
+      // transition PENDING→APPROVED. This closes the race where a
+      // cancellation (PENDING→REJECTED) and a late webhook race each other,
+      // and also blocks double-credit from a replayed webhook.
+      const creditApplied = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.transaction.updateMany({
+          where: { id: txn.id, status: 'PENDING' },
+          data: { status: 'APPROVED', amount: creditAmount },
+        });
+        if (updated.count === 0) return false;
+        await tx.user.update({
           where: { id: txn.userId },
           data: { balance: { increment: creditAmount } },
-        }),
-        this.prisma.transaction.update({
-          where: { id: txn.id },
-          data: { status: 'APPROVED', amount: creditAmount },
-        }),
-      ]);
+        });
+        return true;
+      });
+
+      if (!creditApplied) {
+        this.logger.warn(
+          `[UPI1] creditDeposit skipped — transaction no longer PENDING (orderNo: ${orderNo})`,
+        );
+        return;
+      }
+
       this.logger.log(
         `[UPI1] Deposit APPROVED — userId: ${txn.userId}, amount: ${creditAmount}, orderNo: ${orderNo}`,
       );
@@ -477,7 +543,26 @@ export class PaymentController {
       }
 
       // ── Referral rewards ──────────────────────────────────────────────
-      // (Imported lazily to avoid circular injection — handled after commit)
+      try {
+        if (previousDeposits === 0) {
+          await this.referralService.checkAndAward(txn.userId, 'DEPOSIT_FIRST', creditAmount, `dep_${txn.id}_first`);
+        }
+        await this.referralService.checkAndAward(txn.userId, 'DEPOSIT_RECURRING', creditAmount, `dep_${txn.id}_rec`);
+      } catch (e) {
+        this.logger.error(
+          `[UPI1] Referral reward failed (non-fatal): ${e.message}`,
+        );
+      }
+
+      // ── Deposit confirmation email ───────────────────────────────────
+      try {
+        const user = await this.prisma.user.findUnique({ where: { id: txn.userId }, select: { email: true, username: true } });
+        if (user?.email) {
+          this.emailService.sendDepositSuccess(user.email, user.username || user.email, creditAmount.toFixed(2), 'INR').catch(() => {});
+        }
+      } catch (e) {
+        this.logger.error(`[UPI1] Deposit email failed (non-fatal): ${e.message}`);
+      }
     } catch (e) {
       this.logger.error(`[UPI1] creditDeposit failed: ${e.message}`);
     }
@@ -507,7 +592,7 @@ export class PaymentController {
           .json({ success: false, message: 'Admin access required' });
       }
 
-      const { userId, amount, method, utr, remarks } = body;
+      const { userId, amount, method, utr, remarks, wallet, currency } = body;
       const numAmount = parseFloat(amount);
 
       if (!userId || !numAmount || numAmount <= 0) {
@@ -518,6 +603,16 @@ export class PaymentController {
             message: 'userId and a positive amount are required',
           });
       }
+
+      // Wallet routing: accept explicit `wallet` flag, otherwise infer from
+      // method / currency so legacy callers that only pass a method label
+      // still route Crypto deposits to `cryptoBalance` instead of the INR
+      // `balance`.
+      const isCrypto =
+        String(wallet || '').toLowerCase() === 'crypto' ||
+        String(currency || '').toUpperCase() === 'CRYPTO' ||
+        String(currency || '').toUpperCase() === 'USD' ||
+        String(method || '').toLowerCase().includes('crypto');
 
       const user = await this.prisma.user.findUnique({
         where: { id: Number(userId) },
@@ -531,11 +626,13 @@ export class PaymentController {
       // Generate unique UTR if not provided
       const utrRef = (utr || '').trim() || `ADMIN${Date.now()}`;
 
-      // Create APPROVED transaction & credit balance atomically
+      // Create APPROVED transaction & credit the correct wallet atomically.
       const [, txn] = await this.prisma.$transaction([
         this.prisma.user.update({
           where: { id: Number(userId) },
-          data: { balance: { increment: numAmount } },
+          data: isCrypto
+            ? ({ cryptoBalance: { increment: numAmount } } as any)
+            : { balance: { increment: numAmount } },
         }),
         this.prisma.transaction.create({
           data: {
@@ -543,7 +640,7 @@ export class PaymentController {
             amount: numAmount,
             type: 'DEPOSIT',
             status: 'APPROVED',
-            paymentMethod: method || 'Manual Deposit (Admin)',
+            paymentMethod: method || (isCrypto ? 'Crypto (Manual)' : 'Manual Deposit (Admin)'),
             utr: utrRef,
             remarks:
               remarks ||
@@ -552,21 +649,26 @@ export class PaymentController {
               gateway: 'admin_manual',
               addedBy: adminUser.id,
               adminNote: remarks || '',
+              wallet: isCrypto ? 'crypto' : 'fiat',
+              currency: isCrypto ? 'USD' : 'INR',
+              depositCurrency: isCrypto ? 'CRYPTO' : 'INR',
             } as any,
           },
         }),
       ]);
 
-      // ── Track total deposited ──────────────────────────────────────────
-      try {
-        await this.usersService.setWageringOnFirstDeposit(
-          Number(userId),
-          numAmount,
-        );
-      } catch (e) {
-        this.logger.error(
-          `[ADMIN] totalDeposited update failed (non-fatal): ${e.message}`,
-        );
+      // ── Track total deposited (INR analytics field — fiat only) ────────
+      if (!isCrypto) {
+        try {
+          await this.usersService.setWageringOnFirstDeposit(
+            Number(userId),
+            numAmount,
+          );
+        } catch (e) {
+          this.logger.error(
+            `[ADMIN] totalDeposited update failed (non-fatal): ${e.message}`,
+          );
+        }
       }
 
       this.logger.log(

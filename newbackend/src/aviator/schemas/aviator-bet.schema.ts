@@ -9,6 +9,8 @@ export class AviatorBet {
   @Prop({ required: true }) roundId: number;
   @Prop({ required: true }) userId: number;
   @Prop({ required: true }) betAmount: number;
+  @Prop({ default: false }) usedBonus: boolean;
+  @Prop({ default: 0 }) bonusAmount: number;
   @Prop({ default: 'ACTIVE' }) status: AviatorBetStatus;
   @Prop({ default: 0 }) cashedOutMultiplier: number;
   @Prop({ default: 0 }) payout: number;

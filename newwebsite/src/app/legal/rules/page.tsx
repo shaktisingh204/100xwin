@@ -90,14 +90,14 @@ const SECTIONS = [
 
 export default function RulesPage() {
     return (
-        <div className="min-h-[calc(100vh-64px)] bg-[#0E0F11] text-white pb-24">
+        <div className="min-h-[calc(100vh-64px)] bg-bg-zeero-3 text-white pb-24">
 
             {/* Header */}
-            <div className="relative overflow-hidden bg-gradient-to-b from-brand-gold/6 via-[#111315] to-[#0E0F11] border-b border-white/5">
+            <div className="relative overflow-hidden bg-gradient-to-b from-brand-gold/6 via-[#0F1016] to-[#0C0D12] border-b border-white/[0.04]">
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(212,175,55,0.08),transparent_60%)]" />
                 <div className="relative max-w-3xl mx-auto px-4 pt-10 pb-8 text-center">
                     <div className="hidden md:flex absolute top-6 left-4">
-                        <Link href="/" className="flex items-center gap-2 text-text-muted hover:text-white transition-colors text-sm font-medium bg-white/5 hover:bg-white/10 border border-white/5 px-4 py-2 rounded-full">
+                        <Link href="/" className="flex items-center gap-2 text-text-muted hover:text-white transition-colors text-sm font-medium bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] px-4 py-2 rounded-full">
                             <Home size={14} /> Back to Home
                         </Link>
                     </div>
@@ -116,11 +116,11 @@ export default function RulesPage() {
 
             {/* Quick Navigation */}
             <div className="max-w-3xl mx-auto px-4 pt-8">
-                <div className="bg-[#111315] border border-white/5 rounded-2xl p-5 mb-8">
+                <div className="bg-bg-deep border border-white/[0.04] rounded-2xl p-5 mb-8">
                     <p className="text-xs font-black text-text-muted uppercase tracking-widest mb-3">Quick Navigation</p>
                     <div className="flex flex-wrap gap-2">
                         {SECTIONS.map(({ title }) => (
-                            <span key={title} className="text-xs text-text-muted bg-white/5 px-3 py-1.5 rounded-full">
+                            <span key={title} className="text-xs text-text-muted bg-white/[0.04] px-3 py-1.5 rounded-full">
                                 {title.replace(/^\d+\.\s/, '')}
                             </span>
                         ))}
@@ -131,8 +131,8 @@ export default function RulesPage() {
             {/* Content */}
             <div className="max-w-3xl mx-auto px-4 pb-12 space-y-6">
                 {SECTIONS.map(({ title, content }) => (
-                    <div key={title} className="rounded-2xl border border-white/5 bg-[#111315] overflow-hidden">
-                        <div className="px-6 py-4 border-b border-white/5">
+                    <div key={title} className="rounded-2xl border border-white/[0.04] bg-bg-deep overflow-hidden">
+                        <div className="px-6 py-4 border-b border-white/[0.04]">
                             <h2 className="text-white font-bold text-base">{title}</h2>
                         </div>
                         <div className="px-6 py-5">
@@ -149,10 +149,10 @@ export default function RulesPage() {
                 ))}
 
                 <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                    <Link href="/legal/privacy-policy" className="flex-1 text-center py-3 rounded-xl border border-white/10 text-text-muted hover:text-white hover:border-brand-gold/30 text-sm font-bold transition-all">
+                    <Link href="/legal/privacy-policy" className="flex-1 text-center py-3 rounded-xl border border-white/[0.06] text-text-muted hover:text-white hover:border-brand-gold/30 text-sm font-bold transition-all">
                         Privacy Policy →
                     </Link>
-                    <Link href="/legal/terms" className="flex-1 text-center py-3 rounded-xl border border-white/10 text-text-muted hover:text-white hover:border-brand-gold/30 text-sm font-bold transition-all">
+                    <Link href="/legal/terms" className="flex-1 text-center py-3 rounded-xl border border-white/[0.06] text-text-muted hover:text-white hover:border-brand-gold/30 text-sm font-bold transition-all">
                         Terms of Service →
                     </Link>
                 </div>

@@ -4,17 +4,16 @@ import React, { useState, useEffect } from 'react';
 import {
     X, ArrowDownLeft, ShieldCheck, AlertCircle, Loader2,
     Check, CheckCircle2, Bitcoin,
-    Landmark, User, Hash, Code, Smartphone, Wallet, Lock, Zap, CreditCard,
+    Landmark, User, Hash, Code, Smartphone, Wallet, Lock, Zap,
 } from 'lucide-react';
 import api from '@/services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
 import { getCurrencySymbol } from '@/utils/currency';
-
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-type WithdrawMethod = 'upi' | 'bank' | 'crypto';
+type WithdrawMethod = 'bank' | 'crypto';
 
 interface WithdrawModalProps {
     onClose: () => void;
@@ -38,7 +37,7 @@ const cryptoOptions = [
 
 // Shared field style
 const fieldCls =
-    'w-full bg-white/5 border border-white/8 hover:border-orange-500/30 focus:border-orange-500/50 rounded-xl py-3 px-4 text-sm text-white placeholder-gray-600 focus:outline-none transition-all focus:shadow-[0_0_0_3px_rgba(249,115,22,0.1)]';
+    'w-full bg-white/[0.04] border border-white/[0.05] hover:border-brand-gold/30 focus:border-brand-gold/50 rounded-xl py-3 px-4 text-sm text-text-white placeholder-gray-600 focus:outline-none transition-all focus:shadow-glow-gold';
 const labelCls = 'text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5 block';
 const iconFieldCls = `${fieldCls} pl-10`;
 
@@ -81,26 +80,35 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
 
     // Determine available methods
     const availableMethods: WithdrawMethod[] = isIndia
-        ? ['upi', 'bank', ...(hasCryptoBalance ? ['crypto' as WithdrawMethod] : [])]
+        ? ['bank', ...(hasCryptoBalance ? ['crypto' as WithdrawMethod] : [])]
         : hasCryptoBalance ? ['crypto'] : [];
 
     // Always start on first available method
-    const [method, setMethod] = useState<WithdrawMethod>(availableMethods[0] ?? 'upi');
+    const [method, setMethod] = useState<WithdrawMethod>(availableMethods[0] ?? 'bank');
 
     // Shared
     const [amount, setAmount] = useState('');
     const [loading, setLoading] = useState(false);
-    const [convertingBonus, setConvertingBonus] = useState<'CASINO' | 'SPORTS' | null>(null);
+
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     // ── Min withdrawal settings ────────────────────────────────────────────
     const [minWithdrawal, setMinWithdrawal] = useState<number>(500);
     const [minWithdrawalCrypto, setMinWithdrawalCrypto] = useState<number>(10);
 
+    const isProfileIncomplete = user && (
+        !user.firstName?.trim() || 
+        !user.lastName?.trim() || 
+        !user.country?.trim() || 
+        !user.city?.trim() ||
+        !user.email?.trim() ||
+        !user.phoneNumber?.trim()
+    );
+
     useEffect(() => {
         // Update method if available methods change (e.g. wallet loaded)
         if (!availableMethods.includes(method)) {
-            setMethod(availableMethods[0] ?? 'upi');
+            setMethod(availableMethods[0] ?? 'bank');
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isIndia, hasCryptoBalance]);
@@ -117,19 +125,27 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
             .catch(() => { });
     }, []);
 
+    // ── Saved withdrawal details (localStorage) ─────────────────────────
+    const savedBank = typeof window !== 'undefined'
+        ? JSON.parse(localStorage.getItem('withdraw_bank') || 'null') : null;
+    const savedCrypto = typeof window !== 'undefined'
+        ? JSON.parse(localStorage.getItem('withdraw_crypto') || 'null') : null;
+
     // ── UPI fields ─────────────────────────────────────────────────────────
     const [upiHolderName, setUpiHolderName] = useState('');
     const [upiId, setUpiId] = useState('');
 
     // ── Bank fields ────────────────────────────────────────────────────────
-    const [bankHolderName, setBankHolderName] = useState('');
-    const [bankAccountNo, setBankAccountNo] = useState('');
-    const [bankIfsc, setBankIfsc] = useState('');
-    const [bankName, setBankName] = useState('');
+    const [bankHolderName, setBankHolderName] = useState(savedBank?.holderName || '');
+    const [bankAccountNo, setBankAccountNo] = useState(savedBank?.accountNo || '');
+    const [bankIfsc, setBankIfsc] = useState(savedBank?.ifsc || '');
+    const [bankName, setBankName] = useState(savedBank?.bankName || '');
 
     // ── Crypto fields ──────────────────────────────────────────────────────
-    const [selectedCoin, setSelectedCoin] = useState(cryptoOptions[0]);
-    const [walletAddress, setWalletAddress] = useState('');
+    const [selectedCoin, setSelectedCoin] = useState(
+        (savedCrypto?.coinId && cryptoOptions.find(c => c.id === savedCrypto.coinId)) || cryptoOptions[0],
+    );
+    const [walletAddress, setWalletAddress] = useState(savedCrypto?.address || '');
 
     const resetMessage = () => setMessage(null);
 
@@ -165,31 +181,13 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
     ].map((item) => ({
         ...item,
         wageringRemaining: getBonusWageringRemaining(item.bonus),
+        isPendingConversion: item.bonus?.status === 'PENDING_CONVERSION',
     }));
 
-    const convertibleBonusActions = bonusActionItems.filter((item) => item.balance > 0 && item.wageringRemaining <= 0);
-    const lockedBonusActions = bonusActionItems.filter((item) => item.balance > 0 && item.wageringRemaining > 0);
-
-    const handleConvertBonus = async (type: 'CASINO' | 'SPORTS') => {
-        setConvertingBonus(type);
-        resetMessage();
-        try {
-            const res = await api.post('/bonus/convert', { type });
-            const amountMoved = Number(res.data?.amount || 0);
-            const walletLabel = String(res.data?.walletLabel || (type === 'SPORTS' ? 'Sports Bonus' : 'Casino Bonus'));
-            await refreshWallet();
-            const successText = `${walletLabel} moved to your main wallet${amountMoved > 0 ? ` (${fiatSymbol}${fmt(amountMoved)})` : ''}.`;
-            setMessage({ type: 'success', text: successText });
-            toast.success(successText);
-        } catch (err: unknown) {
-            const maybeAxiosError = err as { response?: { data?: { message?: string } }; message?: string };
-            const msg = maybeAxiosError.response?.data?.message || maybeAxiosError.message || 'Unable to move bonus to main wallet.';
-            setMessage({ type: 'error', text: msg });
-            toast.error(msg);
-        } finally {
-            setConvertingBonus(null);
-        }
-    };
+    const actionableBonusActions = bonusActionItems.filter((item) => item.balance > 0 && !item.bonus?.isSynthetic);
+    // Awaiting admin action — wagering done but status is PENDING_CONVERSION
+    const pendingApprovalBonusActions = actionableBonusActions.filter((item) => item.isPendingConversion);
+    const lockedBonusActions = actionableBonusActions.filter((item) => !item.isPendingConversion && item.wageringRemaining > 0);
 
     // ── Forfeit bonuses before submitting withdrawal ─────────────────────
     const forfeitBonusesAndSubmit = async (submitFn: () => Promise<void>) => {
@@ -258,6 +256,10 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
             bankName,
             currency: user?.currency || 'INR',
         });
+        // Save bank details for future auto-fill
+        localStorage.setItem('withdraw_bank', JSON.stringify({
+            holderName: bankHolderName, accountNo: bankAccountNo, ifsc: bankIfsc, bankName,
+        }));
     };
 
     // ── Submit: Crypto ────────────────────────────────────────────────────
@@ -275,11 +277,14 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
             address: walletAddress,
             currency: 'USD',
         });
+        // Save crypto details for future auto-fill
+        localStorage.setItem('withdraw_crypto', JSON.stringify({
+            coinId: selectedCoin.id, address: walletAddress,
+        }));
     };
 
     const handleSubmit = () => {
         const submitFn =
-            method === 'upi' ? handleUpiSubmit :
             method === 'bank' ? handleBankSubmit :
             handleCryptoSubmit;
         forfeitBonusesAndSubmit(submitFn);
@@ -290,9 +295,8 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
 
     // Method card config
     const allMethodCards: { id: WithdrawMethod; label: string; sub: string; icon: React.ReactNode }[] = [
-        { id: 'upi' as WithdrawMethod, label: 'UPI', sub: 'Instant · India', icon: <Smartphone className="w-5 h-5 text-green-400" /> },
-        { id: 'bank' as WithdrawMethod, label: 'Bank Transfer', sub: 'NEFT / IMPS', icon: <Landmark className="w-5 h-5 text-blue-400" /> },
-        { id: 'crypto' as WithdrawMethod, label: 'Crypto', sub: 'On-chain · Secure', icon: <Bitcoin className="w-5 h-5 text-orange-400" /> },
+        { id: 'bank' as WithdrawMethod, label: 'Bank Transfer', sub: 'NEFT / IMPS', icon: <Landmark className="w-5 h-5 text-brand-gold" /> },
+        { id: 'crypto' as WithdrawMethod, label: 'Crypto', sub: 'On-chain · Secure', icon: <Bitcoin className="w-5 h-5 text-warning" /> },
     ];
     const methodCards = allMethodCards.filter(m => availableMethods.includes(m.id));
 
@@ -300,98 +304,144 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
     return (
         <>
             {/* Backdrop */}
-            <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-md" onClick={onClose} />
+            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-lg" onClick={onClose} />
 
             {/* Modal — bottom sheet on mobile, centered on desktop */}
             <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 pointer-events-none">
                 <div
-                    className="pointer-events-auto w-full sm:max-w-4xl max-h-[95dvh] sm:max-h-[88vh] flex flex-col rounded-t-3xl sm:rounded-2xl overflow-hidden shadow-2xl"
-                    style={{ background: 'linear-gradient(135deg, #0f1923 0%, #141f2e 100%)' }}
+                    className="pointer-events-auto w-full sm:max-w-5xl max-h-[95dvh] sm:max-h-[90vh] flex flex-col rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-xl border border-white/[0.05] relative"
+                    style={{ background: 'linear-gradient(155deg, var(--bg-zeero-2) 0%, var(--bg-deep-3) 60%, #0a0a12 100%)' }}
                 >
+                    {/* Ambient glow accents */}
+                    <div className="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full opacity-20 blur-3xl" style={{ background: 'radial-gradient(circle, var(--brand-gold) 0%, transparent 70%)' }} />
+                    <div className="pointer-events-none absolute -bottom-32 -left-24 w-80 h-80 rounded-full opacity-10 blur-3xl" style={{ background: 'radial-gradient(circle, var(--action-primary) 0%, transparent 70%)' }} />
+
                     {/* Drag handle (mobile) */}
                     <div className="sm:hidden absolute left-1/2 -translate-x-1/2 top-2 w-10 h-1 rounded-full bg-white/20" />
 
                     {/* ═══ HEADER ═══ */}
-                    <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-white/5 shrink-0">
-                        <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl bg-orange-500/15 flex items-center justify-center">
-                                <ArrowDownLeft className="w-4 h-4 text-orange-400" />
+                    <div className="relative flex items-center justify-between px-5 sm:px-7 pt-6 pb-4 border-b border-white/[0.04] shrink-0">
+                        <div className="flex items-center gap-3.5">
+                            <div className="relative w-11 h-11 rounded-2xl flex items-center justify-center shrink-0"
+                                style={{ background: 'linear-gradient(135deg, var(--warning-alpha-12) 0%, rgba(249,115,22,0.08) 100%)', boxShadow: 'inset 0 0 0 1px rgba(251,146,60,0.25)' }}>
+                                <ArrowDownLeft className="w-5 h-5 text-warning" />
+                                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-warning ring-2 ring-[var(--bg-zeero-2)]" />
                             </div>
                             <div>
-                                <h2 className="text-base font-bold text-white leading-tight">Withdraw Funds</h2>
-                                <p className="text-xs text-gray-500">Choose your withdrawal method</p>
+                                <h2 className="text-lg sm:text-xl font-extrabold text-white leading-tight tracking-tight">Withdraw Funds</h2>
+                                <p className="text-[11px] text-gray-500 mt-0.5">Secure · Manual review · 24h processing</p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2.5">
                             {!isCrypto && user && (
-                                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/8">
-                                    <Wallet className="w-3 h-3 text-orange-400" />
-                                    <span className="text-xs font-bold text-white">{fiatSymbol}{fmt(walletBalance)}</span>
+                                <div className="hidden sm:flex flex-col items-end px-3.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+                                    <span className="text-[9px] uppercase tracking-widest text-gray-500 font-bold">Balance</span>
+                                    <span className="text-sm font-extrabold text-warning-bright leading-tight">{fiatSymbol}{fmt(walletBalance)}</span>
                                 </div>
                             )}
-                            <button onClick={onClose} className="p-2 rounded-xl text-gray-500 hover:text-white hover:bg-white/8 transition-all">
-                                <X className="w-4.5 h-4.5" />
+                            <button onClick={onClose} className="p-2.5 rounded-xl text-gray-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.05] transition-all">
+                                <X className="w-4 h-4" />
                             </button>
                         </div>
                     </div>
 
                     {/* ═══ BODY ═══ */}
-                    <div className="flex flex-col flex-1 min-h-0 overflow-y-auto">
+                    <div className="relative flex flex-col flex-1 min-h-0 overflow-y-auto">
 
-                        {/* ── TOP: Method Selector ── */}
-                        <div className="border-b border-white/5 p-4 shrink-0">
-                            <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2 block">Method</label>
-
-                            {availableMethods.length === 0 ? (
-                                <div className="flex items-start gap-2.5 px-3 py-3 rounded-xl bg-amber-500/8 border border-amber-500/20 text-xs text-amber-400/80">
-                                    <span className="text-base leading-none shrink-0 mt-0.5">🌍</span>
-                                    <span>No withdrawal method available. UPI / Bank are only for 🇮🇳 India users. Crypto withdrawals require a crypto balance.</span>
+                        {isProfileIncomplete ? (
+                            <div className="flex flex-col items-center justify-center p-8 sm:p-12 text-center h-full min-h-[420px]">
+                                <div className="relative mb-6">
+                                    <div className="absolute inset-0 rounded-full blur-2xl opacity-40 bg-success-vivid" />
+                                    <div className="relative w-20 h-20 rounded-full bg-success-alpha-16 border border-success-primary/30 flex items-center justify-center">
+                                        <User className="w-10 h-10 text-success-vivid" />
+                                    </div>
                                 </div>
-                            ) : (
-                                <div className={`grid gap-2 grid-cols-${Math.min(methodCards.length, 3)}`}
-                                    style={{ gridTemplateColumns: `repeat(${methodCards.length}, 1fr)` }}>
-                                    {methodCards.map((m) => (
-                                        <button
-                                            key={m.id}
-                                            onClick={() => { setMethod(m.id); resetMessage(); }}
-                                            className={`relative flex flex-col items-center justify-center gap-1 py-2 sm:py-3.5 px-2 rounded-xl transition-all duration-200 border ${method === m.id
-                                                ? 'bg-orange-500/10 border-orange-500/40 shadow-[0_0_16px_rgba(249,115,22,0.2)]'
-                                                : 'bg-white/3 border-white/6 hover:bg-white/6'
-                                                }`}
-                                        >
-                                            {method === m.id && (
-                                                <div className="absolute top-1.5 right-1.5 w-3.5 h-3.5 rounded-full bg-orange-500 flex items-center justify-center">
-                                                    <Check className="w-2 h-2 text-white" />
-                                                </div>
-                                            )}
-                                            <span className="w-8 h-8 flex items-center justify-center bg-white/5 rounded-lg shrink-0 mb-1">
-                                                {m.icon}
-                                            </span>
-                                            <div className="text-xs sm:text-sm font-bold text-white text-center leading-tight">{m.label}</div>
-                                            <div className="text-[9px] text-gray-500 text-center leading-tight">{m.sub}</div>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-
-                            {/* Non-India notice (no UPI/Bank available) */}
-                            {!isIndia && hasCryptoBalance && (
-                                <div className="flex items-start gap-2.5 mt-3 px-3 py-2.5 rounded-xl bg-amber-500/8 border border-amber-500/20 text-xs text-amber-400/80">
-                                    <span className="text-base leading-none shrink-0 mt-0.5">🌍</span>
-                                    <span>UPI / Bank withdrawals are only available for 🇮🇳 India. Withdraw via <strong className="text-amber-300">Crypto</strong> — more options coming soon for your region.</span>
-                                </div>
-                            )}
-
-                            {/* Security note — desktop only */}
-                            <div className="hidden sm:flex items-center gap-2 p-2.5 mt-4 bg-emerald-500/5 border border-emerald-500/15 rounded-lg">
-                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                                <p className="text-[10px] text-emerald-400/80">Withdrawals are processed manually by admin within 24 hours · 256-bit SSL encrypted</p>
+                                <h3 className="text-2xl font-extrabold text-white mb-2 tracking-tight">Complete Your Profile</h3>
+                                <p className="text-sm text-gray-400 max-w-sm mb-8 leading-relaxed">
+                                    For security and verification purposes, you must complete your Personal Information (Name, Country, City) and bind both your Email and Mobile Number before requesting a withdrawal.
+                                </p>
+                                <a
+                                    href="/settings"
+                                    onClick={onClose}
+                                    className="px-8 py-3.5 bg-brand-gold hover:bg-brand-gold-hover text-white transition-all shadow-glow-gold flex items-center gap-2"
+                                >
+                                    <User className="w-5 h-5" />
+                                    Go to Settings
+                                </a>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="flex flex-col lg:flex-row lg:gap-0">
+                                {/* ═══ LEFT PANEL — Method + Info (desktop sidebar) ═══ */}
+                                <aside className="lg:w-[280px] lg:shrink-0 lg:border-r border-white/[0.04] p-4 sm:p-6 lg:p-6 space-y-5">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2.5 block">Choose Method</label>
 
-                        {/* ── BOTTOM: Form ── */}
-                        <div className="shrink-0">
-                            <div className="p-4 sm:p-6 flex flex-col gap-5">
+                                        {availableMethods.length === 0 ? (
+                                            <div className="flex items-start gap-2.5 px-3 py-3 rounded-xl bg-warning-alpha-08 border border-warning/20 text-xs text-warning-bright/80">
+                                                <span className="text-base leading-none shrink-0 mt-0.5">🌍</span>
+                                                <span>No withdrawal method available. UPI / Bank are only for 🇮🇳 India users. Crypto withdrawals require a crypto balance.</span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex lg:flex-col gap-2">
+                                                {methodCards.map((m) => (
+                                                    <button
+                                                        key={m.id}
+                                                        onClick={() => { setMethod(m.id); resetMessage(); }}
+                                                        className={`group relative flex-1 lg:flex-none flex items-center gap-3 p-3 sm:p-3.5 rounded-2xl transition-all duration-200 border text-left ${method === m.id
+                                                            ? 'bg-gradient-to-br from-warning-alpha-12 to-white/3 border-warning/50 shadow-glow-gold'
+                                                            : 'bg-white/[0.03] border-white/6 hover:bg-white/6 hover:border-white/12'
+                                                            }`}
+                                                    >
+                                                        <span className={`w-10 h-10 flex items-center justify-center rounded-xl shrink-0 transition-all ${method === m.id ? 'bg-warning-alpha-12' : 'bg-white/[0.04]'}`}>
+                                                            {m.icon}
+                                                        </span>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-sm font-bold text-white leading-tight">{m.label}</div>
+                                                            <div className="text-[10px] text-gray-500 leading-tight mt-0.5">{m.sub}</div>
+                                                        </div>
+                                                        {method === m.id && (
+                                                            <div className="w-4 h-4 rounded-full bg-warning flex items-center justify-center shrink-0">
+                                                                <Check className="w-2.5 h-2.5 text-black" strokeWidth={3} />
+                                                            </div>
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Non-India notice */}
+                                        {!isIndia && hasCryptoBalance && (
+                                            <div className="flex items-start gap-2.5 mt-3 px-3 py-2.5 rounded-xl bg-warning-alpha-08 border border-warning/20 text-xs text-warning-bright/80">
+                                                <span className="text-base leading-none shrink-0 mt-0.5">🌍</span>
+                                                <span>Bank Transfer is only available for 🇮🇳 India. Withdraw via <strong className="text-warning-bright">Crypto</strong> — more options coming soon for your region.</span>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Balance card (mobile) */}
+                                    {!isCrypto && user && (
+                                        <div className="lg:hidden flex items-center justify-between px-4 py-3 rounded-2xl bg-white/4 border border-white/[0.05]">
+                                            <div className="flex items-center gap-2">
+                                                <Wallet className="w-4 h-4 text-warning" />
+                                                <span className="text-xs text-gray-400 font-semibold">Available Balance</span>
+                                            </div>
+                                            <span className="text-base font-extrabold text-warning-bright">{fiatSymbol}{fmt(walletBalance)}</span>
+                                        </div>
+                                    )}
+
+                                    {/* Security note — desktop sidebar */}
+                                    <div className="hidden lg:flex items-start gap-2.5 p-3 bg-success-soft/15 border border-success-primary/20 rounded-xl">
+                                        <ShieldCheck className="w-4 h-4 text-success-bright shrink-0 mt-0.5" />
+                                        <div>
+                                            <p className="text-[11px] font-bold text-success-bright leading-tight">Secure Withdrawal</p>
+                                            <p className="text-[10px] text-success-bright/70 mt-1 leading-relaxed">Processed manually by admin within 24 hours. 256-bit SSL encrypted.</p>
+                                        </div>
+                                    </div>
+                                </aside>
+
+                                {/* ═══ RIGHT PANEL — Form ═══ */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="p-4 sm:p-6 flex flex-col gap-5">
 
                                 {/* Amount */}
                                 <div>
@@ -400,7 +450,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                             Withdrawal Amount {isCrypto ? '(USD)' : `(${user?.currency || 'INR'})`}
                                         </label>
                                         {!isCrypto && user && (
-                                            <span className="text-[10px] font-bold text-orange-400 flex items-center gap-1">
+                                            <span className="text-[10px] font-bold text-warning flex items-center gap-1">
                                                 <Wallet className="w-3 h-3" />
                                                 Balance: {fiatSymbol}{fmt(walletBalance)}
                                             </span>
@@ -427,17 +477,17 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
 
                                     {/* Real-time validation banners */}
                                     {exceedsBalance && (
-                                        <div className="flex items-center gap-2 mt-2 px-3 py-2 bg-red-500/8 border border-red-500/20 rounded-lg">
-                                            <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                                            <p className="text-[11px] font-medium text-red-400">
+                                        <div className="flex items-center gap-2 mt-2 px-3 py-2 bg-danger-alpha-08 border border-danger/20 rounded-lg">
+                                            <AlertCircle className="w-3.5 h-3.5 text-danger shrink-0" />
+                                            <p className="text-[11px] font-medium text-danger">
                                                 Amount exceeds your wallet balance ({fiatSymbol}{fmt(walletBalance)})
                                             </p>
                                         </div>
                                     )}
                                     {belowMinimum && !exceedsBalance && (
-                                        <div className="flex items-center gap-2 mt-2 px-3 py-2 bg-red-500/8 border border-red-500/20 rounded-lg">
-                                            <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                                            <p className="text-[11px] font-medium text-red-400">
+                                        <div className="flex items-center gap-2 mt-2 px-3 py-2 bg-danger-alpha-08 border border-danger/20 rounded-lg">
+                                            <AlertCircle className="w-3.5 h-3.5 text-danger shrink-0" />
+                                            <p className="text-[11px] font-medium text-danger">
                                                 Minimum withdrawal is {isCrypto ? '$' : fiatSymbol}{fmt(activeMin)}
                                             </p>
                                         </div>
@@ -449,8 +499,8 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                                 key={val}
                                                 onClick={() => setAmount(val)}
                                                 className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all shrink-0 border ${amount === val
-                                                    ? 'bg-orange-500 text-white border-transparent shadow-[0_0_10px_rgba(249,115,22,0.4)]'
-                                                    : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white border-white/6'
+                                                    ? 'bg-brand-gold text-text-inverse border-transparent shadow-glow-gold'
+                                                    : 'bg-white/[0.04] text-gray-400 hover:bg-white/[0.08] hover:text-white border-white/6'
                                                     }`}
                                             >
                                                 {isCrypto ? `$${val}` : `+${val}`}
@@ -459,58 +509,50 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                     </div>
                                 </div>
 
-                                {convertibleBonusActions.length > 0 && (
-                                    <div className="space-y-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/8 p-3.5">
+                                {/* ── Pending Admin Approval (cannot self-convert) ── */}
+                                {pendingApprovalBonusActions.length > 0 && (
+                                    <div className="space-y-2.5 rounded-xl border border-brand-gold/25 bg-brand-alpha-10/50 p-3.5">
                                         <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
-                                                <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+                                            <div className="w-6 h-6 rounded-lg bg-brand-alpha-10/50 flex items-center justify-center shrink-0">
+                                                <Lock className="w-3.5 h-3.5 text-brand-gold" />
                                             </div>
                                             <div>
-                                                <p className="text-xs font-bold text-emerald-400">Unlocked Bonus Ready</p>
-                                                <p className="text-[10px] text-emerald-300/70">Move it to your main wallet before withdrawing.</p>
+                                                <p className="text-xs font-bold text-brand-gold">Bonus Pending Admin Approval</p>
+                                                <p className="text-[10px] text-brand-gold/80/70">Wagering complete! Your bonus is awaiting admin review before it's credited to your main wallet.</p>
                                             </div>
                                         </div>
 
-                                        {convertibleBonusActions.map((bonusAction) => (
+                                        {pendingApprovalBonusActions.map((bonusAction) => (
                                             <div
                                                 key={bonusAction.type}
-                                                className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-black/10 px-3 py-2.5"
+                                                className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.05] bg-black/10 px-3 py-2.5"
                                             >
                                                 <div className="min-w-0">
                                                     <p className="text-[11px] font-bold text-white">{bonusAction.label}</p>
                                                     <p className="text-[10px] text-white/35">
-                                                        {fiatSymbol}{fmt(bonusAction.balance)} available to move
+                                                        {fiatSymbol}{fmt(bonusAction.balance)} pending conversion
                                                     </p>
                                                 </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleConvertBonus(bonusAction.type)}
-                                                    disabled={convertingBonus === bonusAction.type}
-                                                    className="shrink-0 rounded-lg border border-emerald-400/25 bg-emerald-400/15 px-3 py-1.5 text-[10px] font-bold text-emerald-300 transition-all hover:bg-emerald-400/25 disabled:opacity-60 disabled:cursor-not-allowed"
-                                                >
-                                                    {convertingBonus === bonusAction.type ? (
-                                                        <span className="inline-flex items-center gap-1">
-                                                            <Loader2 className="w-3 h-3 animate-spin" />
-                                                            Moving...
-                                                        </span>
-                                                    ) : (
-                                                        'Move to Main'
-                                                    )}
-                                                </button>
+                                                <div className="shrink-0 flex items-center gap-1.5 rounded-lg border border-brand-gold/25 bg-brand-alpha-10 px-3 py-1.5">
+                                                    <Loader2 className="w-3 h-3 text-brand-gold animate-spin" />
+                                                    <span className="text-[10px] font-bold text-brand-gold/80">Awaiting Approval</span>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
                                 )}
 
+
+
                                 {lockedBonusActions.length > 0 && (
-                                    <div className="space-y-2.5 rounded-xl border border-amber-500/25 bg-amber-500/8 p-3.5">
+                                    <div className="space-y-2.5 rounded-xl border border-warning/25 bg-warning-alpha-08 p-3.5">
                                         <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
-                                                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                                            <div className="w-6 h-6 rounded-lg bg-warning-alpha-12 flex items-center justify-center shrink-0">
+                                                <Lock className="w-3.5 h-3.5 text-warning-bright" />
                                             </div>
                                             <div>
-                                                <p className="text-xs font-bold text-amber-300">Bonus Wallet Rules</p>
-                                                <p className="text-[10px] text-amber-200/70">
+                                                <p className="text-xs font-bold text-warning-bright">Bonus Wallet Rules</p>
+                                                <p className="text-[10px] text-warning/70">
                                                     Bets placed from bonus funds settle back into that bonus wallet until wagering is complete.
                                                 </p>
                                             </div>
@@ -519,7 +561,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                         {lockedBonusActions.map((bonusAction) => (
                                             <div
                                                 key={bonusAction.type}
-                                                className="flex items-center justify-between gap-3 rounded-xl border border-white/8 bg-black/10 px-3 py-2.5"
+                                                className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.05] bg-black/10 px-3 py-2.5"
                                             >
                                                 <div className="min-w-0">
                                                     <p className="text-[11px] font-bold text-white">{bonusAction.label}</p>
@@ -528,7 +570,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                                     </p>
                                                 </div>
                                                 <div className="text-right">
-                                                    <p className="text-[10px] font-bold text-amber-300">
+                                                    <p className="text-[10px] font-bold text-warning-bright">
                                                         {fiatSymbol}{fmt(bonusAction.wageringRemaining)} wagering left
                                                     </p>
                                                     <p className="text-[9px] text-white/30">Move to main once unlocked</p>
@@ -538,43 +580,13 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                     </div>
                                 )}
 
-                                {/* ══ UPI fields ══ */}
-                                {method === 'upi' && (
-                                    <div className="space-y-4">
-                                        <h3 className="text-xs font-bold text-gray-400 flex items-center gap-2">
-                                            <Smartphone className="w-3.5 h-3.5 text-green-400" />
-                                            UPI Details
-                                        </h3>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                            <div>
-                                                <label className={labelCls}>Account Holder Name</label>
-                                                <div className="relative">
-                                                    <User className="w-3.5 h-3.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                                                    <input type="text" value={upiHolderName} onChange={(e) => setUpiHolderName(e.target.value)}
-                                                        placeholder="Full Name" className={iconFieldCls} />
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label className={labelCls}>UPI ID</label>
-                                                <div className="relative">
-                                                    <CreditCard className="w-3.5 h-3.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500" />
-                                                    <input type="text" value={upiId} onChange={(e) => setUpiId(e.target.value)}
-                                                        placeholder="name@bank" className={iconFieldCls} />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-green-500/8 border border-green-500/20 text-[10px] text-green-400/80">
-                                            <span className="text-sm leading-none shrink-0 mt-0.5">📲</span>
-                                            <span>UPI withdrawals are processed within 30 minutes to 24 hours after admin approval.</span>
-                                        </div>
-                                    </div>
-                                )}
+
 
                                 {/* ══ Bank Transfer fields ══ */}
                                 {method === 'bank' && (
                                     <div className="space-y-4">
                                         <h3 className="text-xs font-bold text-gray-400 flex items-center gap-2">
-                                            <Landmark className="w-3.5 h-3.5 text-blue-400" />
+                                            <Landmark className="w-3.5 h-3.5 text-brand-gold" />
                                             Bank Account Details
                                         </h3>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -611,7 +623,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-blue-500/8 border border-blue-500/20 text-[10px] text-blue-400/80">
+                                        <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-brand-gold/8 border border-brand-gold/25 text-[10px] text-brand-gold/80">
                                             <span className="text-sm leading-none shrink-0 mt-0.5">🏦</span>
                                             <span>Bank transfers processed within 1–24 hours after admin approval.</span>
                                         </div>
@@ -630,13 +642,13 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                                         key={coin.id}
                                                         onClick={() => setSelectedCoin(coin)}
                                                         className={`flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl border transition-all duration-200 ${selectedCoin.id === coin.id
-                                                            ? 'border-orange-500/50 bg-orange-500/8 shadow-[0_0_12px_rgba(249,115,22,0.2)]'
-                                                            : 'border-white/6 bg-white/3 hover:bg-white/6'
+                                                            ? 'border-brand-gold/50 bg-warning-alpha-08 shadow-glow-gold'
+                                                            : 'border-white/6 bg-white/[0.03] hover:bg-white/6'
                                                             }`}
                                                     >
                                                         <span className="text-lg font-bold" style={{ color: coin.color }}>{coin.icon}</span>
                                                         <span className="text-[10px] font-bold text-white">{coin.label}</span>
-                                                        <span className="text-[8px] text-gray-500 bg-white/5 px-1 rounded">{coin.network}</span>
+                                                        <span className="text-[8px] text-gray-500 bg-white/[0.04] px-1 rounded">{coin.network}</span>
                                                     </button>
                                                 ))}
                                             </div>
@@ -655,11 +667,11 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                         </div>
 
                                         {/* Warning */}
-                                        <div className="flex items-start gap-2.5 p-3 bg-orange-500/8 border border-orange-500/20 rounded-xl">
-                                            <AlertCircle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-                                            <p className="text-[10px] text-orange-200/70 leading-relaxed">
+                                        <div className="flex items-start gap-2.5 p-3 bg-warning-alpha-08 border border-orange-500/20 rounded-xl">
+                                            <AlertCircle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+                                            <p className="text-[10px] text-warning/70 leading-relaxed">
                                                 Double-check the address and network. Sending to a wrong address results in
-                                                <span className="font-bold text-orange-400 text-xs"> permanent loss</span>. Withdrawals are processed manually within 1–24 hrs.
+                                                <span className="font-bold text-warning text-xs"> permanent loss</span>. Withdrawals are processed manually within 1–24 hrs.
                                             </p>
                                         </div>
                                     </div>
@@ -668,8 +680,8 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                 {/* Error / Success message */}
                                 {message && (
                                     <div className={`flex items-start gap-2.5 p-3 rounded-xl text-xs border ${message.type === 'error'
-                                        ? 'bg-red-500/8 border-red-500/20 text-red-400'
-                                        : 'bg-emerald-500/8 border-emerald-500/20 text-emerald-400'
+                                        ? 'bg-danger-alpha-08 border-danger/20 text-danger'
+                                        : 'bg-success-alpha-10 border-success-primary/20 text-success-bright'
                                         }`}>
                                         {message.type === 'error'
                                             ? <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -681,18 +693,18 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
 
                                 {/* ── Active Bonus Forfeiture Warning ──────────── */}
                                 {hasAnyBonus && (
-                                    <div className="space-y-2.5 p-3.5 bg-red-500/8 border border-red-500/30 rounded-xl">
+                                    <div className="space-y-2.5 p-3.5 bg-danger-alpha-08 border border-danger/30 rounded-xl">
                                         <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-lg bg-red-500/15 flex items-center justify-center shrink-0">
-                                                <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+                                            <div className="w-6 h-6 rounded-lg bg-danger-alpha-10 flex items-center justify-center shrink-0">
+                                                <AlertCircle className="w-3.5 h-3.5 text-danger" />
                                             </div>
-                                            <p className="text-xs font-bold text-red-400">⚠️ Withdrawing will forfeit your active bonuses</p>
+                                            <p className="text-xs font-bold text-danger">⚠️ Withdrawing will forfeit your active bonuses</p>
                                         </div>
                                         <div className="space-y-1">
                                             {hasFiatBonus && (
                                                 <div className="flex justify-between text-[11px]">
                                                     <span className="text-white/50">🎰 Casino Bonus + ⚽ Sports Bonus</span>
-                                                    <span className="font-bold text-red-300">
+                                                    <span className="font-bold text-danger">
                                                         {fiatSymbol}{fmt(casinoBonus ?? 0)} + {fiatSymbol}{fmt(sportsBonus ?? 0)}
                                                     </span>
                                                 </div>
@@ -700,11 +712,11 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                             {hasCryptoBonus && (
                                                 <div className="flex justify-between text-[11px]">
                                                     <span className="text-white/50">₿ Crypto Bonus</span>
-                                                    <span className="font-bold text-red-300">${fmt(cryptoBonus ?? 0)}</span>
+                                                    <span className="font-bold text-danger">${fmt(cryptoBonus ?? 0)}</span>
                                                 </div>
                                             )}
                                         </div>
-                                        <p className="text-[10px] text-red-300/60 leading-relaxed">
+                                        <p className="text-[10px] text-danger/60 leading-relaxed">
                                             Once you withdraw, all active casino, sports, and crypto bonuses and wagering progress will be permanently cleared.
                                         </p>
                                         <label className="flex items-center gap-2.5 cursor-pointer">
@@ -712,9 +724,9 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                                 type="checkbox"
                                                 checked={bonusForfeitConfirmed}
                                                 onChange={e => setBonusForfeitConfirmed(e.target.checked)}
-                                                className="w-4 h-4 accent-red-500 rounded"
+                                                className="w-4 h-4 accent-danger-primary rounded"
                                             />
-                                            <span className="text-[11px] font-semibold text-red-300">
+                                            <span className="text-[11px] font-semibold text-danger">
                                                 I understand I will lose all my bonuses
                                             </span>
                                         </label>
@@ -723,16 +735,16 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
 
                                 {/* ── Wagering block banner ─────────────────────────── */}
                                 {wageringBlocked && (
-                                    <div className="space-y-2.5 p-3.5 bg-amber-500/8 border border-amber-500/25 rounded-xl">
+                                    <div className="space-y-2.5 p-3.5 bg-warning-alpha-08 border border-warning/25 rounded-xl">
                                         <div className="flex items-center gap-2">
-                                            <div className="w-6 h-6 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
-                                                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                                            <div className="w-6 h-6 rounded-lg bg-warning-alpha-12 flex items-center justify-center shrink-0">
+                                                <Lock className="w-3.5 h-3.5 text-warning-bright" />
                                             </div>
-                                            <p className="text-xs font-bold text-amber-400">Withdrawal Locked — Complete Wagering</p>
+                                            <p className="text-xs font-bold text-warning-bright">Withdrawal Locked — Complete Wagering</p>
                                         </div>
                                         {/* Progress bar */}
                                         <div className="space-y-1">
-                                            <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                            <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
                                                 <div
                                                     className="h-full rounded-full"
                                                     style={{ width: `${wageringPct}%`, background: 'linear-gradient(90deg, #f59e0b, #f97316)' }}
@@ -744,9 +756,9 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                             </div>
                                         </div>
                                         <div className="flex items-start gap-1.5">
-                                            <Zap className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
-                                            <p className="text-[11px] text-amber-300/70">
-                                                Bet <span className="font-bold text-amber-400">{fiatSymbol}{fmt(wageringRemaining)}</span> more on Sports or Casino to unlock.
+                                            <Zap className="w-3 h-3 text-warning-bright shrink-0 mt-0.5" />
+                                            <p className="text-[11px] text-warning-bright/70">
+                                                Bet <span className="font-bold text-warning-bright">{fiatSymbol}{fmt(wageringRemaining)}</span> more on Sports or Casino to unlock.
                                             </p>
                                         </div>
                                     </div>
@@ -760,9 +772,9 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                         className="w-full py-3.5 rounded-xl font-bold text-white text-sm transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                         style={{
                                             background: loading || !amount || hasValidationError || wageringBlocked || (hasAnyBonus && !bonusForfeitConfirmed)
-                                                ? 'rgba(249,115,22,0.4)'
-                                                : 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-                                            boxShadow: loading || !amount || hasValidationError || wageringBlocked || (hasAnyBonus && !bonusForfeitConfirmed) ? 'none' : '0 0 24px rgba(249,115,22,0.45)',
+                                                ? 'var(--brand-alpha-40)'
+                                                : 'linear-gradient(135deg, var(--action-primary) 0%, var(--action-active) 100%)',
+                                            boxShadow: loading || !amount || hasValidationError || wageringBlocked || (hasAnyBonus && !bonusForfeitConfirmed) ? 'none' : 'var(--shadow-glow-gold)',
                                         }}
                                     >
                                         {loading
@@ -780,8 +792,10 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({ onClose }) => {
                                     By withdrawing you agree to our Terms of Service &amp; Withdrawal Policy.
                                     Minimum withdrawal {isCrypto ? '$' : fiatSymbol}{fmt(activeMin)}.
                                 </p>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 </div>
             </div>

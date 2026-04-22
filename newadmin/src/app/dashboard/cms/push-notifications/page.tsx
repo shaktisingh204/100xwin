@@ -115,7 +115,13 @@ export default function PushNotificationsPage() {
             const res = await fetch('/actions/onesignal-config');
             const data = await res.json();
             setConfigAppId(data?.appId || '');
-            setConfigRestApiKey(data?.restApiKey || '');
+            // REST API key is no longer returned by the server for security.
+            // Only show whether it is set; admin must re-enter to change it.
+            if (data?.restApiKeySet) {
+                setConfigRestApiKey('••••••••••••••••');
+            } else {
+                setConfigRestApiKey('');
+            }
         } catch {} finally { setConfigLoading(false); }
     };
 
@@ -125,7 +131,12 @@ export default function PushNotificationsPage() {
             const res = await fetch('/actions/onesignal-config', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ appId: configAppId, restApiKey: configRestApiKey }),
+                // Only send restApiKey if the admin actually typed a new value
+                // (not the masked placeholder).
+                body: JSON.stringify({
+                    appId: configAppId,
+                    ...(configRestApiKey && !configRestApiKey.startsWith('••') ? { restApiKey: configRestApiKey } : {}),
+                }),
             });
             const data = await res.json();
             if (!data.success) throw new Error(data.error);

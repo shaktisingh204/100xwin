@@ -2,24 +2,23 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 
 export type LimboBetDocument = LimboBet & Document;
-export type LimboBetResult = 'WIN' | 'LOSE' | 'ACTIVE';
+export type LimboBetStatus = 'ACTIVE' | 'CASHEDOUT' | 'LOST';
 
 @Schema({ collection: 'limbo_bets', timestamps: true })
 export class LimboBet {
+  @Prop({ required: true }) roundId: number;
   @Prop({ required: true }) userId: number;
   @Prop({ required: true }) betAmount: number;
-  @Prop({ default: 0 }) targetMultiplier: number;   // 0 = manual mode
-  @Prop({ required: true }) resultMultiplier: number; // crash point / random result
-  @Prop({ required: true }) result: LimboBetResult;
+  @Prop({ default: false }) usedBonus: boolean;
+  @Prop({ default: 0 }) bonusAmount: number;
+  @Prop({ default: 'ACTIVE' }) status: LimboBetStatus;
+  @Prop({ default: 0 }) cashedOutMultiplier: number;
   @Prop({ default: 0 }) payout: number;
-  @Prop({ default: 0 }) cashedOutAt: number;  // what multiplier user cashed out at (manual)
+  @Prop({ default: 0 }) autoCashoutAt: number;  // 0 = manual
   @Prop({ default: 'fiat' }) walletType: string;
   @Prop({ default: 'INR' }) currency: string;
-  @Prop({ required: true }) serverSeed: string;
-  @Prop({ required: true }) serverSeedHash: string;
-  @Prop({ required: true }) nonce: number;
 }
 
 export const LimboBetSchema = SchemaFactory.createForClass(LimboBet);
-LimboBetSchema.index({ userId: 1, createdAt: -1 });
-LimboBetSchema.index({ userId: 1, result: 1 });
+LimboBetSchema.index({ roundId: 1, userId: 1 });
+LimboBetSchema.index({ userId: 1, status: 1 });

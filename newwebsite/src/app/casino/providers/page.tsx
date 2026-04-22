@@ -60,7 +60,7 @@ function ProvidersDirectory() {
                 <div className="space-y-3">
                     <Link
                         href="/casino"
-                        className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-bg-elevated px-3 py-2 text-xs font-bold uppercase tracking-widest text-text-secondary transition-colors hover:text-text-primary"
+                        className="inline-flex items-center gap-2 rounded-xl border border-white/[0.06] bg-bg-elevated px-3 py-2 text-xs font-bold uppercase tracking-widest text-text-secondary transition-colors hover:text-text-primary"
                     >
                         <ChevronLeft size={14} />
                         Back To Casino
@@ -74,7 +74,7 @@ function ProvidersDirectory() {
                     </div>
                 </div>
 
-                <div className="rounded-2xl border border-white/10 bg-bg-elevated px-4 py-3">
+                <div className="rounded-2xl border border-white/[0.06] bg-bg-elevated px-4 py-3">
                     <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-text-muted">Visible Providers</p>
                     <div className="mt-1 flex items-end gap-2">
                         <span className="text-2xl font-black text-text-primary">{filteredProviders.length}</span>
@@ -90,7 +90,7 @@ function ProvidersDirectory() {
                     placeholder="Search providers..."
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-bg-elevated py-3 pl-10 pr-4 text-text-primary outline-none transition-all focus:border-brand-gold/40"
+                    className="w-full rounded-2xl border border-white/[0.06] bg-bg-elevated py-3 pl-10 pr-4 text-text-primary outline-none transition-all focus:border-brand-gold/40"
                 />
             </div>
 
@@ -99,12 +99,12 @@ function ProvidersDirectory() {
                     {Array.from({ length: 8 }).map((_, index) => (
                         <div
                             key={index}
-                            className="h-[176px] animate-pulse rounded-2xl border border-white/5 bg-bg-elevated"
+                            className="h-[176px] animate-pulse rounded-2xl border border-white/[0.04] bg-bg-elevated"
                         />
                     ))}
                 </div>
             ) : filteredProviders.length === 0 ? (
-                <div className="rounded-3xl border border-white/10 bg-bg-elevated px-6 py-14 text-center">
+                <div className="rounded-3xl border border-white/[0.06] bg-bg-elevated px-6 py-14 text-center">
                     <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-gold/10 text-brand-gold">
                         <Search size={22} />
                     </div>
@@ -122,10 +122,10 @@ function ProvidersDirectory() {
                             <Link
                                 key={provider.id || providerCode}
                                 href={`/casino?provider=${encodeURIComponent(providerCode)}`}
-                                className="group rounded-2xl border border-white/10 bg-bg-elevated p-4 transition-all hover:border-brand-gold/30 hover:shadow-glow-gold"
+                                className="group rounded-2xl border border-white/[0.06] bg-bg-elevated p-4 transition-all hover:border-brand-gold/30 hover:shadow-glow-gold"
                             >
                                 <div className="flex items-center justify-between gap-2">
-                                    <span className="rounded-full bg-white/5 px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-text-muted">
+                                    <span className="rounded-full bg-white/[0.04] px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-text-muted">
                                         {provider.count} Games
                                     </span>
                                     <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-brand-gold">
@@ -134,7 +134,7 @@ function ProvidersDirectory() {
                                     </span>
                                 </div>
 
-                                <div className="mt-4 flex h-[88px] items-center justify-center rounded-2xl border border-white/5 bg-black/20 p-4">
+                                <div className="mt-4 flex h-[88px] items-center justify-center rounded-2xl border border-white/[0.04] bg-black/20 p-4">
                                     <ProviderLogo
                                         provider={provider}
                                         alt={provider.name}
@@ -164,12 +164,12 @@ export default function CasinoProvidersPage() {
         <div className="h-screen overflow-hidden bg-bg-base flex flex-col">
             <Header />
 
-            <div className="flex-1 overflow-hidden pt-[64px] max-w-[1920px] mx-auto w-full md:flex">
+            <div className="flex-1 overflow-hidden pt-[60px] md:pt-[64px] max-w-[1920px] mx-auto w-full md:flex">
                 <div className="hidden md:block">
                     <LeftSidebar />
                 </div>
 
-                <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden pb-[72px] md:pb-0 md:border-l md:border-r md:border-white/5">
+                <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden pb-[72px] md:pb-0 md:border-l md:border-r md:border-white/[0.04]">
                     <ProvidersDirectory />
                 </main>
             </div>

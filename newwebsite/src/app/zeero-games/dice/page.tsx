@@ -11,6 +11,7 @@ import { useModal } from "@/context/ModalContext";
 import { useOriginalsAccess } from "@/hooks/useOriginalsAccess";
 import { useGameSounds } from "@/hooks/useGameSounds";
 import { getConfiguredSocketNamespace } from "@/utils/socketUrl";
+import { Volume2, VolumeX } from "lucide-react";
 
 interface RollResult {
   gameId: string;
@@ -362,8 +363,8 @@ export default function DicePage() {
     if (isRolling || autoRunning) {
       return;
     }
-    if (betAmount <= 0) {
-      toast.error("Enter a bet");
+    if (betAmount < 10) {
+      toast.error("Minimum bet is 10");
       return;
     }
     if (betAmount > activeBalance) {
@@ -382,8 +383,8 @@ export default function DicePage() {
     if (isRolling) {
       return;
     }
-    if (betAmount <= 0) {
-      toast.error("Enter a bet");
+    if (betAmount < 10) {
+      toast.error("Minimum bet is 10");
       return;
     }
     if (betAmount > activeBalance) {
@@ -414,7 +415,7 @@ export default function DicePage() {
     <div className="min-h-screen md:h-screen overflow-y-auto md:overflow-hidden flex flex-col" style={{ background: "#1a1d26" }}>
       <Header />
 
-      <div className="flex flex-1 md:overflow-hidden pt-[110px] md:pt-[64px] pb-[80px] md:pb-0 max-w-[1920px] mx-auto w-full">
+      <div className="flex flex-1 md:overflow-hidden pt-[100px] md:pt-[64px] pb-[80px] md:pb-0 max-w-[1920px] mx-auto w-full">
         <LeftSidebar />
 
         <main className="flex-1 min-w-0 flex flex-col md:flex-row md:overflow-hidden border-l" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
@@ -444,7 +445,7 @@ export default function DicePage() {
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[11px] text-zinc-400 font-bold">Amount</span>
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 p-0.5">
+                    <div className="flex items-center gap-1 rounded-full border border-white/[0.06] bg-white/[0.04] p-0.5">
                       {(["fiat", "crypto"] as const).map((type) => (
                         <button
                           key={type}
@@ -463,9 +464,9 @@ export default function DicePage() {
                     <button
                       onClick={toggleMute}
                       title={muted ? "Unmute" : "Mute"}
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, opacity: 0.7 }}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-white/[0.05] text-zinc-500 hover:text-white transition-colors"
                     >
-                      {muted ? "🔇" : "🔊"}
+                      {muted ? <VolumeX size={14} /> : <Volume2 size={14} />}
                     </button>
                   </div>
                 </div>
@@ -541,8 +542,8 @@ export default function DicePage() {
               </div>
 
               {tab === "auto" && (
-                <div className="space-y-3 rounded-xl border border-white/8 bg-[#181c25] p-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="space-y-3 rounded-xl border border-white/[0.08] bg-bg-modal p-3">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
                       <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mb-1 block">Rounds</span>
                       <input
@@ -550,7 +551,7 @@ export default function DicePage() {
                         value={autoRounds}
                         disabled={autoRunning}
                         onChange={(event) => setAutoRounds(event.target.value.replace(/[^0-9]/g, ""))}
-                        className="w-full rounded-lg bg-[#262b36] px-3 py-2 text-sm font-bold text-white outline-none disabled:opacity-40"
+                        className="w-full rounded-lg bg-bg-surface-4 px-3 py-2 text-sm font-bold text-white outline-none disabled:opacity-40"
                       />
                     </div>
                     <div>
@@ -561,7 +562,7 @@ export default function DicePage() {
                         disabled={autoRunning}
                         placeholder="0"
                         onChange={(event) => setAutoStopWin(event.target.value.replace(/[^0-9.]/g, ""))}
-                        className="w-full rounded-lg bg-[#262b36] px-3 py-2 text-sm font-bold text-white outline-none disabled:opacity-40 placeholder:text-zinc-600"
+                        className="w-full rounded-lg bg-bg-surface-4 px-3 py-2 text-sm font-bold text-white outline-none disabled:opacity-40 placeholder:text-zinc-600"
                       />
                     </div>
                     <div>
@@ -572,7 +573,7 @@ export default function DicePage() {
                         disabled={autoRunning}
                         placeholder="0"
                         onChange={(event) => setAutoStopLoss(event.target.value.replace(/[^0-9.]/g, ""))}
-                        className="w-full rounded-lg bg-[#262b36] px-3 py-2 text-sm font-bold text-white outline-none disabled:opacity-40 placeholder:text-zinc-600"
+                        className="w-full rounded-lg bg-bg-surface-4 px-3 py-2 text-sm font-bold text-white outline-none disabled:opacity-40 placeholder:text-zinc-600"
                       />
                     </div>
                   </div>
@@ -649,7 +650,7 @@ export default function DicePage() {
           <div className="flex-1 flex flex-col overflow-y-auto order-1 md:order-2" style={{ background: "#1a1d26" }}>
             <div className="flex-shrink-0 py-3 text-center border-b" style={{ background: "#21242e", borderColor: "rgba(255,255,255,0.05)" }}>
               {lastResult ? (
-                <span className={`text-sm font-bold ${won ? "text-emerald-400" : "text-red-400"}`}>
+                <span className={`text-sm font-bold ${won ? "text-success-bright" : "text-danger"}`}>
                   {won
                     ? `Won ${activeSymbol}${lastResult.payout.toFixed(2)}`
                     : `Lost — Rolled ${lastResult.roll.toFixed(2)}`}
@@ -686,17 +687,17 @@ export default function DicePage() {
 
               <div className="w-full max-w-[600px] mb-10">
                 <div className="relative px-2">
-                  <div className="relative h-4 rounded-full overflow-hidden" style={{ background: "#3f3f46" }}>
+                  <div className="relative h-1.5 rounded-full overflow-hidden mt-4 mb-3" style={{ background: "#3f3f46" }}>
                     <div className="absolute inset-0 rounded-full" style={{ background: sliderGrad }} />
                   </div>
 
                   {lastResult && (
                     <div
-                      className="absolute top-0 h-4"
+                      className="absolute top-0 h-1.5"
                       style={{ left: `calc(${lastResult.roll}% + ${(0.5 - lastResult.roll / 100) * 16}px)`, transform: "translateX(-50%)" }}
                     >
                       <div
-                        className="w-0.5 h-6 -mt-1 rounded-full"
+                        className="w-0.5 h-6 -mt-2 rounded-full"
                         style={{
                           background: won ? "#22c55e" : "#ef4444",
                           boxShadow: `0 0 8px ${won ? "#22c55e" : "#ef4444"}`,
@@ -713,15 +714,15 @@ export default function DicePage() {
                     value={target}
                     onChange={(event) => setTarget(Number(event.target.value))}
                     disabled={isRolling || autoRunning}
-                    className="absolute inset-0 w-full h-4 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                    className="absolute inset-0 w-full h-1.5 mt-4 opacity-0 cursor-pointer disabled:cursor-not-allowed"
                     style={{ zIndex: 3 }}
                   />
 
                   <div
-                    className="absolute top-0 h-4 pointer-events-none"
+                    className="absolute top-0 h-1.5 pointer-events-none mt-4"
                     style={{ left: `calc(${target}% + ${(0.5 - target / 100) * 16}px)`, transform: "translateX(-50%)" }}
                   >
-                    <div className="w-6 h-6 -mt-1 rounded-md bg-white shadow-lg" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.4)" }} />
+                    <div className="w-5 h-5 absolute top-[-7px] -ml-[10px] rounded-md bg-white shadow-lg" style={{ boxShadow: "0 2px 8px rgba(0,0,0,0.4)" }} />
                   </div>
                 </div>
 
@@ -760,8 +761,8 @@ export default function DicePage() {
                     <span
                       key={item.gameId}
                       className={`inline-flex items-center text-[10px] font-black px-2 py-0.5 rounded-full whitespace-nowrap ${item.status === "WON"
-                        ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/20"
-                        : "bg-red-500/15 text-red-400 border border-red-500/20"}`}
+                        ? "bg-success-alpha-16 text-success-bright border border-success-primary/20"
+                        : "bg-danger-alpha-10 text-danger border border-danger/20"}`}
                     >
                       {item.roll.toFixed(2)}
                     </span>

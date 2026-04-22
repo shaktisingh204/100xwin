@@ -27,8 +27,8 @@ export const betsService = {
         return response.data;
     },
 
-    settleMarket: async (marketId: string, winningSelectionId: string) => {
-        const response = await api.post('/bets/settle', { marketId, winningSelectionId });
+    settleMarket: async (marketId: string, winningSelectionId: string, eventId?: string) => {
+        const response = await api.post('/bets/settle', { marketId, winningSelectionId, eventId });
         return response.data;
     }
 };

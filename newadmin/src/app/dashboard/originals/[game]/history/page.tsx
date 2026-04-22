@@ -13,9 +13,12 @@ import toast from "react-hot-toast";
 const fmt = (n: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(n);
 
+const formatPlinkoPath = (path: number[] = []) => path.map((step) => (step ? "R" : "L")).join("");
+
 export default function GameHistoryPage() {
   const params = useParams();
   const game = params.game as string;
+  const isPlinko = game === "plinko";
 
   const [games, setGames] = useState<any[]>([]);
   const [total, setTotal] = useState(0);
@@ -96,7 +99,10 @@ export default function GameHistoryPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-[10px] text-slate-500 uppercase bg-slate-900/60 border-b border-slate-700">
-                  {["ID", "User", "Bet", "Mines", "Tiles", "Multiplier", "Payout", "Wallet", "Status", "Time", "Action"].map((h) => (
+                  {(isPlinko
+                    ? ["ID", "User", "Bet", "Rows", "Risk", "Path", "Slot", "Multiplier", "Payout", "Wallet", "Status", "Time"]
+                    : ["ID", "User", "Bet", "Mines", "Tiles", "Multiplier", "Payout", "Wallet", "Status", "Time", "Action"]
+                  ).map((h) => (
                     <th key={h} className="px-4 py-3 text-left whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -104,13 +110,68 @@ export default function GameHistoryPage() {
               <tbody className="divide-y divide-slate-700/40">
                 {games.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="px-4 py-10 text-center text-slate-500 text-sm">
+                    <td colSpan={isPlinko ? 12 : 11} className="px-4 py-10 text-center text-slate-500 text-sm">
                       No games found.
                     </td>
                   </tr>
                 )}
                 {games.map((g: any) => {
                   const gid: string = g.gameId || String(g._id || "");
+                  const plinkoPayoutClass = g.status === "WON"
+                    ? "text-emerald-400"
+                    : g.payout > 0
+                      ? "text-amber-300"
+                      : "text-red-400";
+
+                  if (isPlinko) {
+                    return (
+                      <tr key={gid} className="hover:bg-slate-700/20 transition-colors">
+                        <td className="px-4 py-2.5 text-slate-400 text-xs font-mono">{gid.slice(-8)}</td>
+                        <td className="px-4 py-2.5">
+                          <div className="text-white text-xs font-medium">{g.user?.username || "—"}</div>
+                          <div className="text-slate-500 text-[10px]">#{g.userId}</div>
+                        </td>
+                        <td className="px-4 py-2.5 text-white text-xs font-bold">{fmt(g.betAmount)}</td>
+                        <td className="px-4 py-2.5 text-slate-300 text-xs font-semibold">{g.rows}</td>
+                        <td className="px-4 py-2.5">
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                            g.risk === "high"
+                              ? "bg-rose-500/10 text-rose-300"
+                              : g.risk === "medium"
+                                ? "bg-amber-500/10 text-amber-300"
+                                : "bg-emerald-500/10 text-emerald-300"
+                          }`}>
+                            {g.risk}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-300 text-[10px] font-mono">{formatPlinkoPath(g.path)}</td>
+                        <td className="px-4 py-2.5 text-slate-300 text-xs font-semibold">{g.slotIndex}</td>
+                        <td className="px-4 py-2.5 text-brand-gold text-xs font-bold">
+                          {Number(g.multiplier || 0).toFixed(2)}×
+                        </td>
+                        <td className={`px-4 py-2.5 text-xs font-bold ${plinkoPayoutClass}`}>
+                          {fmt(g.payout || 0)}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase
+                            ${g.walletType === "crypto" ? "bg-purple-500/10 text-purple-400" : "bg-blue-500/10 text-blue-400"}`}>
+                            {g.walletType}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1 w-fit
+                            ${g.status === "WON" ? "bg-emerald-500/10 text-emerald-400" : "bg-rose-500/10 text-rose-300"}`}>
+                            {g.status === "WON" ? <Gem size={9} /> : <Bomb size={9} />}
+                            {g.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-400 text-[10px] whitespace-nowrap">
+                          {new Date(g.createdAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}
+                        </td>
+                      </tr>
+                    );
+                  }
+
                   return (
                     <tr key={gid} className="hover:bg-slate-700/20 transition-colors">
                       <td className="px-4 py-2.5 text-slate-400 text-xs font-mono">{gid.slice(-8)}</td>
@@ -146,7 +207,7 @@ export default function GameHistoryPage() {
                         {new Date(g.createdAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}
                       </td>
                       <td className="px-4 py-2.5">
-                        {g.status === "ACTIVE" && (
+                        {g.status === "ACTIVE" && !isPlinko && (
                           <button
                             onClick={() => handleForceClose(gid)}
                             disabled={forceClosing === gid}

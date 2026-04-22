@@ -10,9 +10,9 @@ export const metadata = {
 const SECTIONS = [
     {
         icon: Shield,
-        color: 'text-blue-400',
-        bg: 'bg-blue-400/10',
-        border: 'border-blue-400/20',
+        color: 'text-brand-gold',
+        bg: 'bg-brand-gold/10',
+        border: 'border-brand-gold/20',
         title: 'Provably Fair System',
         body: [
             'Zeero uses a cryptographically provably fair system for all casino games. This means every game result is determined by a verifiable algorithm rather than a centralized server decision.',
@@ -34,7 +34,7 @@ const SECTIONS = [
     },
     {
         icon: BarChart2,
-        color: 'text-purple-400',
+        color: 'text-accent-purple',
         bg: 'bg-purple-400/10',
         border: 'border-purple-400/20',
         title: 'Return to Player (RTP)',
@@ -72,14 +72,14 @@ const SECTIONS = [
 
 export default function FairnessPage() {
     return (
-        <div className="min-h-[calc(100vh-64px)] bg-[#0E0F11] text-white pb-24">
+        <div className="min-h-[calc(100vh-64px)] bg-bg-zeero-3 text-white pb-24">
 
             {/* Hero */}
-            <div className="relative overflow-hidden bg-gradient-to-b from-green-500/8 via-[#111315] to-[#0E0F11] border-b border-white/5">
+            <div className="relative overflow-hidden bg-gradient-to-b from-green-500/8 via-[#0F1016] to-[#0C0D12] border-b border-white/[0.04]">
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(34,197,94,0.10),transparent_60%)]" />
                 <div className="relative max-w-3xl mx-auto px-4 pt-10 pb-8 text-center">
                     <div className="hidden md:flex absolute top-6 left-4">
-                        <Link href="/" className="flex items-center gap-2 text-text-muted hover:text-white transition-colors text-sm font-medium bg-white/5 hover:bg-white/10 border border-white/5 px-4 py-2 rounded-full">
+                        <Link href="/" className="flex items-center gap-2 text-text-muted hover:text-white transition-colors text-sm font-medium bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] px-4 py-2 rounded-full">
                             <Home size={14} /> Back to Home
                         </Link>
                     </div>
@@ -98,8 +98,8 @@ export default function FairnessPage() {
             {/* Content */}
             <div className="max-w-4xl mx-auto px-4 py-12 space-y-8">
                 {SECTIONS.map(({ icon: Icon, color, bg, border, title, body }) => (
-                    <div key={title} className={`rounded-2xl border ${border} bg-[#111315] overflow-hidden`}>
-                        <div className={`px-6 py-4 border-b border-white/5 flex items-center gap-3`}>
+                    <div key={title} className={`rounded-2xl border ${border} bg-bg-deep overflow-hidden`}>
+                        <div className={`px-6 py-4 border-b border-white/[0.04] flex items-center gap-3`}>
                             <div className={`p-2.5 rounded-xl ${bg} ${color}`}>
                                 <Icon size={20} />
                             </div>
@@ -121,7 +121,7 @@ export default function FairnessPage() {
                     </div>
                     <Link
                         href="/support"
-                        className="flex items-center gap-2 bg-brand-gold hover:bg-brand-gold-hover text-black font-black px-6 py-3 rounded-xl text-sm uppercase transition-all shadow-glow-gold whitespace-nowrap"
+                        className="flex items-center gap-2 bg-brand-gold hover:bg-brand-gold-hover text-text-inverse font-black px-6 py-3 rounded-xl text-sm uppercase transition-all shadow-glow-gold whitespace-nowrap"
                     >
                         <ExternalLink size={16} /> Contact Support
                     </Link>

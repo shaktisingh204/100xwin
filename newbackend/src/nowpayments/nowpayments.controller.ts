@@ -12,7 +12,7 @@ import {
     Request,
     BadRequestException,
 } from '@nestjs/common';
-import { NowpaymentsService } from './nowpayments.service';
+import { NowpaymentsService, NowPaymentsCurrencyCatalog } from './nowpayments.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Public } from '../auth/public.decorator';
 import { Response } from 'express';
@@ -57,6 +57,11 @@ export class NowpaymentsController {
         this.logger.log(`Creating crypto payment for user ${userId}: ${amount} ${priceCurrency} → ${payCurrency}`);
 
         try {
+            const isSupportedCurrency = await this.nowpaymentsService.isSupportedPayCurrency(payCurrency);
+            if (!isSupportedCurrency) {
+                throw new BadRequestException(`Unsupported NOWPayments currency: ${payCurrency.toUpperCase()}`);
+            }
+
             // Pre-validate against NOWPayments minimum amount
             const minAmount = await this.nowpaymentsService.getMinimumAmount(priceCurrency, payCurrency);
             if (minAmount > 0 && amount < minAmount) {
@@ -102,11 +107,11 @@ export class NowpaymentsController {
      */
     @Get('currencies')
     @UseGuards(JwtAuthGuard)
-    async getCurrencies() {
-        const currencies = await this.nowpaymentsService.getAvailableCurrencies();
+    async getCurrencies(): Promise<{ success: true } & NowPaymentsCurrencyCatalog> {
+        const catalog = await this.nowpaymentsService.getCurrencyCatalog();
         return {
             success: true,
-            currencies,
+            ...catalog,
         };
     }
 

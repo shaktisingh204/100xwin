@@ -5,6 +5,7 @@ import { Trophy, Activity, ChevronRight } from 'lucide-react';
 import type { Event } from '@/services/sports';
 
 // ─── Country → flag ───────────────────────────────────────────────────────────
+import { useEarlySixMatches } from '@/hooks/useEarlySixMatches';
 const FLAG_MAP: Record<string, string> = {
     IN: '🇮🇳', GB: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', AU: '🇦🇺', ZA: '🇿🇦', NZ: '🇳🇿', PK: '🇵🇰', WI: '🌴',
     BD: '🇧🇩', SL: '🇱🇰', AF: '🇦🇫', ZW: '🇿🇼', IE: '🇮🇪', NL: '🇳🇱',
@@ -28,29 +29,31 @@ export default function SportEventCard({ match, teamIcons }: { match: Event; tea
     const flag     = getFlag(match.competition?.country_code);
     const homeIcon = teamIcons?.[homeTeam.toLowerCase().trim()];
     const awayIcon = teamIcons?.[awayTeam.toLowerCase().trim()];
+    const earlySixIds = useEarlySixMatches();
+    const hasEarlySix = earlySixIds.has(String(match.event_id));
 
     return (
         <Link
             href={`/sports/match/${match.event_id}`}
-            className={`relative flex flex-col bg-[#1a1d21] rounded-2xl border overflow-hidden transition-all hover:border-white/10 ${
-                isLive ? 'border-emerald-500/12' : 'border-white/[0.06]'
+            className={`relative flex flex-col bg-bg-modal rounded-2xl border overflow-hidden transition-all hover:border-white/[0.06] ${
+                isLive ? 'border-success-primary/12' : 'border-white/[0.06]'
             }`}
         >
             {/* live stripe */}
-            {isLive && <div className="absolute top-0 left-0 right-0 h-0.5 bg-emerald-500/40" />}
+            {isLive && <div className="absolute top-0 left-0 right-0 h-0.5 bg-success-primary/40" />}
 
             {/* Header */}
             <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.03]">
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                    <Trophy size={9} className="text-emerald-400/50 flex-shrink-0" />
-                    <span className="text-emerald-400/60 text-[10px] font-semibold truncate">
+                    <Trophy size={9} className="text-success-bright/50 flex-shrink-0" />
+                    <span className="text-success-bright/60 text-[10px] font-semibold truncate">
                         {(match as any).competition_name || match.competition?.competition_name || ''}
                     </span>
                 </div>
                 {isLive ? (
-                    <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md flex-shrink-0 ml-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-emerald-400 text-[9px] font-black">LIVE</span>
+                    <div className="flex items-center gap-1 bg-success-alpha-10 border border-success-primary/20 px-2 py-0.5 rounded-md flex-shrink-0 ml-2">
+                        <div className="w-1.5 h-1.5 rounded-full bg-success-primary animate-pulse" />
+                        <span className="text-success-bright text-[9px] font-black">LIVE</span>
                     </div>
                 ) : isDone ? (
                     <span className="text-white/20 text-[9px] font-bold ml-2 flex-shrink-0">ENDED</span>
@@ -62,11 +65,19 @@ export default function SportEventCard({ match, teamIcons }: { match: Event; tea
                 )}
             </div>
 
+            {hasEarlySix && (
+                <div className="flex justify-center mt-1 -mb-1 relative z-10">
+                    <span className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded-md shadow-[0_0_8px_rgba(139,92,246,0.3)] border border-purple-400/30 w-full mx-3 text-center">
+                        🎯 Early 6 Refund Offer
+                    </span>
+                </div>
+            )}
+
             {/* Teams */}
             <div className="px-3 py-2.5 flex flex-col gap-2 flex-1">
                 {/* Home */}
                 <div className="flex items-center gap-2.5">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/[0.04] border overflow-hidden ${isLive ? 'border-emerald-500/15' : 'border-white/[0.06]'}`}>
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/[0.04] border overflow-hidden ${isLive ? 'border-success-primary/15' : 'border-white/[0.06]'}`}>
                         {homeIcon
                             ? <img src={homeIcon} alt="" className="w-full h-full object-contain p-0.5" />
                             : flag
@@ -76,7 +87,7 @@ export default function SportEventCard({ match, teamIcons }: { match: Event; tea
                     </div>
                     <span className="flex-1 text-white text-[13px] font-bold truncate">{homeTeam}</span>
                     {match.score1 != null && (
-                        <span className={`text-base font-black min-w-[24px] text-right ${isLive ? 'text-emerald-400' : 'text-white'}`}>
+                        <span className={`text-base font-black min-w-[24px] text-right ${isLive ? 'text-success-bright' : 'text-white'}`}>
                             {match.score1}
                         </span>
                     )}
@@ -92,7 +103,7 @@ export default function SportEventCard({ match, teamIcons }: { match: Event; tea
                 {/* Away */}
                 {awayTeam && (
                     <div className="flex items-center gap-2.5">
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/[0.04] border overflow-hidden ${isLive ? 'border-emerald-500/15' : 'border-white/[0.06]'}`}>
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-white/[0.04] border overflow-hidden ${isLive ? 'border-success-primary/15' : 'border-white/[0.06]'}`}>
                             {awayIcon
                                 ? <img src={awayIcon} alt="" className="w-full h-full object-contain p-0.5" />
                                 : flag
@@ -102,7 +113,7 @@ export default function SportEventCard({ match, teamIcons }: { match: Event; tea
                         </div>
                         <span className="flex-1 text-white text-[13px] font-bold truncate">{awayTeam}</span>
                         {match.score2 != null && (
-                            <span className={`text-base font-black min-w-[24px] text-right ${isLive ? 'text-emerald-400' : 'text-white'}`}>
+                            <span className={`text-base font-black min-w-[24px] text-right ${isLive ? 'text-success-bright' : 'text-white'}`}>
                                 {match.score2}
                             </span>
                         )}

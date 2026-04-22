@@ -16,17 +16,18 @@ export default function MatchRow({ match }: MatchRowProps) {
     const getMarket = (namePart: string) =>
         match.markets?.find(m => m.market_name.toLowerCase().includes(namePart.toLowerCase()));
 
-    const handleOddClick = (e: React.MouseEvent, marketId: string, selectionName: string, odds: number) => {
+    const handleOddClick = (e: React.MouseEvent, marketId: string, selectionName: string, odds: number, selectionId: string, marketName: string) => {
         e.stopPropagation();
         if (!odds || odds <= 1) return;
         addBet({
             eventId: match.event_id,
             eventName: match.event_name,
             marketId,
-            marketName: marketId,
-            selectionId: selectionName,
+            marketName,
+            selectionId,
             selectionName,
             odds,
+            marketType: 'MATCH_ODDS',
         });
     };
 
@@ -84,15 +85,15 @@ export default function MatchRow({ match }: MatchRowProps) {
         return (
             <div
                 onClick={() => router.push(`/sports/match/${match.event_id}`)}
-                className="group relative bg-[#1a1d21] hover:bg-[#1e2126] rounded-xl p-4 cursor-pointer transition-all duration-200 border border-white/[0.06] hover:border-white/10 overflow-hidden flex flex-col gap-3"
+                className="group relative bg-bg-modal hover:bg-bg-input-2 rounded-xl p-4 cursor-pointer transition-all duration-200 border border-white/[0.06] hover:border-white/[0.06] overflow-hidden flex flex-col gap-3"
             >
                 <div className="flex items-center gap-2 text-[11px] text-white/40 font-medium">
                     <span className="text-base leading-none">{flag}</span>
                     <span className="truncate">{countryName} · {leagueName}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-lg bg-[#252830] flex items-center justify-center border border-white/5">
-                        <Trophy size={16} className="text-amber-400" />
+                    <div className="w-9 h-9 rounded-lg bg-bg-surface flex items-center justify-center border border-white/[0.04]">
+                        <Trophy size={16} className="text-warning-bright" />
                     </div>
                     <span className="text-sm font-bold text-white leading-snug truncate">{match.event_name}</span>
                 </div>
@@ -118,7 +119,7 @@ export default function MatchRow({ match }: MatchRowProps) {
     return (
         <div
             onClick={() => router.push(`/sports/match/${match.event_id}`)}
-            className="group relative bg-[#1a1d21] hover:bg-[#1e2126] rounded-xl cursor-pointer transition-all duration-200 border border-white/[0.06] hover:border-white/10 overflow-hidden"
+            className="group relative bg-bg-modal hover:bg-bg-input-2 rounded-xl cursor-pointer transition-all duration-200 border border-white/[0.06] hover:border-white/[0.06] overflow-hidden"
         >
             {/* Header strip: league + time/live badge */}
             <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.04]">
@@ -127,7 +128,7 @@ export default function MatchRow({ match }: MatchRowProps) {
                     <span className="truncate">{countryName} · {leagueName}</span>
                 </div>
                 {isLive ? (
-                    <div className="flex items-center gap-1 flex-shrink-0 bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-black px-2 py-0.5 rounded uppercase">
+                    <div className="flex items-center gap-1 flex-shrink-0 bg-danger-alpha-10 border border-danger/20 text-danger text-[10px] font-black px-2 py-0.5 rounded uppercase">
                         <Radio size={8} className="animate-pulse" />
                         LIVE
                     </div>
@@ -150,7 +151,7 @@ export default function MatchRow({ match }: MatchRowProps) {
                         <span className="text-[13px] font-semibold text-white truncate">{homeTeam}</span>
                     </div>
                     {match.score1 != null && (
-                        <span className={`text-base font-black tabular-nums tracking-tight flex-shrink-0 ${isLive ? 'text-[#3BC117]' : 'text-white'}`}>
+                        <span className={`text-base font-black tabular-nums tracking-tight flex-shrink-0 ${isLive ? 'text-brand-gold' : 'text-white'}`}>
                             {match.score1}
                         </span>
                     )}
@@ -162,7 +163,7 @@ export default function MatchRow({ match }: MatchRowProps) {
                         <span className="text-[13px] font-semibold text-white truncate">{awayTeam}</span>
                     </div>
                     {match.score2 != null && (
-                        <span className={`text-base font-black tabular-nums tracking-tight flex-shrink-0 ${isLive ? 'text-[#3BC117]' : 'text-white'}`}>
+                        <span className={`text-base font-black tabular-nums tracking-tight flex-shrink-0 ${isLive ? 'text-brand-gold' : 'text-white'}`}>
                             {match.score2}
                         </span>
                     )}
@@ -183,7 +184,14 @@ export default function MatchRow({ match }: MatchRowProps) {
                                     key={idx}
                                     label={label}
                                     value={price}
-                                    onClick={(e) => price && handleOddClick(e, match.event_id, runner.nat || label, price)}
+                                    onClick={(e) => price && handleOddClick(
+                                        e,
+                                        winnerMarket?.market_id || '1',
+                                        runner.nat || runner.runnerName || label,
+                                        price,
+                                        String(runner.sid || runner.selectionId || runner.runnerId || label),
+                                        winnerMarket?.market_name || 'Match Odds'
+                                    )}
                                 />
                             );
                         })}
@@ -211,7 +219,7 @@ function TeamFlag({ team, fallbackFlag, countryCode, size = 'sm' }: {
     const isGeneric = code === 'un' || (countryCode && code === countryCode.toLowerCase());
 
     return (
-        <div className={`${dim} rounded-md bg-[#252830] flex items-center justify-center flex-shrink-0 overflow-hidden border border-white/5`}>
+        <div className={`${dim} rounded-md bg-bg-surface flex items-center justify-center flex-shrink-0 overflow-hidden border border-white/[0.04]`}>
             {isGeneric ? (
                 <span className="text-sm leading-none">{fallbackFlag}</span>
             ) : (
@@ -219,6 +227,8 @@ function TeamFlag({ team, fallbackFlag, countryCode, size = 'sm' }: {
                     src={`https://flagcdn.com/w40/${code}.png`}
                     className="w-full h-full object-contain"
                     alt={team}
+                    loading="lazy"
+                    decoding="async"
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                 />
             )}
@@ -231,7 +241,7 @@ function OddsButton({ label, value, onClick }: {
 }) {
     if (!value) {
         return (
-            <div className="h-9 rounded-lg bg-[#252830] border border-white/[0.04] flex items-center justify-between px-2.5 opacity-40">
+            <div className="h-9 rounded-lg bg-bg-surface border border-white/[0.04] flex items-center justify-between px-2.5 opacity-40">
                 <span className="text-[10px] text-white/40 font-bold">{label}</span>
                 <span className="text-[11px] text-white/20 font-bold">-</span>
             </div>
@@ -240,10 +250,10 @@ function OddsButton({ label, value, onClick }: {
     return (
         <button
             onClick={onClick}
-            className="h-9 rounded-lg bg-[#252830] hover:bg-[#3BC117] border border-white/[0.06] hover:border-[#3BC117] flex items-center justify-between px-2.5 transition-all duration-150 active:scale-95 group/odd"
+            className="h-9 rounded-lg bg-bg-surface hover:bg-brand-gold border border-white/[0.06] hover:border-brand-gold flex items-center justify-between px-2.5 transition-all duration-150 active:scale-95 group/odd"
         >
-            <span className="text-[10px] font-bold text-white/40 group-hover/odd:text-black/60 transition-colors">{label}</span>
-            <span className="text-[13px] font-black text-white group-hover/odd:text-black transition-colors">{value}</span>
+            <span className="text-[10px] font-bold text-white/40 group-hover/odd:text-text-inverse/60 transition-colors">{label}</span>
+            <span className="text-[13px] font-black text-white group-hover/odd:text-text-inverse transition-colors">{value}</span>
         </button>
     );
 }

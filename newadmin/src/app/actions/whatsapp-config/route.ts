@@ -60,7 +60,7 @@ export async function PATCH(req: NextRequest) {
         const result = await WhatsAppConfig.findOneAndUpdate(
             { key: CONFIG_KEY },
             { $set: { key: CONFIG_KEY, ...update } },
-            { upsert: true, new: true, lean: true }
+            { upsert: true, returnDocument: 'after', lean: true }
         ) as any;
 
         return NextResponse.json({ success: true, config: result });

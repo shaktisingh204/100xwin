@@ -4,9 +4,14 @@ import {
 } from '@nestjs/common';
 import { OriginalsAdminService } from './originals-admin.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { Role } from '@prisma/client';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.TECH_MASTER, Role.SUPER_ADMIN)
 @Controller('admin/originals')
+
 export class OriginalsAdminController {
   constructor(private readonly adminService: OriginalsAdminService) {}
 
@@ -47,6 +52,18 @@ export class OriginalsAdminController {
     @Req() req: any,
   ) {
     return this.adminService.upsertConfig(game, body, req.user?.id);
+  }
+
+  /** POST /admin/originals/config/:game/enable — quickly enable a game without navigating away */
+  @Post('config/:game/enable')
+  enableGame(@Param('game') game: string, @Req() req: any) {
+    return this.adminService.quickToggleGame(game, true, req.user?.id);
+  }
+
+  /** POST /admin/originals/config/:game/disable — quickly disable a game without navigating away */
+  @Post('config/:game/disable')
+  disableGame(@Param('game') game: string, @Req() req: any) {
+    return this.adminService.quickToggleGame(game, false, req.user?.id);
   }
 
   /** PATCH /admin/originals/access — update who can play Zeero Originals */

@@ -2,13 +2,15 @@ import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import * as bcrypt from 'bcrypt';
 import { EventsGateway } from '../events.gateway';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class UsersService {
     constructor(
         private prisma: PrismaService,
         @Inject(forwardRef(() => EventsGateway))
-        private eventsGateway: EventsGateway
+        private eventsGateway: EventsGateway,
+        private emailService: EmailService,
     ) { }
 
     async getBalance(username: string) {
@@ -166,8 +168,8 @@ export class UsersService {
 
         const mainWalletBalance = parseFloat((user.balance || 0).toString());
         const bonusWalletBalance = parseFloat((user.sportsBonus || 0).toString());
-        const depositWageringRequired = parseFloat((user.totalDeposited || 0).toString());
-        const depositWageringDone = parseFloat((user.totalWagered || 0).toString());
+        const depositWageringRequired = parseFloat((user.depositWageringRequired || 0).toString());
+        const depositWageringDone = parseFloat((user.depositWageringDone || 0).toString());
 
         return {
             // Fiat wallet
@@ -253,6 +255,25 @@ export class UsersService {
         return { success: true, username: trimmed };
     }
 
+    async updateProfile(userId: number, profileData: { firstName?: string; lastName?: string; country?: string; city?: string }): Promise<{ success: boolean; error?: string }> {
+        const { firstName, lastName, country, city } = profileData;
+        if (!firstName?.trim() || !lastName?.trim() || !country?.trim() || !city?.trim()) {
+            return { success: false, error: 'All fields (Name, Surname, Country, City) are required.' };
+        }
+
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: { 
+                firstName: firstName.trim(), 
+                lastName: lastName.trim(), 
+                country: country.trim(), 
+                city: city.trim() 
+            } as any
+        });
+        
+        return { success: true };
+    }
+
     async changePassword(userId: number, currentPassword: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
         if (!currentPassword || !newPassword) return { success: false, error: 'All fields are required.' };
         if (newPassword.length < 6) return { success: false, error: 'New password must be at least 6 characters.' };
@@ -333,10 +354,18 @@ export class UsersService {
     }
 
     async update(id: number, data: any) {
-        return this.prisma.user.update({
+        const updated = await this.prisma.user.update({
             where: { id },
             data,
         });
+
+        if (data.isBanned === true && updated.email) {
+            this.emailService
+                .sendAccountSuspended(updated.email, updated.username, data.banReason || 'Policy violation')
+                .catch((err) => console.error(`Failed to send suspension email to user ${id}`, err));
+        }
+
+        return updated;
     }
 
     async remove(id: number) {
@@ -364,16 +393,23 @@ export class UsersService {
         });
     }
 
-    async addFunds(userId: number, amount: number, type: 'credit' | 'debit', adminId: number) {
+    async addFunds(
+        userId: number,
+        amount: number,
+        type: 'credit' | 'debit',
+        adminId: number,
+        wallet: 'fiat' | 'crypto' = 'fiat',
+    ) {
         if (amount <= 0) throw new Error('Amount must be positive');
 
+        const isCrypto = wallet === 'crypto';
+        const delta = type === 'credit' ? { increment: amount } : { decrement: amount };
+
         return this.prisma.$transaction(async (prisma) => {
-            // 1. Update User Balance
+            // 1. Update User Balance — fiat vs crypto wallet routed by `wallet`
             const user = await prisma.user.update({
                 where: { id: userId },
-                data: {
-                    balance: type === 'credit' ? { increment: amount } : { decrement: amount }
-                }
+                data: isCrypto ? { cryptoBalance: delta } : { balance: delta },
             });
 
             // 2. Create Transaction Record
@@ -383,19 +419,25 @@ export class UsersService {
                     amount,
                     type: type === 'credit' ? 'ADMIN_DEPOSIT' : 'ADMIN_WITHDRAWAL',
                     status: 'COMPLETED',
-                    paymentMethod: 'MANUAL',
-                    remarks: `Manual ${type} by Admin/Manager ID: ${adminId}`,
+                    paymentMethod: isCrypto ? 'MANUAL_CRYPTO' : 'MANUAL',
+                    remarks: `Manual ${type} by Admin/Manager ID: ${adminId} (${isCrypto ? 'crypto' : 'fiat'} wallet)`,
                     adminId,
+                    paymentDetails: {
+                        source: 'ADMIN_ADD_FUNDS',
+                        wallet: isCrypto ? 'crypto' : 'fiat',
+                        currency: isCrypto ? 'USD' : 'INR',
+                    } as any,
                     createdAt: new Date(),
-                    updatedAt: new Date()
-                }
+                    updatedAt: new Date(),
+                },
             });
 
             return user;
         }).then(user => {
             // Emit socket event after successful transaction
             this.eventsGateway.emitUserWalletUpdate(user.id, {
-                balance: parseFloat(user.balance.toString())
+                balance: parseFloat(user.balance.toString()),
+                cryptoBalance: parseFloat((user as any).cryptoBalance?.toString?.() ?? '0'),
             });
             return user;
         });
@@ -443,10 +485,26 @@ export class UsersService {
         if (!userIds.length) return { count: 0 };
 
         if (action === 'BAN') {
-            return this.prisma.user.updateMany({
+            const result = await this.prisma.user.updateMany({
                 where: { id: { in: userIds } },
-                data: { isBanned: true }
+                data: { isBanned: true },
             });
+
+            // Send suspension email to each banned user (fire-and-forget)
+            const users = await this.prisma.user.findMany({
+                where: { id: { in: userIds } },
+                select: { email: true, username: true },
+            });
+            const reason = data?.reason || 'Policy violation';
+            for (const user of users) {
+                if (user.email) {
+                    this.emailService
+                        .sendAccountSuspended(user.email, user.username, reason)
+                        .catch((err) => console.error(`Failed to send suspension email to ${user.email}`, err));
+                }
+            }
+
+            return result;
         }
 
         if (action === 'VERIFY') {
@@ -494,6 +552,19 @@ export class UsersService {
                                 amount,
                                 type: 'BONUS',
                                 status: 'APPROVED',
+                                paymentMethod: 'BONUS_WALLET',
+                                paymentDetails: {
+                                    source: 'ADMIN_BULK',
+                                    bonusCode: 'ADMIN_BULK',
+                                    bonusType: 'CASINO',
+                                    applicableTo: 'CASINO',
+                                    walletLabel: 'Casino Bonus',
+                                    bonusCurrency: 'INR',
+                                    depositAmount: 0,
+                                    bonusAmount: amount,
+                                    conversionCapAmount: amount,
+                                    wageringRequired: 0,
+                                },
                                 remarks: 'Bulk Casino Bonus Action (Admin)',
                                 createdAt: new Date(),
                                 updatedAt: new Date()

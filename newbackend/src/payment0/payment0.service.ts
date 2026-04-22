@@ -14,8 +14,12 @@ export class Payment0Service {
      */
     async verifyPaymentWithRazorpay(gatewayTxn: string, expectedAmount: number): Promise<boolean> {
         try {
-            const keyId = this.configService.get<string>('RAZORPAY_KEY_ID') || 'rzp_live_SOrV6qkYgxQsuB';
-            const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET') || 'Ck5W7Ai2dsMRvoVyFC9MG1KG';
+            const keyId = this.configService.get<string>('RAZORPAY_KEY_ID');
+            const keySecret = this.configService.get<string>('RAZORPAY_KEY_SECRET');
+            if (!keyId || !keySecret) {
+                this.logger.error('[UPI0] RAZORPAY_KEY_ID/RAZORPAY_KEY_SECRET not configured');
+                return false;
+            }
 
             const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
 
@@ -67,7 +71,14 @@ export class Payment0Service {
             .update(rawBody)
             .digest('hex');
 
-        const valid = expectedSignature === receivedSignature;
+        let valid = false;
+        try {
+            const a = Buffer.from(expectedSignature, 'utf8');
+            const b = Buffer.from(receivedSignature, 'utf8');
+            valid = a.length === b.length && crypto.timingSafeEqual(a, b);
+        } catch {
+            valid = false;
+        }
 
         if (!valid) {
             this.logger.warn(`[UPI0-Webhook] Signature mismatch. Expected: ${expectedSignature}, Got: ${receivedSignature}`);

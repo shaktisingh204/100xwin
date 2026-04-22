@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
-import { TrendingUp, Trophy } from 'lucide-react';
+import { TrendingUp } from 'lucide-react';
 import { casinoService } from '@/services/casino';
 import { useWallet } from '@/context/WalletContext';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 const getRandomAmount = (symbol = '₹') => {
     const amount = (Math.random() * 500000) + 1000;
@@ -20,71 +22,89 @@ const getRandomUser = () => {
     return `${adj}${noun}${Math.floor(Math.random() * 999)}`;
 };
 
-const ACCENT_HUES = ['#f59e0b', '#10b981', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899', '#f97316', '#6366f1'];
+const CARD_COLORS = [
+    'from-purple-700 to-purple-900',
+    'from-blue-600 to-blue-900',
+    'from-teal-600 to-teal-900',
+    'from-red-700 to-red-900',
+    'from-orange-600 to-orange-900',
+    'from-pink-600 to-pink-900',
+    'from-indigo-600 to-indigo-900',
+    'from-green-600 to-green-900',
+];
 
 interface WinItem {
     game: string;
     user: string;
     amount: string;
-    hue: string;
+    color: string;
     image: string;
 }
 
+/** Build a WinItem from a real DB game object */
 function gameToWinItem(game: any, idx: number): WinItem {
     return {
         game: game.gameName || game.name || 'Casino Game',
         user: getRandomUser(),
         amount: getRandomAmount(),
-        hue: ACCENT_HUES[idx % ACCENT_HUES.length],
+        color: CARD_COLORS[idx % CARD_COLORS.length],
         image: game.image || game.thumbnail || game.imageUrl || '',
     };
 }
 
-/* ── Horizontal glass card ticker item ─────────────────────────────────────── */
-function TickerCard({ win }: { win: WinItem }) {
+// ── Ticker item card ──────────────────────────────────────────────────────────
+
+function TickerItem({ win }: { win: WinItem }) {
     const [imgFailed, setImgFailed] = useState(false);
     const hasImage = !imgFailed && !!win.image;
 
     return (
-        <div className="flex-shrink-0 flex items-center gap-2.5 bg-white/[0.02] border border-white/[0.04] rounded-xl px-2.5 py-2 mx-1 hover:border-white/[0.08] transition-all group cursor-pointer min-w-[200px]">
-            {/* Thumbnail */}
-            <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 border border-white/[0.06]">
+        <div className="flex-shrink-0 w-[78px] mx-1 group cursor-pointer">
+            <div
+                className={`relative w-full h-[96px] rounded-xl overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.3)] border border-white/[0.06]
+                    mb-1.5 group-hover:border-brand-gold/40 transition-all group-hover:scale-105 group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.4)]
+                    bg-gradient-to-b ${win.color}`}
+            >
                 {hasImage ? (
-                    <img src={win.image} alt={win.game} onError={() => setImgFailed(true)} className="w-full h-full object-cover" loading="lazy" />
+                    <img
+                        src={win.image}
+                        alt={win.game}
+                        onError={() => setImgFailed(true)}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                    />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-white/[0.03] to-white/[0.01]">
-                        <span className="text-base">🎮</span>
+                    <div className="w-full h-full flex items-center justify-center">
+                        <span className="text-3xl">🎮</span>
                     </div>
                 )}
-            </div>
 
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-                <p className="text-[10px] text-white/35 font-medium truncate">{win.user}</p>
-                <p className="text-[9px] text-white/15 truncate">{win.game}</p>
+                {/* game name overlay */}
+                <div className="absolute bottom-0 left-0 right-0 p-1.5 z-10 bg-gradient-to-t from-black/70 to-transparent">
+                    <p className="text-[9px] text-white/90 font-bold truncate text-center leading-tight drop-shadow">
+                        {win.game}
+                    </p>
+                </div>
             </div>
-
-            {/* Win amount */}
-            <div className="flex-shrink-0 text-right">
-                <p className="text-[12px] font-black" style={{ color: win.hue }}>{win.amount}</p>
-                <p className="text-[7px] text-white/10 font-bold uppercase">Won</p>
-            </div>
+            <p className="text-[10px] text-text-muted font-medium truncate text-center leading-tight mt-1">{win.user}</p>
+            <p className="text-[11px] font-black text-brand-gold text-center leading-tight">{win.amount}</p>
         </div>
     );
 }
+
+// ── Skeleton placeholder (shown before DB games load) ────────────────────────
 
 function TickerSkeleton() {
     return (
-        <div className="flex-shrink-0 flex items-center gap-2.5 bg-white/[0.015] rounded-xl px-2.5 py-2 mx-1 min-w-[200px]">
-            <div className="w-10 h-10 rounded-lg bg-white/[0.03] animate-pulse flex-shrink-0" />
-            <div className="flex-1">
-                <div className="h-2 w-16 bg-white/[0.03] rounded animate-pulse mb-1" />
-                <div className="h-1.5 w-20 bg-white/[0.02] rounded animate-pulse" />
-            </div>
-            <div className="h-3 w-10 bg-white/[0.03] rounded animate-pulse" />
+        <div className="flex-shrink-0 w-[78px] mx-1">
+            <div className="w-full h-[96px] rounded-xl skeleton-block mb-1.5" />
+            <div className="w-2/3 h-2 rounded skeleton-block mx-auto mb-1" />
+            <div className="w-1/2 h-2.5 rounded skeleton-block mx-auto" />
         </div>
     );
 }
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function RecentWinsTicker() {
     const { activeSymbol } = useWallet();
@@ -95,46 +115,72 @@ export default function RecentWinsTicker() {
     useEffect(() => {
         if (fetchedRef.current) return;
         fetchedRef.current = true;
+
         const load = async () => {
             try {
+                // Fetch a diverse set of games from different categories in parallel
                 const [slotsRes, liveRes, crashRes] = await Promise.all([
                     casinoService.getGames(undefined, 'slots', undefined, 1, 15),
                     casinoService.getGames(undefined, 'live', undefined, 1, 10),
                     casinoService.getGames(undefined, 'crash', undefined, 1, 5),
                 ]);
-                const raw = [...(slotsRes.games || []), ...(liveRes.games || []), ...(crashRes.games || [])];
-                if (raw.length === 0) { setLoading(false); return; }
+
+                const raw = [
+                    ...(slotsRes.games || []),
+                    ...(liveRes.games || []),
+                    ...(crashRes.games || []),
+                ];
+
+                if (raw.length === 0) {
+                    setLoading(false);
+                    return;
+                }
+
+                // Shuffle so the ticker order is different each load
                 const shuffled = [...raw].sort(() => Math.random() - 0.5);
+
+                // Build win items — duplicate to fill the scroll seamlessly
                 const items = shuffled.map((g, i) => gameToWinItem(g, i));
-                const withSymbol = items.map(item => ({ ...item, amount: getRandomAmount(activeSymbol) }));
-                setWins([...withSymbol, ...withSymbol]);
-            } catch (e) { console.error('RecentWinsTicker: failed', e); }
-            finally { setLoading(false); }
+                // Re-apply symbol to amounts
+                const withSymbol = items.map(item => ({
+                    ...item,
+                    amount: getRandomAmount(activeSymbol),
+                }));
+                setWins([...withSymbol, ...withSymbol]); // doubled for infinite scroll
+            } catch (e) {
+                console.error('RecentWinsTicker: failed to load games', e);
+                // On error, leave wins empty — component will show nothing gracefully
+            } finally {
+                setLoading(false);
+            }
         };
+
         load();
     }, []);
 
     return (
-        <div className="w-full py-2">
+        <div className="w-full bg-bg-section py-3">
             {/* Header */}
-            <div className="flex items-center gap-2 px-3 md:px-0 mb-2">
-                <div className="flex items-center gap-1.5">
-                    <Trophy size={12} className="text-brand-gold" />
-                    <span className="text-[11px] font-black text-white/40 uppercase tracking-wider">Winning Right Now</span>
-                </div>
-                <div className="flex-1 h-px bg-gradient-to-r from-white/[0.05] to-transparent" />
-                <TrendingUp size={11} className="text-emerald-500/40" />
+            <div className="flex items-center gap-2 px-4 mb-3">
+                <div className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.8)] animate-pulse" />
+                <span className="text-sm font-black text-white uppercase tracking-tight">Recent Big Wins</span>
+                <TrendingUp size={14} className="text-green-500 ml-auto" />
             </div>
 
-            {/* Ticker */}
+            {/* Scrolling Row */}
             <div className="overflow-hidden relative">
                 {loading ? (
-                    <div className="flex px-3 md:px-0">
-                        {Array.from({ length: 6 }).map((_, i) => <TickerSkeleton key={i} />)}
+                    // Skeleton shimmer while DB games are loading
+                    <div className="flex px-4 gap-0">
+                        {Array.from({ length: 12 }).map((_, i) => (
+                            <TickerSkeleton key={i} />
+                        ))}
                     </div>
                 ) : wins.length > 0 ? (
-                    <div className="flex animate-scroll hover:[animation-play-state:paused] w-max">
-                        {wins.map((win, i) => <TickerCard key={i} win={win} />)}
+                    <div className="flex animate-scroll hover:[animation-play-state:paused] w-max px-4 gap-0">
+                        {wins.map((win, i) => (
+                            <TickerItem key={i} win={win} />
+                        ))}
                     </div>
                 ) : null}
             </div>

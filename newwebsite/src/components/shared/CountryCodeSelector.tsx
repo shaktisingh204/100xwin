@@ -237,7 +237,7 @@ const CountryCodeSelector: React.FC<CountryCodeSelectorProps> = ({ value, onChan
 
             {/* Dropdown */}
             {open && (
-                <div className="absolute top-[calc(100%+6px)] left-0 z-[200] w-[260px] bg-bg-elevated border border-divider rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute top-[calc(100%+6px)] left-0 z-[200] w-[260px] bg-bg-elevated border border-divider rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
                     {/* Search */}
                     <div className="flex items-center gap-2 px-3 py-2.5 border-b border-divider">
                         <Search size={14} className="text-text-muted shrink-0" />

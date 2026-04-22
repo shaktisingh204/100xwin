@@ -10,14 +10,13 @@ import {
     X,
     Check,
     Copy,
-    AlertCircle,
-    ShieldCheck,
     Loader2,
-    Clock,
     CheckCircle2,
+    Gift,
     RefreshCw,
     ArrowLeft,
-    ArrowUpRight,
+    ChevronDown,
+    Search,
 } from 'lucide-react';
 import { countries } from '@/config/countries';
 import { BonusPromotion } from '@/services/promotions';
@@ -37,11 +36,30 @@ interface CryptoOption {
     color: string;
 }
 
+interface NowPaymentsNetworkOption extends CryptoOption {
+    code: string;
+    logoUrl: string | null;
+    enabled: boolean;
+    isAvailableForPayment: boolean;
+}
+
+interface NowPaymentsCurrenciesResponse {
+    success: boolean;
+    coins: Array<{
+        code: string;
+        label: string;
+        logoUrl: string | null;
+        networks: NowPaymentsNetworkOption[];
+    }>;
+    syncedAt: string | null;
+}
+
 interface GatewayOption {
     id: string;
     label: string;
     sub: string;
     icon: string;
+    logoUrl?: string | null;
     minDeposit: number;
     badge?: string;
 }
@@ -56,6 +74,34 @@ const defaultCryptoOptions: CryptoOption[] = [
     { id: 'xrp', label: 'XRP', network: 'XRP', icon: '✕', color: '#346AA9' },
     { id: 'trx', label: 'TRON', network: 'TRC20', icon: '◈', color: '#EF0027' },
 ];
+
+const popularNowPaymentsCoinIds = new Set([
+    'btc',
+    'eth',
+    'xrp',
+    'usdt',
+    'ltc',
+    'bch',
+    'doge',
+    'xno',
+    'xmr',
+    'dash',
+    'vet',
+    'uni',
+    'sol',
+    'ada',
+    'shib',
+    'dgb',
+    'trx',
+    'usdttrc20',
+    'usdtbsc',
+    'usdterc20',
+    'usdtsol',
+    'usdc',
+    'usdcmatic',
+    'usdtmatic',
+    'usdcsol',
+]);
 
 const quickAmountsFiat = ['500', '1000', '2000', '5000', '10000'];
 const quickAmountsUPI2 = ['200', '500', '1000', '2000', '5000'];
@@ -72,13 +118,21 @@ const parseAmountList = (value?: string) => {
 
 const buildQuickAmounts = (minimum: number, configuredValue?: string, fallback: string[] = []) => {
     const configured = parseAmountList(configuredValue);
-    if (configured.length) return configured;
 
-    const derived = minimum > 0
-        ? [minimum, minimum * 2, minimum * 5, minimum * 10, minimum * 20]
-        : fallback.map((value) => Number(value));
+    let baseAmounts: number[] = [];
+    if (configured.length) {
+        baseAmounts = configured.map(Number);
+    } else {
+        baseAmounts = minimum > 0
+            ? [minimum, minimum * 2, minimum * 5, minimum * 10, minimum * 20]
+            : fallback.map(Number);
+    }
 
-    return Array.from(new Set(derived.filter((value) => Number.isFinite(value) && value > 0)))
+    if (minimum > 0) {
+        baseAmounts = [minimum, ...baseAmounts.filter((val) => val !== minimum)];
+    }
+
+    return Array.from(new Set(baseAmounts.filter((value) => Number.isFinite(value) && value > 0)))
         .slice(0, 5)
         .map((value) => String(Number(value.toFixed(2))).replace(/\.0+$/, ''));
 };
@@ -109,6 +163,93 @@ const parseCryptoOptionsConfig = (value?: string): CryptoOption[] => {
     } catch {
         return defaultCryptoOptions;
     }
+};
+
+const buildFallbackCryptoOption = (currencyCode: string): CryptoOption => {
+    const normalizedId = currencyCode.toLowerCase();
+    const upperCode = currencyCode.toUpperCase();
+
+    const exactFallbackLabels: Record<string, { label: string; network: string }> = {
+        btc: { label: 'Bitcoin', network: 'BTC' },
+        eth: { label: 'Ethereum', network: 'ETH' },
+        xrp: { label: 'XRP', network: 'XRP' },
+        ltc: { label: 'Litecoin', network: 'LTC' },
+        bch: { label: 'Bitcoin Cash', network: 'BCH' },
+        doge: { label: 'Dogecoin', network: 'DOGE' },
+        xmr: { label: 'Monero', network: 'XMR' },
+        dash: { label: 'Dash', network: 'DASH' },
+        vet: { label: 'VeChain', network: 'VET' },
+        uni: { label: 'Uniswap', network: 'UNI' },
+        sol: { label: 'Solana', network: 'SOL' },
+        ada: { label: 'Cardano', network: 'ADA' },
+        shib: { label: 'Shiba Inu', network: 'SHIB' },
+        dgb: { label: 'DigiByte', network: 'DGB' },
+        trx: { label: 'TRON', network: 'TRX' },
+        usdttrc20: { label: 'Tether', network: 'TRC20' },
+        usdtbsc: { label: 'Tether', network: 'BSC' },
+        usdterc20: { label: 'Tether', network: 'ERC20' },
+        usdtsol: { label: 'Tether', network: 'Solana' },
+        usdtmatic: { label: 'Tether', network: 'Polygon' },
+        usdc: { label: 'USD Coin', network: 'USDC' },
+        usdcmatic: { label: 'USD Coin', network: 'Polygon' },
+        usdcsol: { label: 'USD Coin', network: 'Solana' },
+        usdt: { label: 'Tether', network: 'USDT' },
+        bnbbsc: { label: 'BNB', network: 'BSC' },
+    };
+
+    const exactMatch = exactFallbackLabels[normalizedId];
+    if (exactMatch) {
+        return {
+            id: normalizedId,
+            label: exactMatch.label,
+            network: exactMatch.network,
+            icon: upperCode.slice(0, 1),
+            color: '#F5C451',
+        };
+    }
+
+    const networkPatterns: Array<{ suffix: string; network: string }> = [
+        { suffix: 'TRC20', network: 'TRC20' },
+        { suffix: 'ERC20', network: 'ERC20' },
+        { suffix: 'BSC', network: 'BSC' },
+        { suffix: 'SOL', network: 'Solana' },
+        { suffix: 'MATIC', network: 'Polygon' },
+        { suffix: 'ARB', network: 'Arbitrum' },
+        { suffix: 'MAINNET', network: 'Mainnet' },
+    ];
+
+    for (const pattern of networkPatterns) {
+        if (upperCode.endsWith(pattern.suffix) && upperCode.length > pattern.suffix.length) {
+            const baseCode = upperCode.slice(0, -pattern.suffix.length);
+            return {
+                id: normalizedId,
+                label: baseCode,
+                network: pattern.network,
+                icon: baseCode.slice(0, 1) || upperCode.slice(0, 1),
+                color: '#F5C451',
+            };
+        }
+    }
+
+    return {
+        id: normalizedId,
+        label: upperCode,
+        network: upperCode,
+        icon: upperCode.slice(0, 1),
+        color: '#F5C451',
+    };
+};
+
+const buildCoinMonogram = (label: string, code: string) => {
+    const normalizedLabel = label.trim();
+    if (!normalizedLabel) return code.slice(0, 2).toUpperCase();
+
+    const parts = normalizedLabel.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+        return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
+    }
+
+    return normalizedLabel.slice(0, 2).toUpperCase();
 };
 
 type CryptoStep = 'configure' | 'awaiting' | 'success';
@@ -155,6 +296,8 @@ interface PromoValidationResult {
         percentage: number;
         amount: number;
         minDeposit: number;
+        minDepositFiat?: number;
+        minDepositCrypto?: number;
         maxBonus: number;
         wageringRequirement: number;
         depositWagerMultiplier: number;
@@ -201,7 +344,7 @@ const getApiErrorMessage = (error: unknown, fallback: string) => {
 
 export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
     const { user } = useAuth();
-    const { openManualDeposit } = useModal();
+    const { openManualDeposit, depositInitialTab, depositAllowFiatTab } = useModal();
 
     // STRICT: fiat is ONLY for users whose registered country is exactly 'IN'.
     // Do NOT use a fallback of 'IN' — missing/null country means NOT India.
@@ -210,7 +353,7 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
     const fiatSymbol = getCurrencySymbol(user?.currency || 'INR');
     const currentCountry = countries.find((country) => country.code === user?.country) ?? countries[0];
 
-    // Indian users default to fiat; everyone else defaults to crypto
+    // Indian users default to fiat unless this modal was opened in crypto-only mode.
     const [activeTab, setActiveTab] = useState<'fiat' | 'crypto'>(isIndia ? 'fiat' : 'crypto');
     const [selectedMethod, setSelectedMethod] = useState<string>('');
     const [amount, setAmount] = useState<string>('');
@@ -232,18 +375,50 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
     const [minDeposit, setMinDeposit] = useState<number>(100);
     const [minDepositUPI2, setMinDepositUPI2] = useState<number>(200);
     const [minDepositUPI0, setMinDepositUPI0] = useState<number>(100);
+    const [minDepositUPI3, setMinDepositUPI3] = useState<number>(100);
+    const [minDepositUPI4, setMinDepositUPI4] = useState<number>(100);
+    const [minDepositUPI5, setMinDepositUPI5] = useState<number>(100);
+    const [minDepositUPI6, setMinDepositUPI6] = useState<number>(100);
+    const [minDepositUPI9, setMinDepositUPI9] = useState<number>(100);
+    const [minDepositCashfree, setMinDepositCashfree] = useState<number>(100);
     const [minDepositCrypto, setMinDepositCrypto] = useState<number>(10);
 
     // Gateway config from SystemConfig
     const [upi1Enabled, setUpi1Enabled] = useState<boolean>(true);
     const [upi2Enabled, setUpi2Enabled] = useState<boolean>(true);
+    const [upi3Enabled, setUpi3Enabled] = useState<boolean>(true);
+    const [upi4Enabled, setUpi4Enabled] = useState<boolean>(false);
+    const [upi5Enabled, setUpi5Enabled] = useState<boolean>(true);
+    const [upi6Enabled, setUpi6Enabled] = useState<boolean>(true);
+    const [upi9Enabled, setUpi9Enabled] = useState<boolean>(true);
+    const [cashfreeEnabled, setCashfreeEnabled] = useState<boolean>(false);
     // Gateway display names & taglines (admin-configurable)
     const [upi1Name, setUpi1Name] = useState('UPI Gateway 1');
     const [upi1Tag, setUpi1Tag] = useState('NekPay · Instant');
+    const [upi1LogoUrl, setUpi1LogoUrl] = useState('');
     const [upi2Name, setUpi2Name] = useState('UPI Gateway 2');
     const [upi2Tag, setUpi2Tag] = useState('UPI / Bank · Fast');
+    const [upi2LogoUrl, setUpi2LogoUrl] = useState('');
+    const [upi3Name, setUpi3Name] = useState('UPI Gateway 3');
+    const [upi3Tag, setUpi3Tag] = useState('iPayment · Instant');
+    const [upi3LogoUrl, setUpi3LogoUrl] = useState('');
+    const [upi4Name, setUpi4Name] = useState('UPI Gateway 4');
+    const [upi4Tag, setUpi4Tag] = useState('Silkpay · Fast');
+    const [upi4LogoUrl, setUpi4LogoUrl] = useState('');
+    const [upi5Name, setUpi5Name] = useState('UPI Gateway 5');
+    const [upi5Tag, setUpi5Tag] = useState('RezorPay · Fast');
+    const [upi5LogoUrl, setUpi5LogoUrl] = useState('');
+    const [upi6Name, setUpi6Name] = useState('Gateway 6 (A-Pay)');
+    const [upi6Tag, setUpi6Tag] = useState('A-Pay · Fast');
+    const [upi6LogoUrl, setUpi6LogoUrl] = useState('');
+    const [upi9Name, setUpi9Name] = useState('UPI Gateway 9');
+    const [upi9Tag, setUpi9Tag] = useState('UltraPay · Fast');
+    const [upi9LogoUrl, setUpi9LogoUrl] = useState('');
+    const [cashfreeName, setCashfreeName] = useState('Cashfree Gateway');
+    const [cashfreeTag, setCashfreeTag] = useState('Secure · Fast');
+    const [cashfreeLogoUrl, setCashfreeLogoUrl] = useState('');
     // Admin-controlled display order
-    const [upiOrder, setUpiOrder] = useState<string[]>(['UPI1', 'UPI2']);
+    const [upiOrder, setUpiOrder] = useState<string[]>(['CASHFREE', 'UPI1', 'UPI2', 'UPI3', 'UPI4', 'UPI5', 'UPI6']);
 
     // Amount validation
     const [selectedMethodError, setSelectedMethodError] = useState<string>('');
@@ -255,7 +430,14 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
     const [selectedBonusId, setSelectedBonusId] = useState<string | null>(null);
 
     const [cryptoOptions, setCryptoOptions] = useState<CryptoOption[]>(defaultCryptoOptions);
-    const [selectedCoin, setSelectedCoin] = useState<CryptoOption>(defaultCryptoOptions[0]);
+    const [selectedCoinCode, setSelectedCoinCode] = useState<string | null>(null);
+    const [selectedNetworkOption, setSelectedNetworkOption] = useState<NowPaymentsNetworkOption | null>(null);
+    const [availableNowPaymentsCoins, setAvailableNowPaymentsCoins] = useState<NowPaymentsCurrenciesResponse['coins']>([]);
+    const [cryptoOptionsLoading, setCryptoOptionsLoading] = useState(false);
+    const [coinSearch, setCoinSearch] = useState('');
+    const [networkSearch, setNetworkSearch] = useState('');
+    const [isCoinDropdownOpen, setIsCoinDropdownOpen] = useState(false);
+    const [isNetworkDropdownOpen, setIsNetworkDropdownOpen] = useState(false);
     const [cryptoStep, setCryptoStep] = useState<CryptoStep>('configure');
     const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
     const [paymentStatus, setPaymentStatus] = useState<string>('waiting');
@@ -266,15 +448,18 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
 
-    // STRICT enforcement: whenever user data loads/changes, force the correct tab.
-    // Non-India users MUST be on crypto; India users default to fiat.
+    // STRICT enforcement: whenever this modal opens, force the correct tab.
+    // Non-India users MUST be on crypto; manual-only chooser mode also opens crypto-only.
     useEffect(() => {
+        if (!isOpen) return;
         if (!isIndia) {
+            setActiveTab('crypto');
+        } else if (!depositAllowFiatTab || depositInitialTab === 'crypto') {
             setActiveTab('crypto');
         } else {
             setActiveTab('fiat');
         }
-    }, [isIndia]);
+    }, [depositAllowFiatTab, depositInitialTab, isIndia, isOpen]);
 
     useEffect(() => {
         if (isOpen) {
@@ -289,22 +474,69 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
                     if (!isNaN(minU2) && minU2 > 0) setMinDepositUPI2(minU2);
                     const minU0 = parseFloat(d.MIN_DEPOSIT_UPI0);
                     if (!isNaN(minU0) && minU0 > 0) setMinDepositUPI0(minU0);
+                    const minU3 = parseFloat(d.MIN_DEPOSIT_UPI3);
+                    if (!isNaN(minU3) && minU3 > 0) setMinDepositUPI3(minU3);
+                    const minU4 = parseFloat(d.MIN_DEPOSIT_UPI4);
+                    if (!isNaN(minU4) && minU4 > 0) setMinDepositUPI4(minU4);
+                    const minU5 = parseFloat(d.MIN_DEPOSIT_UPI5);
+                    if (!isNaN(minU5) && minU5 > 0) setMinDepositUPI5(minU5);
+                    const minU6 = parseFloat(d.MIN_DEPOSIT_UPI6);
+                    if (!isNaN(minU6) && minU6 > 0) setMinDepositUPI6(minU6);
+                    const minU9 = parseFloat(d.MIN_DEPOSIT_UPI9);
+                    if (!isNaN(minU9) && minU9 > 0) setMinDepositUPI9(minU9);
+                    const minCF = parseFloat(d.MIN_DEPOSIT_CASHFREE);
+                    if (!isNaN(minCF) && minCF > 0) setMinDepositCashfree(minCF);
                     const minCrypto = parseFloat(d.MIN_DEPOSIT_CRYPTO);
                     if (!isNaN(minCrypto) && minCrypto > 0) setMinDepositCrypto(minCrypto);
 
                     // Gateway enable/disable
                     const u1 = d.UPI1_ENABLED !== 'false';
                     const u2 = d.UPI2_ENABLED !== 'false';
+                    const u3 = d.UPI3_ENABLED !== 'false';
+                    const u4 = d.UPI4_ENABLED !== 'false';
+                    const u5 = d.UPI5_ENABLED !== 'false';
+                    const u6 = d.UPI6_ENABLED !== 'false';
+                    const u9 = d.UPI9_ENABLED !== 'false';
                     setUpi1Enabled(u1);
                     setUpi2Enabled(u2);
+                    setUpi3Enabled(u3);
+                    setUpi4Enabled(u4);
+                    setUpi5Enabled(u5);
+                    setUpi6Enabled(u6);
+                    setUpi9Enabled(u9);
                     // Gateway display names & taglines
                     if (d.UPI1_NAME) setUpi1Name(d.UPI1_NAME);
                     if (d.UPI1_TAGLINE) setUpi1Tag(d.UPI1_TAGLINE);
+                    setUpi1LogoUrl((d.UPI1_LOGO_URL || '').trim());
                     if (d.UPI2_NAME) setUpi2Name(d.UPI2_NAME);
                     if (d.UPI2_TAGLINE) setUpi2Tag(d.UPI2_TAGLINE);
-                    // Display order (UPI1/UPI2 only)
+                    setUpi2LogoUrl((d.UPI2_LOGO_URL || '').trim());
+                    if (d.UPI3_NAME) setUpi3Name(d.UPI3_NAME);
+                    if (d.UPI3_TAGLINE) setUpi3Tag(d.UPI3_TAGLINE);
+                    setUpi3LogoUrl((d.UPI3_LOGO_URL || '').trim());
+                    if (d.UPI4_NAME) setUpi4Name(d.UPI4_NAME);
+                    if (d.UPI4_TAGLINE) setUpi4Tag(d.UPI4_TAGLINE);
+                    setUpi4LogoUrl((d.UPI4_LOGO_URL || '').trim());
+                    if (d.UPI5_NAME) setUpi5Name(d.UPI5_NAME);
+                    if (d.UPI5_TAGLINE) setUpi5Tag(d.UPI5_TAGLINE);
+                    setUpi5LogoUrl((d.UPI5_LOGO_URL || '').trim());
+                    if (d.UPI6_NAME) setUpi6Name(d.UPI6_NAME);
+                    if (d.UPI6_TAGLINE) setUpi6Tag(d.UPI6_TAGLINE);
+                    setUpi6LogoUrl((d.UPI6_LOGO_URL || '').trim());
+                    if (d.UPI9_NAME) setUpi9Name(d.UPI9_NAME);
+                    if (d.UPI9_TAGLINE) setUpi9Tag(d.UPI9_TAGLINE);
+                    setUpi9LogoUrl((d.UPI9_LOGO_URL || '').trim());
+
+                    const cf = d.CASHFREE_ENABLED !== 'false';
+                    setCashfreeEnabled(cf);
+                    if (d.CASHFREE_NAME) setCashfreeName(d.CASHFREE_NAME);
+                    if (d.CASHFREE_TAGLINE) setCashfreeTag(d.CASHFREE_TAGLINE);
+                    setCashfreeLogoUrl((d.CASHFREE_LOGO_URL || '').trim());
+
+                    // Display order (UPI1/UPI2/UPI3/UPI4/UPI5/UPI6/CASHFREE)
                     if (d.UPI_GATEWAY_ORDER) {
-                        const ord = (d.UPI_GATEWAY_ORDER as string).split(',').map((s: string) => s.trim()).filter((s) => s === 'UPI1' || s === 'UPI2');
+                        const validIds = ['UPI1', 'UPI2', 'UPI3', 'UPI4', 'UPI5', 'UPI6', 'UPI9', 'CASHFREE'];
+                        const ord = (d.UPI_GATEWAY_ORDER as string).split(',').map((s: string) => s.trim()).filter((s) => validIds.includes(s));
                         if (ord.length) setUpiOrder(ord);
                     }
                     setCryptoOptions(parseCryptoOptionsConfig(d.DEPOSIT_CRYPTO_OPTIONS));
@@ -334,10 +566,128 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
     }, [isOpen]);
 
     useEffect(() => {
-        if (!cryptoOptions.find((coin) => coin.id === selectedCoin.id)) {
-            setSelectedCoin(cryptoOptions[0] ?? defaultCryptoOptions[0]);
+        if (!isOpen) return;
+
+        const previousBodyOverflow = document.body.style.overflow;
+        const previousHtmlOverflow = document.documentElement.style.overflow;
+
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+
+        return () => {
+            document.body.style.overflow = previousBodyOverflow;
+            document.documentElement.style.overflow = previousHtmlOverflow;
+        };
+    }, [isOpen]);
+
+    useEffect(() => {
+        let isCancelled = false;
+
+        const loadNowPaymentsOptions = async () => {
+            if (!isOpen) return;
+
+            setCryptoOptionsLoading(true);
+
+            try {
+                const res = await api.get<NowPaymentsCurrenciesResponse>('/nowpayments/currencies');
+                const configuredById = new Map(
+                    cryptoOptions.map((coin) => [coin.id.toLowerCase(), coin] as const),
+                );
+                const apiCoins = Array.isArray(res.data?.coins) ? res.data.coins : [];
+                const nextCoins = apiCoins
+                    .map((coin) => ({
+                        ...coin,
+                        code: coin.code?.toUpperCase?.() || coin.label.toUpperCase(),
+                        logoUrl: coin.logoUrl || coin.networks.find((network) => network.logoUrl)?.logoUrl || null,
+                        networks: coin.networks.map((network) => {
+                            const configured = configuredById.get(network.id.toLowerCase());
+                            const fallback = buildFallbackCryptoOption(network.id);
+
+                            return {
+                                ...network,
+                                id: network.id.toLowerCase(),
+                                code: network.code || network.id.toUpperCase(),
+                                label: coin.label,
+                                network: network.network || configured?.network || fallback.network,
+                                logoUrl: network.logoUrl || null,
+                                icon: configured?.icon || fallback.icon,
+                                color: configured?.color || fallback.color,
+                            };
+                        }),
+                    }))
+                    .filter((coin) => coin.networks.length > 0)
+                    .sort((a, b) => a.label.localeCompare(b.label));
+
+                if (!isCancelled) {
+                    setAvailableNowPaymentsCoins(nextCoins);
+                }
+            } catch {
+                if (!isCancelled) {
+                    const fallbackCoins = [...cryptoOptions]
+                        .sort((a, b) => a.label.localeCompare(b.label))
+                        .reduce<NowPaymentsCurrenciesResponse['coins']>((acc, option) => {
+                            const existing = acc.find((coin) => coin.label === option.label);
+                            const nextNetwork: NowPaymentsNetworkOption = {
+                                id: option.id,
+                                code: option.id.toUpperCase(),
+                                label: option.label,
+                                network: option.network,
+                                logoUrl: null,
+                                enabled: true,
+                                isAvailableForPayment: true,
+                                icon: option.icon,
+                                color: option.color,
+                            };
+
+                            if (existing) {
+                                existing.networks.push(nextNetwork);
+                            } else {
+                                acc.push({
+                                    code: option.label.toUpperCase(),
+                                    label: option.label,
+                                    logoUrl: null,
+                                    networks: [nextNetwork],
+                                });
+                            }
+
+                            return acc;
+                        }, []);
+                    setAvailableNowPaymentsCoins(fallbackCoins);
+                }
+            } finally {
+                if (!isCancelled) {
+                    setCryptoOptionsLoading(false);
+                }
+            }
+        };
+
+        void loadNowPaymentsOptions();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, [cryptoOptions, isOpen]);
+
+    useEffect(() => {
+        const selectedCoin = selectedCoinCode
+            ? availableNowPaymentsCoins.find((coin) => coin.code === selectedCoinCode) ?? null
+            : null;
+        const networkOptions = selectedCoin?.networks ?? [];
+
+        if (selectedNetworkOption && !networkOptions.find((coin) => coin.id === selectedNetworkOption.id)) {
+            setSelectedNetworkOption(null);
         }
-    }, [cryptoOptions, selectedCoin.id]);
+        if (selectedCoinCode && !availableNowPaymentsCoins.find((coin) => coin.code === selectedCoinCode)) {
+            setSelectedCoinCode(null);
+        }
+    }, [availableNowPaymentsCoins, selectedCoinCode, selectedNetworkOption]);
+
+    useEffect(() => {
+        if (!isOpen || cryptoStep !== 'configure') {
+            setIsCoinDropdownOpen(false);
+            setIsNetworkDropdownOpen(false);
+        }
+    }, [cryptoStep, isOpen]);
 
     useEffect(() => {
         const handleMessage = (event: MessageEvent) => {
@@ -353,8 +703,14 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
         const enabledMethods = (currentCountry.paymentMethods || []).filter((method) => {
             if (method.id === 'UPI1' && !upi1Enabled) return false;
             if (method.id === 'UPI2' && !upi2Enabled) return false;
+            if (method.id === 'UPI3' && !upi3Enabled) return false;
+            if (method.id === 'UPI4' && !upi4Enabled) return false;
+            if (method.id === 'UPI5' && !upi5Enabled) return false;
+            if (method.id === 'UPI6' && !upi6Enabled) return false;
+            if (method.id === 'UPI9' && !upi9Enabled) return false;
+            if (method.id === 'CASHFREE' && !cashfreeEnabled) return false;
             if (method.id === 'UPI0') return false;
-            return method.id === 'UPI1' || method.id === 'UPI2';
+            return method.id === 'UPI1' || method.id === 'UPI2' || method.id === 'UPI3' || method.id === 'UPI4' || method.id === 'UPI5' || method.id === 'UPI6' || method.id === 'UPI9' || method.id === 'CASHFREE';
         });
 
         const exists = enabledMethods.find((method) => method.id === selectedMethod);
@@ -362,7 +718,7 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
             setSelectedMethodError('');
             setSelectedMethod('');
         }
-    }, [currentCountry.paymentMethods, selectedMethod, upi1Enabled, upi2Enabled]);
+    }, [currentCountry.paymentMethods, selectedMethod, upi1Enabled, upi2Enabled, upi3Enabled, upi4Enabled, upi5Enabled, upi6Enabled, upi9Enabled, cashfreeEnabled]);
 
     useEffect(() => {
         if (!isOpen) {
@@ -378,7 +734,7 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
 
     const resetCryptoState = () => {
         setCryptoStep('configure'); setPaymentData(null);
-        setPaymentStatus('waiting'); setTimeLeft(0); setCopied(false);
+        setPaymentStatus('waiting'); setTimeLeft(0); setCopied(false); setSelectedCoinCode(null); setSelectedNetworkOption(null); setCoinSearch(''); setNetworkSearch(''); setIsCoinDropdownOpen(false); setIsNetworkDropdownOpen(false);
     };
 
     const startTimer = (expiresAt: string | null) => {
@@ -471,7 +827,16 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
         } catch (err: unknown) {
             if (requestId !== promoRequestRef.current) return;
             setPromoResult(null);
-            setPromoError(getApiErrorMessage(err, 'Invalid promo code'));
+            
+            const errMsg = getApiErrorMessage(err, 'Invalid promo code');
+            if (errMsg === 'This bonus is only available on your first deposit') {
+                setPromoCode('');
+                setPromoError('');
+                toast.error('Promo removed: ' + errMsg);
+                return;
+            }
+
+            setPromoError(errMsg);
         } finally {
             if (requestId === promoRequestRef.current) setPromoValidating(false);
         }
@@ -528,7 +893,10 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
         ? availableBonuses.find((bonus) => bonus._id === selectedBonusId)
         : findBonusByCode(promoCode)) ?? null;
     const parsedAmount = parseFloat(amount) || 0;
-    const bonusMinDeposit = promoResult?.eligibility?.minDeposit ?? selectedBonus?.minDeposit ?? 0;
+    const selectedBonusMinDeposit = depositCurrency === 'CRYPTO'
+        ? (selectedBonus?.minDepositCrypto ?? selectedBonus?.minDeposit ?? 0)
+        : (selectedBonus?.minDepositFiat ?? selectedBonus?.minDeposit ?? 0);
+    const bonusMinDeposit = promoResult?.eligibility?.minDeposit ?? selectedBonusMinDeposit;
     const bonusMinDepositShortfall = promoResult?.eligibility?.minDepositShortfall ?? Math.max(0, bonusMinDeposit - parsedAmount);
     const bonusMinDepositMet = promoResult?.eligibility?.minDepositMet ?? parsedAmount >= bonusMinDeposit;
     const bonusRequiresFirstDeposit = promoResult?.eligibility?.requiresFirstDeposit ?? !!selectedBonus?.forFirstDepositOnly;
@@ -563,6 +931,18 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
 
     const handleGenerateCryptoAddress = async () => {
         const enteredAmount = parseFloat(amount);
+        if (!selectedCoin) {
+            const errorMessage = 'Please choose a coin first.';
+            setCryptoAmountError(errorMessage);
+            toast.error(errorMessage);
+            return;
+        }
+        if (!selectedNetworkOption) {
+            const errorMessage = 'Please choose a network first.';
+            setCryptoAmountError(errorMessage);
+            toast.error(errorMessage);
+            return;
+        }
         if (!amount || enteredAmount <= 0) {
             const errorMessage = 'Please enter a valid amount (USD).';
             setCryptoAmountError(errorMessage);
@@ -580,7 +960,7 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
         try {
             const res = await api.post('/nowpayments/create', {
                 amount: parseFloat(amount),
-                payCurrency: selectedCoin.id,
+                payCurrency: selectedNetworkOption.id,
                 priceCurrency: 'usd',
                 bonusCode: promoCode || undefined,
             });
@@ -611,7 +991,13 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
         const numAmt = parseFloat(amount);
         const isUPI2 = selectedMethod === 'UPI2';
         const isUPI0 = selectedMethod === 'UPI0';
-        const minAmt = activeGatewayMinDeposit ?? (isUPI0 ? minDepositUPI0 : (isUPI2 ? minDepositUPI2 : minDeposit));
+        const isUPI3 = selectedMethod === 'UPI3';
+        const isUPI4 = selectedMethod === 'UPI4';
+        const isUPI5 = selectedMethod === 'UPI5';
+        const isUPI6 = selectedMethod === 'UPI6';
+        const isUPI9 = selectedMethod === 'UPI9';
+        const isCashfree = selectedMethod === 'CASHFREE';
+        const minAmt = activeGatewayMinDeposit ?? (isCashfree ? minDepositCashfree : isUPI9 ? minDepositUPI9 : isUPI6 ? minDepositUPI6 : isUPI5 ? minDepositUPI5 : isUPI4 ? minDepositUPI4 : isUPI3 ? minDepositUPI3 : isUPI0 ? minDepositUPI0 : isUPI2 ? minDepositUPI2 : minDeposit);
 
         if (!amount || numAmt <= 0) {
             setAmountError('Please enter a valid amount.');
@@ -619,7 +1005,7 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
             return;
         }
         if (numAmt < minAmt) {
-            setAmountError(`Minimum deposit for ${activeGatewayLabel || (isUPI0 ? 'UPI Gateway 0' : (isUPI2 ? upi2Name : upi1Name))} is ${fiatSymbol}${minAmt}.`);
+            setAmountError(`Minimum deposit for ${activeGatewayLabel || (isCashfree ? cashfreeName : isUPI9 ? upi9Name : isUPI6 ? upi6Name : isUPI5 ? upi5Name : isUPI4 ? upi4Name : isUPI3 ? upi3Name : isUPI0 ? 'UPI Gateway 0' : isUPI2 ? upi2Name : upi1Name)} is ${fiatSymbol}${minAmt}.`);
             toast.error(`Minimum deposit is ${fiatSymbol}${minAmt}.`);
             return;
         }
@@ -629,7 +1015,140 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
         try {
             const now = new Date();
 
-            if (isUPI0) {
+            if (selectedMethod === 'CASHFREE') {
+                // ── Cashfree Gateway ──────────────────────────────────────
+                const orderNo = `CF${now.getTime()}${Math.floor(Math.random() * 100)}`;
+                const response = await api.post('/payment1/create', {
+                    orderNo,
+                    amount: Math.round(parseFloat(amount)).toString(),
+                    userId: user?.id,
+                    bonusCode: promoCode || undefined,
+                    returnUrl: window.location.origin + '/profile/transactions'
+                });
+                const { success, payUrl, message: errMsg } = response.data;
+                if (success && payUrl) {
+                    api.delete('/bonus/pending').catch(() => { });
+                    // Cashfree strictly enforces X-Frame-Options: DENY on its checkout
+                    // We must orchestrate a full top-level redirect instead of loading in our modal's iframe.
+                    window.location.href = payUrl;
+                    void fetchGatewayRetryState();
+                    if (promoCode) toast.success(`🎁 Bonus code ${promoCode} will be applied!`);
+                } else if (success) {
+                    toast.success('Payment initiated!'); onClose();
+                } else {
+                    throw new Error(errMsg || 'Cashfree gateway rejected the request');
+                }
+            } else if (isUPI9) {
+                // ── UPI 9 / UltraPay Gateway ──────────────────────────────────────
+                const orderNo = `DEP9${now.getTime()}${Math.floor(Math.random() * 100)}`;
+                const response = await api.post('/payment9/create', {
+                    orderNo,
+                    amount: Math.round(parseFloat(amount)).toString(),
+                    userId: user?.id,
+                    bonusCode: promoCode || undefined,
+                    payerName: user?.username || undefined,
+                });
+                const { success, payUrl, message: errMsg } = response.data;
+                if (success && payUrl) {
+                    api.delete('/bonus/pending').catch(() => { });
+                    setIframeUrl(payUrl);
+                    void fetchGatewayRetryState();
+                    if (promoCode) toast.success(`🎁 Bonus code ${promoCode} will be applied on payment confirmation!`);
+                } else if (success) {
+                    toast.success('Payment initiated!'); onClose();
+                } else {
+                    throw new Error(errMsg || 'UltraPay (UPI 9) gateway rejected the request');
+                }
+            } else if (isUPI6) {
+                // ── Gateway 6 / A-Pay Gateway ──────────────────────────────────────
+                const orderNo = `DEP6${now.getTime()}${Math.floor(Math.random() * 100)}`;
+                const response = await api.post('/payment6/create', {
+                    orderNo,
+                    amount: Math.round(parseFloat(amount)).toString(),
+                    userId: user?.id,
+                    bonusCode: promoCode || undefined,
+                });
+                const { success, payUrl, message: errMsg } = response.data;
+                if (success && payUrl) {
+                    api.delete('/bonus/pending').catch(() => { });
+                    setIframeUrl(payUrl);
+                    void fetchGatewayRetryState();
+                    if (promoCode) toast.success(`🎁 Bonus code ${promoCode} will be applied on payment confirmation!`);
+                } else if (success) {
+                    toast.success('Payment initiated!'); onClose();
+                } else {
+                    throw new Error(errMsg || 'Gateway 6 (A-Pay) rejected the request');
+                }
+            } else if (isUPI5) {
+                // ── UPI 5 / RezorPay Gateway ──────────────────────────────────────
+                const orderNo = `DEP5${now.getTime()}${Math.floor(Math.random() * 100)}`;
+                const response = await api.post('/payment5/create', {
+                    orderNo,
+                    amount: Math.round(parseFloat(amount)).toString(),
+                    userId: user?.id,
+                    bonusCode: promoCode || undefined,
+                    payerName: user?.username || undefined,
+                });
+                const { success, payUrl, message: errMsg } = response.data;
+                if (success && payUrl) {
+                    api.delete('/bonus/pending').catch(() => { });
+                    setIframeUrl(payUrl);
+                    void fetchGatewayRetryState();
+                    if (promoCode) toast.success(`🎁 Bonus code ${promoCode} will be applied on payment confirmation!`);
+                } else if (success) {
+                    toast.success('Payment initiated!'); onClose();
+                } else {
+                    throw new Error(errMsg || 'UPI 5 gateway rejected the request');
+                }
+            } else if (isUPI4) {
+                // ── UPI 4 / Silkpay Gateway ──────────────────────────────────────
+                const orderNo = `DEP4${now.getTime()}${Math.floor(Math.random() * 100)}`;
+                const response = await api.post('/payment4/create', {
+                    orderNo,
+                    amount: Math.round(parseFloat(amount)).toString(),
+                    userId: user?.id,
+                    bonusCode: promoCode || undefined,
+                    payerName: user?.username || undefined,
+                });
+                const { success, payUrl, message: errMsg } = response.data;
+                if (success && payUrl) {
+                    api.delete('/bonus/pending').catch(() => { });
+                    setIframeUrl(payUrl);
+                    void fetchGatewayRetryState();
+                    if (promoCode) toast.success(`🎁 Bonus code ${promoCode} will be applied on payment confirmation!`);
+                } else if (success) {
+                    toast.success('Payment initiated!'); onClose();
+                } else {
+                    throw new Error(errMsg || 'UPI 4 gateway rejected the request');
+                }
+            } else if (isUPI3) {
+                // ── UPI 3 / iPayment Gateway (AES+MD5 security) ─────────────
+                const orderNo = `DEP3${now.getTime()}${Math.floor(Math.random() * 100)}`;
+                // Gateway requires extra.email — pass real email if available,
+                // otherwise generate a deterministic placeholder (never empty)
+                const payEmail =
+                    (typeof user === 'object' && user && 'email' in user && typeof user.email === 'string' && user.email) ||
+                    `user${user?.id || 0}@${(user?.username || 'player').toLowerCase().replace(/[^a-z0-9]/g, '')}.bet`;
+                const response = await api.post('/payment3/create', {
+                    orderNo,
+                    amount: Math.round(parseFloat(amount)).toString(),
+                    userId: user?.id,
+                    bonusCode: promoCode || undefined,
+                    payerName: user?.username || undefined,
+                    payEmail,
+                });
+                const { success, payUrl, message: errMsg } = response.data;
+                if (success && payUrl) {
+                    api.delete('/bonus/pending').catch(() => { });
+                    setIframeUrl(payUrl);
+                    void fetchGatewayRetryState();
+                    if (promoCode) toast.success(`🎁 Bonus code ${promoCode} will be applied on payment confirmation!`);
+                } else if (success) {
+                    toast.success('Payment initiated!'); onClose();
+                } else {
+                    throw new Error(errMsg || 'UPI 3 gateway rejected the request');
+                }
+            } else if (isUPI0) {
                 const orderNo = `DEP0${now.getTime()}${Math.floor(Math.random() * 100)}`;
                 const response = await api.post('/payment0/create', {
                     orderNo,
@@ -746,8 +1265,8 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
         sending: { label: 'Sending funds…', color: 'text-brand-gold' },
         finished: { label: 'Complete!', color: 'text-green-400' },
         partially_paid: { label: 'Partial — contact support', color: 'text-brand-gold' },
-        failed: { label: 'Failed', color: 'text-red-400' },
-        expired: { label: 'Expired', color: 'text-red-400' },
+        failed: { label: 'Failed', color: 'text-danger' },
+        expired: { label: 'Expired', color: 'text-danger' },
     };
 
     const fiatSubmitHint = gatewayRetryState?.forceManual
@@ -782,20 +1301,45 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
                 if (method.id === 'UPI0') return null;
                 if (method.id === 'UPI1' && !upi1Enabled) return null;
                 if (method.id === 'UPI2' && !upi2Enabled) return null;
-                if (method.id !== 'UPI1' && method.id !== 'UPI2') return null;
+                if (method.id === 'UPI3' && !upi3Enabled) return null;
+                if (method.id === 'UPI4' && !upi4Enabled) return null;
+                if (method.id === 'UPI5' && !upi5Enabled) return null;
+                if (method.id === 'UPI6' && !upi6Enabled) return null;
+                if (method.id === 'UPI9' && !upi9Enabled) return null;
+                if (method.id === 'CASHFREE' && !cashfreeEnabled) return null;
+                if (method.id !== 'UPI1' && method.id !== 'UPI2' && method.id !== 'UPI3' && method.id !== 'UPI4' && method.id !== 'UPI5' && method.id !== 'UPI6' && method.id !== 'UPI9' && method.id !== 'CASHFREE') return null;
 
                 const isGatewayOne = method.id === 'UPI1';
+                const isGatewayThree = method.id === 'UPI3';
+                const isGatewayFour = method.id === 'UPI4';
+                const isGatewayFive = method.id === 'UPI5';
+                const isGatewaySix = method.id === 'UPI6';
+                const isGatewayNine = method.id === 'UPI9';
+                const isCashfree = method.id === 'CASHFREE';
 
                 return {
                     id: method.id,
-                    label: isGatewayOne ? upi1Name : upi2Name,
-                    sub: method.subLabel || (isGatewayOne ? upi1Tag : upi2Tag),
+                    label: isGatewayOne ? upi1Name : isGatewayThree ? upi3Name : isGatewayFour ? upi4Name : isGatewayFive ? upi5Name : isGatewaySix ? upi6Name : isGatewayNine ? upi9Name : isCashfree ? cashfreeName : upi2Name,
+                    sub: method.subLabel || (isGatewayOne ? upi1Tag : isGatewayThree ? upi3Tag : isGatewayFour ? upi4Tag : isGatewayFive ? upi5Tag : isGatewaySix ? upi6Tag : isGatewayNine ? upi9Tag : isCashfree ? cashfreeTag : upi2Tag),
+                    logoUrl: isGatewayOne ? upi1LogoUrl : isGatewayThree ? upi3LogoUrl : isGatewayFour ? upi4LogoUrl : isGatewayFive ? upi5LogoUrl : isGatewaySix ? upi6LogoUrl : isGatewayNine ? upi9LogoUrl : isCashfree ? cashfreeLogoUrl : upi2LogoUrl,
                     icon: method.icon && method.icon !== 'UPI'
                         ? method.icon
                         : isGatewayOne
                             ? '🏦'
-                            : '📲',
-                    minDeposit: isGatewayOne ? minDeposit : minDepositUPI2,
+                            : isGatewayThree
+                                ? '⚡'
+                                : isGatewayFour
+                                    ? '🚀'
+                                    : isGatewayFive
+                                        ? '🛡️'
+                                        : isGatewaySix
+                                            ? '🔗'
+                                            : isGatewayNine
+                                                ? '⚡'
+                                                : isCashfree
+                                                    ? '💳'
+                                                    : '📲',
+                    minDeposit: isGatewayOne ? minDeposit : isGatewayThree ? minDepositUPI3 : isGatewayFour ? minDepositUPI4 : isGatewayFive ? minDepositUPI5 : isGatewaySix ? minDepositUPI6 : isGatewayNine ? minDepositUPI9 : isCashfree ? minDepositCashfree : minDepositUPI2,
                     badge: method.badge,
                 };
             })
@@ -826,15 +1370,23 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
     const modalTitle = publicSettings.DEPOSIT_MODAL_TITLE || 'Deposit';
     const cryptoTabLabel = publicSettings.DEPOSIT_TAB_CRYPTO_LABEL || 'Crypto';
     const fiatTabLabel = publicSettings.DEPOSIT_TAB_FIAT_LABEL || 'Fiat';
-    const bonusHeading = publicSettings.DEPOSIT_AUTO_BONUS_LABEL || 'Applied Bonus';
-    const depositMethodHeading = publicSettings.DEPOSIT_METHOD_TITLE || 'Deposit Method';
-    const amountHeading = publicSettings.DEPOSIT_AMOUNT_TITLE || 'Amount';
+    const canShowFiatTab = isIndia && depositAllowFiatTab;
     const currentQuickAmounts = isFiatFlow
         ? buildQuickAmounts(
-            selectedMethod === 'UPI2' ? minDepositUPI2 : minDeposit,
-            selectedMethod === 'UPI2'
+            selectedMethod === 'CASHFREE' ? minDepositCashfree : selectedMethod === 'UPI2' ? minDepositUPI2 : selectedMethod === 'UPI3' ? minDepositUPI3 : selectedMethod === 'UPI4' ? minDepositUPI4 : selectedMethod === 'UPI5' ? minDepositUPI5 : selectedMethod === 'UPI6' ? minDepositUPI6 : selectedMethod === 'UPI9' ? minDepositUPI9 : minDeposit,
+            selectedMethod === 'CASHFREE'
+                ? publicSettings.DEPOSIT_QUICK_AMOUNTS_CASHFREE || publicSettings.DEPOSIT_QUICK_AMOUNTS_FIAT
+                : selectedMethod === 'UPI2'
                 ? publicSettings.DEPOSIT_QUICK_AMOUNTS_UPI2 || publicSettings.DEPOSIT_QUICK_AMOUNTS_FIAT
-                : publicSettings.DEPOSIT_QUICK_AMOUNTS_UPI1 || publicSettings.DEPOSIT_QUICK_AMOUNTS_FIAT,
+                : selectedMethod === 'UPI3'
+                    ? publicSettings.DEPOSIT_QUICK_AMOUNTS_UPI3 || publicSettings.DEPOSIT_QUICK_AMOUNTS_FIAT
+                    : selectedMethod === 'UPI4'
+                        ? publicSettings.DEPOSIT_QUICK_AMOUNTS_UPI4 || publicSettings.DEPOSIT_QUICK_AMOUNTS_FIAT
+                        : selectedMethod === 'UPI5'
+                            ? publicSettings.DEPOSIT_QUICK_AMOUNTS_UPI5 || publicSettings.DEPOSIT_QUICK_AMOUNTS_FIAT
+                            : selectedMethod === 'UPI6'
+                                ? publicSettings.DEPOSIT_QUICK_AMOUNTS_UPI6 || publicSettings.DEPOSIT_QUICK_AMOUNTS_FIAT
+                                : publicSettings.DEPOSIT_QUICK_AMOUNTS_UPI1 || publicSettings.DEPOSIT_QUICK_AMOUNTS_FIAT,
             selectedMethod === 'UPI2' ? quickAmountsUPI2 : quickAmountsFiat,
         )
         : buildQuickAmounts(
@@ -853,9 +1405,36 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
             ? `${fiatSymbol}${formatAmount(activeGatewayMinDeposit)}`
             : 'Select gateway'
         : `$${formatAmount(minDepositCrypto)}`;
-    const currentRouteLabel = isFiatFlow
-        ? activeGatewayLabel || 'Choose gateway'
-        : `${selectedCoin.label} · ${selectedCoin.network}`;
+    const selectedCoin = selectedCoinCode
+        ? availableNowPaymentsCoins.find((coin) => coin.code === selectedCoinCode) ?? null
+        : null;
+    const normalizedCoinSearch = coinSearch.trim().toLowerCase();
+    const normalizedNetworkSearch = networkSearch.trim().toLowerCase();
+    const displayedCoinOptions = availableNowPaymentsCoins
+        .filter((coin) => {
+            if (!normalizedCoinSearch) return true;
+            const searchableNetworks = coin.networks.map((network) => network.network).join(' ');
+            return `${coin.label} ${coin.code} ${searchableNetworks}`.toLowerCase().includes(normalizedCoinSearch);
+        })
+        .sort((a, b) => {
+            const aPopular = a.networks.some((coin) => popularNowPaymentsCoinIds.has(coin.id.toLowerCase())) ? 0 : 1;
+            const bPopular = b.networks.some((coin) => popularNowPaymentsCoinIds.has(coin.id.toLowerCase())) ? 0 : 1;
+            if (aPopular !== bPopular) return aPopular - bPopular;
+            return a.label.localeCompare(b.label);
+        });
+    const availableNetworkOptions = selectedCoin
+        ? selectedCoin.networks
+        : [];
+    const filteredNetworkOptions = availableNetworkOptions
+        .filter((coin) => {
+            if (!normalizedNetworkSearch) return true;
+            const searchable = `${coin.network} ${coin.id} ${coin.label}`.toLowerCase();
+            return searchable.includes(normalizedNetworkSearch);
+        })
+        .sort((a, b) => a.network.localeCompare(b.network) || a.id.localeCompare(b.id));
+    const displayedNetworkOptions = filteredNetworkOptions.length
+        ? filteredNetworkOptions
+        : availableNetworkOptions;
     const appliedBonusTitle = promoResult?.bonus.title || selectedBonus?.title || (promoCode ? `Promo ${promoCode}` : '');
     const appliedBonusValueLabel = promoResult
         ? `${isFiatFlow ? fiatSymbol : '$'}${formatAmount(promoResult.estimatedBonus)}`
@@ -873,599 +1452,655 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
                 : promoCode
                     ? 'This bonus will stay attached to your deposit request.'
                     : '';
-    const appliedBonusToneClass = promoBlockingError
-        ? 'border-red-500/30 bg-red-500/10 text-red-100'
-        : promoValidating
-            ? 'border-brand-gold/25 bg-brand-gold/10 text-text-primary'
-            : 'border-brand-gold/25 bg-brand-gold/10 text-text-primary';
-    const recommendedGatewayId = publicSettings.DEPOSIT_RECOMMENDED_GATEWAY
-        || gatewayOptions.find((gateway) => gateway.badge?.toLowerCase() === 'recommended')?.id
-        || gatewayOptions[0]?.id;
+    const lightFieldClass = 'rounded-[18px] border border-white/[0.06] bg-bg-elevated px-4 py-3';
+    const lightCardClass = 'rounded-[20px] border border-white/[0.06] bg-bg-card shadow-soft';
+
+    const renderGatewayLogo = (
+        gateway: GatewayOption,
+        wrapperClass: string,
+        fallbackClass: string,
+        imageClass = 'h-full w-full object-contain p-2',
+    ) => (
+        <div className={wrapperClass}>
+            {gateway.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={gateway.logoUrl} alt={gateway.label} className={imageClass} style={{ width: 'auto', maxWidth: 'fit-content' }} />
+            ) : (
+                <span className={fallbackClass}>{gateway.icon}</span>
+            )}
+        </div>
+    );
+
+    const renderBodyTabs = () => (
+        <div className="grid grid-cols-2 gap-1 rounded-[18px] border border-white/[0.06] bg-bg-elevated p-1">
+            <button
+                onClick={() => {
+                    setActiveTab('fiat');
+                    resetCryptoState();
+                    setMessage(null);
+                    setIframeUrl(null);
+                }}
+                className={`flex items-center justify-center gap-2 rounded-[14px] px-4 py-3 text-sm font-semibold transition-all ${activeTab === 'fiat'
+                    ? 'border border-brand-gold/20 bg-bg-card text-text-primary shadow-soft'
+                    : 'text-text-muted hover:text-text-primary'
+                    }`}
+            >
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brown-accent text-[10px] font-bold text-text-primary">
+                    {fiatSymbol}
+                </span>
+                {fiatTabLabel}
+            </button>
+            <button
+                onClick={() => {
+                    setActiveTab('crypto');
+                    setMessage(null);
+                    setSelectedMethod('');
+                }}
+                className={`flex items-center justify-center gap-2 rounded-[14px] px-4 py-3 text-sm font-semibold transition-all ${activeTab === 'crypto'
+                    ? 'border border-brand-gold/20 bg-bg-card text-text-primary shadow-soft'
+                    : 'text-text-muted hover:text-text-primary'
+                    }`}
+            >
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-gold text-[10px] font-bold text-text-inverse">
+                    B
+                </span>
+                {cryptoTabLabel}
+            </button>
+        </div>
+    );
+
+    const renderConfigureView = () => {
+        const showFiatAmountStep = isFiatFlow && (!!selectedMethod || isForcedManualFlow);
+        const showFooterAction = showFiatAmountStep || (!isFiatFlow && !!selectedNetworkOption);
+
+        return (
+            <div className="flex min-h-0 flex-1 flex-col bg-bg-card">
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
+                    <div className="mx-auto w-full max-w-md space-y-4 sm:max-w-lg">
+                        {canShowFiatTab && renderBodyTabs()}
+
+                        {!canShowFiatTab && (
+                            <div className="rounded-[18px] border border-white/[0.06] bg-bg-elevated px-4 py-3 text-center text-sm font-semibold text-text-primary">
+                                {cryptoTabLabel}
+                            </div>
+                        )}
+
+                        {isFiatFlow ? (
+                            showFiatAmountStep ? (
+                                <>
+                                    {!isForcedManualFlow && (
+                                        <button
+                                            onClick={() => {
+                                                setSelectedMethod('');
+                                                setAmountError('');
+                                                setMessage(null);
+                                            }}
+                                            className="inline-flex items-center gap-2 text-sm font-semibold text-brand-gold"
+                                        >
+                                            <ArrowLeft className="h-4 w-4" />
+                                            Back
+                                        </button>
+                                    )}
+
+                                    {!isForcedManualFlow && selectedGateway && (
+                                        <div className="px-1">
+                                            <div className="flex items-center gap-3">
+                                                {renderGatewayLogo(selectedGateway, 'flex h-14 w-14 items-center justify-center overflow-hidden text-text-primary', 'text-2xl')}
+                                                <div>
+                                                    <p className="text-2xl font-adx-bold tracking-tight text-text-primary">
+                                                        {selectedGateway.label}
+                                                    </p>
+                                                    <p className="mt-1 text-sm text-text-muted">{selectedGateway.sub}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {isForcedManualFlow && gatewayRetryState && (
+                                        <div className="rounded-[20px] border border-brand-gold/20 bg-brand-gold/10 px-4 py-3">
+                                            <p className="text-sm font-semibold text-text-primary">{gatewayRetryState.message}</p>
+                                            <p className="mt-1 text-xs text-text-muted">
+                                                Ref {gatewayRetryState.pendingTransaction?.utr || 'Pending'} · {fiatSymbol}{formatAmount(gatewayRetryState.pendingTransaction?.amount || 0)}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className={lightFieldClass}>
+                                        <p className="text-xs text-text-muted">Amount</p>
+                                        <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            pattern="[0-9]*"
+                                            value={amount}
+                                            onChange={(e) => {
+                                                const value = sanitizeAmountInput(e.target.value);
+                                                setAmount(value);
+                                                setMessage(null);
+                                                const numericValue = parseFloat(value);
+                                                if (value && activeGatewayMinDeposit && numericValue < activeGatewayMinDeposit) {
+                                                    setAmountError(`Minimum deposit is ${fiatSymbol}${activeGatewayMinDeposit}`);
+                                                } else {
+                                                    setAmountError('');
+                                                }
+                                            }}
+                                            placeholder={`${fiatSymbol}0`}
+                                            className="mt-1 w-full bg-transparent text-[2rem] font-adx-bold tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
+                                        />
+                                    </div>
+
+                                    <p className="px-1 text-sm text-text-secondary">
+                                        Minimum deposit {currentMinimumLabel}.
+                                    </p>
+
+                                    <div className="flex flex-wrap gap-2">
+                                        {currentQuickAmounts.map((value) => (
+                                            <button
+                                                key={value}
+                                                onClick={() => {
+                                                    setAmount(value);
+                                                    setMessage(null);
+                                                    if (activeGatewayMinDeposit && parseFloat(value) < activeGatewayMinDeposit) {
+                                                        setAmountError(`Minimum deposit is ${fiatSymbol}${activeGatewayMinDeposit}`);
+                                                    } else {
+                                                        setAmountError('');
+                                                    }
+                                                }}
+                                                className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${amount === value
+                                                    ? 'bg-brand-gold text-text-inverse shadow-glow-gold'
+                                                    : 'bg-bg-elevated text-text-primary hover:bg-bg-hover'
+                                                    }`}
+                                            >
+                                                {fiatSymbol}{value}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className={`${lightFieldClass} flex items-center justify-between`}>
+                                        <div className="flex items-center gap-3">
+                                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brown-accent text-[11px] font-bold text-text-primary">
+                                                {fiatSymbol}
+                                            </span>
+                                            <span className="text-base font-medium text-text-primary">
+                                                {currentCountry.name === 'India' ? 'Indian rupee' : `${user?.currency || 'Fiat currency'}`}
+                                            </span>
+                                        </div>
+                                        <ChevronDown className="h-5 w-5 text-text-muted" />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {gatewayOptions.map((gateway) => (
+                                            <button
+                                                key={gateway.id}
+                                                onClick={() => {
+                                                    setSelectedMethod(gateway.id);
+                                                    setSelectedMethodError('');
+                                                    setAmountError('');
+                                                    setMessage(null);
+                                                }}
+                                                className="rounded-[20px] border border-white/[0.06] bg-bg-elevated p-4 text-left transition-all hover:-translate-y-0.5 hover:bg-bg-hover"
+                                            >
+                                                {renderGatewayLogo(
+                                                    gateway,
+                                                    'flex h-12 w-full items-center overflow-hidden text-text-primary',
+                                                    'text-2xl',
+                                                    'h-full w-full object-contain object-left py-1',
+                                                )}
+                                                <p className="mt-2 text-base font-semibold text-text-primary">{gateway.label}</p>
+                                                <p className="mt-1 text-sm text-text-muted">{gateway.sub || `${fiatSymbol}${formatAmount(gateway.minDeposit)} min`}</p>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            )
+                        ) : (
+                            <>
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (cryptoStep !== 'configure' || cryptoOptionsLoading) return;
+                                            setIsCoinDropdownOpen((open) => !open);
+                                            setIsNetworkDropdownOpen(false);
+                                        }}
+                                        disabled={cryptoStep !== 'configure' || cryptoOptionsLoading}
+                                        className={`${lightFieldClass} flex w-full items-center justify-between gap-3 text-left disabled:cursor-not-allowed disabled:opacity-60`}
+                                    >
+                                        <div className="flex min-w-0 items-center gap-3">
+                                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-gold/15 text-[11px] font-bold text-brand-gold">
+                                                {selectedCoin ? buildCoinMonogram(selectedCoin.label, selectedCoin.code).slice(0, 1) : 'C'}
+                                            </span>
+                                            <span className="truncate text-base font-medium text-text-primary">
+                                                {selectedCoin?.label || 'Select coin'}
+                                            </span>
+                                        </div>
+                                        <ChevronDown className={`h-5 w-5 text-text-muted transition-transform ${isCoinDropdownOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+
+                                    {isCoinDropdownOpen && (
+                                        <div className={`relative mt-2 z-10 ${lightCardClass}`}>
+                                            <div className="p-4">
+                                                <div className="flex items-center gap-2 rounded-[16px] border border-white/[0.06] bg-bg-elevated px-3 py-3">
+                                                    <Search className="h-4 w-4 shrink-0 text-text-muted" />
+                                                    <input
+                                                        type="text"
+                                                        value={coinSearch}
+                                                        onChange={(e) => setCoinSearch(e.target.value)}
+                                                        placeholder="Search"
+                                                        className="w-full bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="max-h-72 overflow-y-auto px-3 pb-3">
+                                                {displayedCoinOptions.map((coin) => (
+                                                    <button
+                                                        key={coin.code}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (cryptoStep !== 'configure') return;
+                                                            setSelectedCoinCode(coin.code);
+                                                            setSelectedNetworkOption(null);
+                                                            setNetworkSearch('');
+                                                            setIsCoinDropdownOpen(false);
+                                                        }}
+                                                        className="flex w-full items-center gap-3 border-b border-white/[0.06] px-2 py-3 text-left last:border-b-0"
+                                                    >
+                                                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-gold/15 text-[11px] font-bold text-brand-gold">
+                                                            {buildCoinMonogram(coin.label, coin.code).slice(0, 1)}
+                                                        </span>
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="truncate text-base font-medium text-text-primary">{coin.label}</p>
+                                                            <p className="mt-0.5 text-sm text-text-muted">{coin.code}</p>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {selectedCoin && (
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (cryptoStep !== 'configure' || cryptoOptionsLoading || !selectedCoin) return;
+                                                setIsNetworkDropdownOpen((open) => !open);
+                                                setIsCoinDropdownOpen(false);
+                                            }}
+                                            disabled={cryptoStep !== 'configure' || cryptoOptionsLoading || !selectedCoin}
+                                            className={`${lightFieldClass} flex w-full items-center justify-between gap-3 text-left disabled:cursor-not-allowed disabled:opacity-60`}
+                                        >
+                                            <span className="truncate text-base font-medium text-text-primary">
+                                                {selectedNetworkOption?.network || 'Select network'}
+                                            </span>
+                                            <ChevronDown className={`h-5 w-5 text-text-muted transition-transform ${isNetworkDropdownOpen ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {isNetworkDropdownOpen && (
+                                            <div className={`relative mt-2 z-10 ${lightCardClass}`}>
+                                                <div className="max-h-72 overflow-y-auto px-3 py-2">
+                                                    {displayedNetworkOptions.map((coin) => (
+                                                        <button
+                                                            key={coin.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (cryptoStep !== 'configure') return;
+                                                                setSelectedNetworkOption(coin);
+                                                                setIsNetworkDropdownOpen(false);
+                                                            }}
+                                                            className="flex w-full items-start justify-between gap-3 border-b border-white/[0.06] px-2 py-3 text-left last:border-b-0"
+                                                        >
+                                                            <div>
+                                                                <p className="text-base font-medium text-text-primary">{coin.network}</p>
+                                                                <p className="mt-0.5 text-sm text-text-muted">
+                                                                    Crediting time ≈ {coin.network.toLowerCase().includes('erc') ? '10' : '5'} minutes
+                                                                </p>
+                                                            </div>
+                                                            {selectedNetworkOption?.id === coin.id && (
+                                                                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-brand-gold" />
+                                                            )}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {selectedNetworkOption && (
+                                    <>
+                                        <div className={lightFieldClass}>
+                                            <p className="text-xs text-text-muted">Amount</p>
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                pattern="[0-9]*"
+                                                value={amount}
+                                                onChange={(e) => {
+                                                    const value = sanitizeAmountInput(e.target.value);
+                                                    setAmount(value);
+                                                    setMessage(null);
+                                                    const numericValue = parseFloat(value);
+                                                    if (value && numericValue < minDepositCrypto) {
+                                                        setCryptoAmountError(`Minimum crypto deposit is $${minDepositCrypto}`);
+                                                    } else {
+                                                        setCryptoAmountError('');
+                                                    }
+                                                }}
+                                                placeholder={`$${minDepositCrypto}`}
+                                                className="mt-1 w-full bg-transparent text-[2rem] font-adx-bold tracking-tight text-text-primary placeholder:text-text-muted focus:outline-none"
+                                            />
+                                        </div>
+
+                                        <p className="text-center text-sm leading-relaxed text-text-secondary">
+                                            Minimum <span className="font-semibold text-text-primary">USD {formatAmount(minDepositCrypto)}</span>
+                                            <br />
+                                            Amounts below this will not be credited.
+                                        </p>
+                                    </>
+                                )}
+                            </>
+                        )}
+
+                        {(promoCode || message) && (
+                            <div className="space-y-3">
+                                {promoCode && (
+                                    <div className={`rounded-[18px] border px-4 py-3 text-sm ${promoBlockingError
+                                        ? 'border-danger/30 bg-danger-soft text-danger'
+                                        : 'border-brand-gold/20 bg-brand-gold/10 text-text-secondary'
+                                        }`}>
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div>
+                                                <p className="font-semibold text-text-primary">{appliedBonusTitle}</p>
+                                                <p className="mt-1 leading-relaxed">{appliedBonusMeta}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {promoValidating ? (
+                                                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-gold" />
+                                                ) : (
+                                                    <Gift className="h-4 w-4 shrink-0 text-brand-gold" />
+                                                )}
+                                                <button
+                                                    onClick={() => {
+                                                        setPromoCode('');
+                                                        setSelectedBonusId(null);
+                                                        setPromoError('');
+                                                        window.sessionStorage.removeItem(manualDepositBonusCodeKey);
+                                                        api.delete('/bonus/pending').catch(() => {});
+                                                        toast.success('Bonus removed');
+                                                    }}
+                                                    type="button"
+                                                    className="rounded hover:bg-white/[0.08] p-1 text-slate-400 hover:text-white transition-colors"
+                                                    title="Remove Bonus"
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {message && (
+                                    <div className={`rounded-[18px] border px-4 py-3 text-sm ${message.type === 'error'
+                                        ? 'border-danger/30 bg-danger-soft text-danger'
+                                        : 'border-brand-gold/20 bg-brand-gold/10 text-text-secondary'
+                                        }`}>
+                                        {message.text}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {showFooterAction && (
+                    <div className="shrink-0 border-t border-white/[0.06] bg-bg-card px-4 py-4 sm:px-5">
+                        <div className="mx-auto flex max-w-md flex-col gap-3 sm:max-w-lg">
+                            {!isForcedManualFlow && (
+                                <p className={`text-sm ${promoBlockingError || currentAmountError || selectedMethodError ? 'text-danger' : 'text-text-muted'}`}>
+                                    {currentSubmitHint}
+                                </p>
+                            )}
+
+                            <button
+                                onClick={isFiatFlow
+                                    ? isForcedManualFlow
+                                        ? () => handleManualFallback(gatewayRetryState?.message, false)
+                                        : handleFiatSubmit
+                                    : handleGenerateCryptoAddress}
+                                disabled={currentSubmitDisabled}
+                                className="inline-flex w-full items-center justify-center gap-2 rounded-[16px] bg-brand-gold px-6 py-3.5 text-sm font-semibold text-text-inverse shadow-glow-gold transition-all hover:bg-brand-gold-hover disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {loading ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Processing…
+                                    </>
+                                ) : (
+                                    isForcedManualFlow ? 'Continue to Manual UPI' : isFiatFlow ? 'Deposit' : 'Generate Address'
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const handleIframeLoad = (e: React.SyntheticEvent<HTMLIFrameElement>) => {
+        try {
+            const iframeWindow = e.currentTarget.contentWindow;
+            if (!iframeWindow) return;
+            // This will throw a DOMException if on a cross-origin payment gateway
+            const href = iframeWindow.location.href;
+            if (href && (href.includes('zeero.bet') || href.includes(window.location.host))) {
+                onClose();
+            }
+        } catch {
+            // Expected catch: iframe is currently on an external payment provider
+        }
+    };
+
+    const renderIframeView = () => (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-bg-card">
+            <div className="shrink-0 flex items-center justify-end border-b border-white/[0.06] bg-bg-card px-4 py-3 sm:px-5">
+                <button
+                    onClick={onClose}
+                    className="inline-flex items-center justify-center rounded-full border border-white/[0.06] bg-bg-elevated px-6 py-2 text-sm font-semibold text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
+                >
+                    Close
+                </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden bg-bg-card">
+                <iframe
+                    src={iframeUrl || undefined}
+                    onLoad={handleIframeLoad}
+                    className="block h-full min-h-0 w-full border-0 bg-bg-card"
+                    title="Secure Payment"
+                    allow="payment"
+                />
+            </div>
+        </div>
+    );
+
+    const renderAwaitingView = () => (
+        <div className="flex min-h-0 flex-1 flex-col bg-bg-card">
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
+                <div className="mx-auto w-full max-w-md space-y-4 sm:max-w-lg">
+                    {canShowFiatTab && renderBodyTabs()}
+
+                    <div className={`${lightFieldClass} flex items-center justify-between`}>
+                        <div className="flex items-center gap-3">
+                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-gold/15 text-[11px] font-bold text-brand-gold">
+                                {selectedCoin ? buildCoinMonogram(selectedCoin.label, selectedCoin.code).slice(0, 1) : 'C'}
+                            </span>
+                            <span className="text-base font-medium text-text-primary">{selectedCoin?.label || paymentData?.payCurrency}</span>
+                        </div>
+                        <ChevronDown className="h-5 w-5 text-text-muted" />
+                    </div>
+
+                    <div className={`${lightFieldClass} flex items-center justify-between`}>
+                        <span className="text-base font-medium text-text-primary">{selectedNetworkOption?.network}</span>
+                        <ChevronDown className="h-5 w-5 text-text-muted" />
+                    </div>
+
+                    <p className="text-center text-sm leading-relaxed text-text-secondary">
+                        Minimum <span className="font-semibold text-text-primary">USD {formatAmount(minDepositCrypto)}</span>
+                        <br />
+                        Amounts below this will not be credited.
+                    </p>
+
+                    {paymentData && (
+                        <div className="rounded-[22px] border border-white/[0.06] bg-bg-elevated p-4 shadow-soft">
+                            {/* Exact crypto amount to send — calculated by NOWPayments
+                                for the USD amount the user entered. Without this the
+                                user has no way of knowing how many coins to transfer. */}
+                            {paymentData.payAmount > 0 && (
+                                <div className="mb-4 rounded-[16px] border border-brand-gold/30 bg-brand-gold/10 px-4 py-3">
+                                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-gold">
+                                        Send exactly
+                                    </p>
+                                    <div className="mt-1 flex items-center justify-between gap-3">
+                                        <p className="break-all text-lg font-adx-bold tracking-tight text-text-primary sm:text-xl">
+                                            {paymentData.payAmount} {String(paymentData.payCurrency || selectedCoin?.code || '').toUpperCase()}
+                                        </p>
+                                        <button
+                                            onClick={() => handleCopy(String(paymentData.payAmount))}
+                                            className="shrink-0 inline-flex items-center gap-1 rounded-[10px] border border-brand-gold/40 bg-brand-gold/10 px-2.5 py-1.5 text-[11px] font-semibold text-brand-gold transition-colors hover:bg-brand-gold/20"
+                                        >
+                                            <Copy className="h-3 w-3" />
+                                            Copy
+                                        </button>
+                                    </div>
+                                    <p className="mt-1 text-[11px] text-text-muted">
+                                        ≈ ${amount} USD · sending less will not be credited
+                                    </p>
+                                </div>
+                            )}
+
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                                <div className="flex justify-center sm:block">
+                                    <div className="inline-flex rounded-[16px] bg-white p-2">
+                                        <QRCode value={paymentData.payAddress} size={120} bgColor="#FFFFFF" fgColor="#07111b" />
+                                    </div>
+                                </div>
+
+                                <div className="min-w-0 flex-1 text-center sm:text-left">
+                                    <p className="text-[1.75rem] font-adx-bold tracking-tight text-text-primary">Deposit address</p>
+                                    <p className="mt-2 break-all text-sm font-semibold text-text-secondary">
+                                        {paymentData.payAddress}
+                                    </p>
+                                    <button
+                                        onClick={() => handleCopy(paymentData.payAddress)}
+                                        className="mt-4 inline-flex items-center justify-center gap-2 rounded-[12px] bg-brand-gold px-5 py-2.5 text-sm font-semibold text-text-inverse shadow-glow-gold transition-colors hover:bg-brand-gold-hover"
+                                    >
+                                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                                        Copy
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="flex items-center justify-between rounded-[18px] border border-white/[0.06] bg-bg-elevated px-4 py-3 text-sm text-text-muted">
+                        <span>{statusMap[paymentStatus]?.label || paymentStatus}</span>
+                        {timeLeft > 0 ? <span>{formatTime(timeLeft)}</span> : <RefreshCw className={`h-4 w-4 ${statusLoading ? 'animate-spin' : ''}`} />}
+                    </div>
+                </div>
+            </div>
+
+            <div className="shrink-0 border-t border-white/[0.06] bg-bg-card px-4 py-4 sm:px-5">
+                <div className="mx-auto flex max-w-md items-center justify-between gap-3 sm:max-w-lg">
+                    <button
+                        onClick={() => { stopPolling(); stopTimer(); resetCryptoState(); }}
+                        className="inline-flex items-center gap-2 text-sm font-semibold text-brand-gold"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back
+                    </button>
+                    <p className="text-right text-xs text-text-muted">
+                        Waiting for confirmation on the network.
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderSuccessView = () => (
+        <div className="flex flex-1 items-center justify-center bg-bg-card px-4 py-8 sm:px-6">
+            <div className="w-full max-w-md rounded-[28px] border border-white/[0.06] bg-bg-elevated p-6 text-center shadow-soft">
+                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-brand-gold/10">
+                    <CheckCircle2 className="h-10 w-10 text-brand-gold" />
+                </div>
+                <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.24em] text-brand-gold">Transfer Complete</p>
+                <h3 className="mt-3 text-3xl font-adx-bold tracking-tight text-text-primary">Deposit Confirmed</h3>
+                <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-text-secondary">
+                    Your crypto deposit of <span className="font-semibold text-text-primary">${amount} USD</span> has been confirmed and credited to your balance.
+                </p>
+
+                <div className="mt-6 grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-[18px] border border-white/[0.06] bg-bg-base p-3">
+                        <p className="text-[10px] uppercase tracking-[0.2em] text-text-muted">Amount</p>
+                        <p className="mt-2 text-sm font-semibold text-text-primary">${amount}</p>
+                    </div>
+                    <div className="rounded-[18px] border border-white/[0.06] bg-bg-base p-3">
+                        <p className="text-[10px] uppercase tracking-[0.2em] text-text-muted">Route</p>
+                        <p className="mt-2 text-sm font-semibold text-text-primary">{selectedNetworkOption?.network || selectedCoin?.label || 'Crypto'}</p>
+                    </div>
+                </div>
+
+                <button
+                    onClick={() => { resetCryptoState(); onClose(); }}
+                    className="mt-7 inline-flex items-center justify-center rounded-[16px] bg-brand-gold px-8 py-3 text-sm font-semibold text-text-inverse shadow-glow-gold transition-all hover:bg-brand-gold-hover"
+                >
+                    Done
+                </button>
+            </div>
+        </div>
+    );
 
     if (!isOpen) return null;
 
     return (
         <>
-            <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+            <div
+                className="fixed inset-0 z-50 bg-[radial-gradient(circle_at_top,rgba(255,106,0,0.08),transparent_28%),rgba(0,0,0,0.85)] backdrop-blur-md"
+                onClick={onClose}
+            />
 
-            <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-5 pointer-events-none">
-                <div
-                    className={`pointer-events-auto relative w-full overflow-hidden border border-white/[0.06] bg-bg-section text-text-primary shadow-hard ${iframeUrl
-                        ? 'h-[100dvh] max-h-[100dvh] rounded-none sm:h-[92vh] sm:max-h-[92vh] sm:max-w-5xl sm:rounded-[32px]'
-                        : 'h-[100dvh] max-h-[100dvh] rounded-none sm:h-[92vh] sm:max-h-[92vh] sm:max-w-5xl sm:rounded-[32px]'
-                        }`}
-                >
-                    <div className="relative flex h-full flex-col">
-                        <div className="shrink-0 border-b border-white/[0.06] bg-bg-card">
-                            <div className="sm:hidden absolute left-1/2 top-2 h-1 w-10 -translate-x-1/2 rounded-full bg-white/20" />
-                            <div className="px-3 pb-3 pt-4 sm:px-6 sm:pb-5 sm:pt-6">
-                                <div className="grid grid-cols-[40px_1fr_40px] items-center">
-                                    <button
-                                        onClick={onClose}
-                                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-bg-elevated text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-                                    >
-                                        <ArrowLeft className="h-5 w-5" />
-                                    </button>
-                                    <h2 className="text-center text-[1.65rem] font-semibold text-text-primary sm:text-[2.1rem]">
-                                        {modalTitle}
-                                    </h2>
-                                    <div />
-                                </div>
-
-                                {isIndia && (
-                                    <div className="mt-5 grid grid-cols-2 border-b border-white/[0.06]">
-                                        <button
-                                            onClick={() => { setActiveTab('crypto'); setMessage(null); }}
-                                            className={`border-b-4 px-3 py-2.5 text-base font-semibold transition-colors sm:px-4 sm:py-3 sm:text-xl ${activeTab === 'crypto'
-                                                ? 'border-brand-gold text-brand-gold'
-                                                : 'border-transparent text-text-muted hover:text-text-primary'
-                                                }`}
-                                        >
-                                            {cryptoTabLabel}
-                                        </button>
-                                        <button
-                                            onClick={() => { setActiveTab('fiat'); resetCryptoState(); setMessage(null); setIframeUrl(null); }}
-                                            className={`border-b-4 px-3 py-2.5 text-base font-semibold transition-colors sm:px-4 sm:py-3 sm:text-xl ${activeTab === 'fiat'
-                                                ? 'border-brand-gold text-brand-gold'
-                                                : 'border-transparent text-text-muted hover:text-text-primary'
-                                                }`}
-                                        >
-                                            {fiatTabLabel}
-                                        </button>
-                                    </div>
-                                )}
-                                {!isIndia && (
-                                    <div className="mt-5 border-b border-white/[0.06]">
-                                        <div className="border-b-4 border-brand-gold px-3 py-2.5 text-center text-base font-semibold text-brand-gold sm:px-4 sm:py-3 sm:text-xl">
-                                            {cryptoTabLabel}
-                                        </div>
-                                    </div>
-                                )}
+            <div className="pointer-events-none fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-5">
+                <div className="pointer-events-auto relative flex h-[100dvh] max-h-[100dvh] w-full flex-col overflow-hidden overscroll-contain bg-bg-card text-text-primary shadow-hard sm:h-[85vh] sm:min-h-[85vh] sm:max-h-[85vh] sm:max-w-[430px] sm:rounded-[28px]">
+                    <div className="relative flex min-h-0 flex-1 flex-col">
+                        <div className="shrink-0 border-b border-white/[0.06] bg-bg-card px-5 pb-4 pt-5">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-2xl font-adx-bold tracking-tight text-text-primary">
+                                    {modalTitle}
+                                </h2>
+                                <button
+                                    onClick={onClose}
+                                    className="flex h-9 w-9 items-center justify-center rounded-full text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
                             </div>
                         </div>
 
                         {!isIndia && (
-                            <div className="shrink-0 border-b border-brand-gold/20 bg-brand-gold/10 px-4 py-3 text-sm text-text-secondary sm:px-6">
-                                UPI and fiat routes are available for India registrations only right now. Your deposit stays in crypto mode here.
+                            <div className="shrink-0 border-b border-brand-gold/20 bg-brand-gold/10 px-4 py-3 text-sm text-text-secondary">
+                                UPI and fiat routes are available for India registrations only. This account stays in crypto mode here.
                             </div>
                         )}
 
-                        {iframeUrl ? (
-                            <div className="flex min-h-0 flex-1 flex-col bg-white">
-                                <div className="flex items-center justify-between border-b border-white/[0.06] bg-bg-card px-4 py-3 text-sm text-text-secondary">
-                                    <span>Secure payment gateway</span>
-                                    <button
-                                        onClick={() => setIframeUrl(null)}
-                                        className="rounded-full border border-white/[0.06] bg-bg-elevated px-3 py-1 text-xs font-semibold text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-                                    >
-                                        Back to checkout
-                                    </button>
-                                </div>
-                                <iframe src={iframeUrl} className="min-h-0 flex-1 border-0 bg-white" title="Secure Payment" allow="payment" />
-                            </div>
-                        ) : (
-                            <>
-                                {(isFiatFlow || cryptoStep === 'configure') && (
-                                    <div className="flex min-h-0 flex-1 flex-col">
-                                        <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-2.5 sm:px-6 sm:py-6">
-                                            <div className="mx-auto w-full max-w-5xl rounded-[20px] bg-bg-card p-2.5 sm:rounded-[28px] sm:p-6">
-                                                <div className="space-y-2.5 sm:space-y-5">
-                                                    {promoCode && (
-                                                        <div className={`rounded-xl border px-2.5 py-2 sm:px-4 ${appliedBonusToneClass}`}>
-                                                            <div className="flex items-center justify-between gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                                                <div className="min-w-0">
-                                                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                                                        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-text-muted">
-                                                                            {bonusHeading}
-                                                                        </p>
-                                                                        <p className="text-[13px] font-semibold text-text-primary sm:text-base">{appliedBonusTitle}</p>
-                                                                    </div>
-                                                                    {appliedBonusMeta && (
-                                                                        <p className="mt-0.5 line-clamp-1 text-[10px] leading-relaxed text-text-secondary sm:mt-1 sm:text-[11px]">{appliedBonusMeta}</p>
-                                                                    )}
-                                                                </div>
-                                                                {promoValidating ? (
-                                                                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-brand-gold" />
-                                                                ) : promoBlockingError ? (
-                                                                    <AlertCircle className="h-4 w-4 shrink-0 text-red-300" />
-                                                                ) : (
-                                                                    <CheckCircle2 className="h-4 w-4 shrink-0 text-brand-gold" />
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {isFiatFlow && gatewayRetryState?.hasPendingGatewayPayment && (
-                                                        <div className={`rounded-xl border px-3 py-3 sm:rounded-2xl sm:px-4 sm:py-4 ${gatewayRetryState.forceManual
-                                                            ? 'border-orange-500/30 bg-orange-500/10'
-                                                            : 'border-brand-gold/25 bg-brand-gold/10'
-                                                            }`}>
-                                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                                                <div className="min-w-0">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <AlertCircle className={`h-4 w-4 shrink-0 ${gatewayRetryState.forceManual ? 'text-orange-300' : 'text-brand-gold'}`} />
-                                                                        <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-text-muted">
-                                                                            Pending Payment Detected
-                                                                        </p>
-                                                                    </div>
-                                                                    <p className="mt-2 text-sm font-semibold text-text-primary">{gatewayRetryState.message}</p>
-                                                                    <p className="mt-1 text-[11px] text-text-secondary">
-                                                                        Ref {gatewayRetryState.pendingTransaction?.utr || 'Pending'} · {fiatSymbol}{formatAmount(gatewayRetryState.pendingTransaction?.amount || 0)}
-                                                                    </p>
-                                                                </div>
-
-                                                                {gatewayRetryState.forceManual ? (
-                                                                    <button
-                                                                        onClick={() => handleManualFallback(gatewayRetryState.message, false)}
-                                                                        className="inline-flex items-center justify-center rounded-[14px] border border-orange-300/30 bg-orange-500/15 px-4 py-2 text-xs font-semibold text-orange-100 transition-colors hover:bg-orange-500/20"
-                                                                    >
-                                                                        Open Manual UPI
-                                                                    </button>
-                                                                ) : (
-                                                                    <div className="inline-flex shrink-0 items-center justify-center rounded-full border border-brand-gold/20 bg-brand-gold/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-gold">
-                                                                        {Math.max(0, gatewayRetryState.maxGatewayRetries - gatewayRetryState.gatewayRetryCount)} gateway retry left
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {promoResult?.hasConflict && (
-                                                        <div className="rounded-xl border border-brand-gold/25 bg-brand-gold/10 px-3 py-2 text-[11px] text-text-primary sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm">
-                                                            This deposit bonus will replace your active {promoResult.conflictBonus?.title || 'bonus'} after approval.
-                                                        </div>
-                                                    )}
-
-                                                    {bonusRequiresFirstDeposit && promoResult?.eligibility && (
-                                                        <div className={`rounded-xl border px-3 py-2 text-[11px] sm:rounded-2xl sm:px-4 sm:py-3 sm:text-sm ${promoResult.eligibility.isFirstDeposit
-                                                            ? 'border-brand-gold/25 bg-brand-gold/10 text-text-primary'
-                                                            : 'border-red-500/25 bg-red-500/10 text-red-100'
-                                                            }`}>
-                                                            {promoResult.eligibility.isFirstDeposit
-                                                                ? 'This account is still eligible for this first-deposit offer.'
-                                                                : 'This offer is only for first deposit, so it will not apply to this account.'}
-                                                        </div>
-                                                    )}
-
-                                                    <div className="rounded-[18px] bg-bg-elevated p-2.5 sm:rounded-[26px] sm:p-4">
-                                                        <div className="flex items-center justify-between gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                                            <div className="min-w-0">
-                                                                <h3 className="text-[15px] font-semibold text-text-primary sm:text-xl">
-                                                                    {isFiatFlow ? 'Deposit Currency' : 'Deposit Asset'}
-                                                                </h3>
-                                                                <p className="mt-0.5 text-[11px] text-text-secondary sm:mt-1 sm:text-sm">
-                                                                    {isFiatFlow
-                                                                        ? 'Your fiat deposit will use your registered currency.'
-                                                                        : 'Choose the network you want to deposit with.'}
-                                                                </p>
-                                                            </div>
-                                                            {isFiatFlow ? (
-                                                                <div className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-white/[0.06] bg-bg-hover px-2.5 py-2 sm:w-auto sm:gap-3 sm:rounded-xl sm:px-3 sm:py-2.5">
-                                                                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-gold text-base font-semibold text-text-inverse sm:h-9 sm:w-9 sm:text-lg">
-                                                                        {fiatSymbol}
-                                                                    </span>
-                                                                    <div>
-                                                                        <p className="text-sm font-semibold text-text-primary sm:text-base">{user?.currency || 'INR'}</p>
-                                                                        <p className="text-[10px] text-text-muted sm:text-xs">Fiat wallet</p>
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="shrink-0 rounded-lg border border-white/[0.06] bg-bg-hover px-2.5 py-2 text-left sm:rounded-xl sm:px-3 sm:py-2.5 sm:text-right">
-                                                                    <p className="text-sm font-semibold text-text-primary sm:text-base">{selectedCoin.label}</p>
-                                                                    <p className="text-[10px] text-text-muted sm:text-xs">{selectedCoin.network}</p>
-                                                                </div>
-                                                            )}
-                                                        </div>
-
-                                                        {!isFiatFlow && (
-                                                            <div className="mt-2.5 grid grid-cols-2 gap-2 sm:mt-3 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4">
-                                                                {cryptoOptions.map((coin) => (
-                                                                    <button
-                                                                        key={coin.id}
-                                                                        onClick={() => { if (cryptoStep !== 'configure') return; setSelectedCoin(coin); }}
-                                                                        disabled={cryptoStep !== 'configure'}
-                                                                        className={`min-h-[96px] rounded-[16px] border p-3 text-left transition-all sm:min-h-[108px] sm:rounded-[20px] sm:p-3.5 ${selectedCoin.id === coin.id
-                                                                            ? 'border-brand-gold/60 bg-brand-gold/10'
-                                                                            : 'border-white/[0.06] bg-bg-hover hover:border-brand-gold/30 hover:bg-bg-card'
-                                                                            } ${cryptoStep !== 'configure' ? 'cursor-not-allowed opacity-50' : ''}`}
-                                                                    >
-                                                                        <div className="flex h-full flex-col justify-between gap-3">
-                                                                            <div className="flex items-start justify-between gap-2">
-                                                                                <span
-                                                                                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/[0.06] bg-bg-card text-lg font-bold sm:h-10 sm:w-10 sm:text-xl"
-                                                                                    style={{ color: coin.color }}
-                                                                                >
-                                                                                    {coin.icon}
-                                                                                </span>
-                                                                                {selectedCoin.id === coin.id && (
-                                                                                    <span className="rounded-full bg-brand-gold px-2 py-1 text-[8px] font-bold uppercase tracking-[0.18em] text-text-inverse sm:text-[9px]">
-                                                                                        Active
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-
-                                                                            <div className="min-w-0">
-                                                                                <p className="truncate text-[13px] font-semibold text-text-primary sm:text-sm">{coin.label}</p>
-                                                                                <p className="mt-1 text-[10px] text-text-muted sm:text-[11px]">{coin.network}</p>
-                                                                            </div>
-                                                                        </div>
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {isFiatFlow && (
-                                                        <div className="rounded-[18px] bg-bg-elevated p-2.5 sm:rounded-[26px] sm:p-4">
-                                                            <div className="flex items-center justify-between gap-3">
-                                                                <div className="min-w-0">
-                                                                    <h3 className="text-[15px] font-semibold text-text-primary sm:text-xl">{depositMethodHeading}</h3>
-                                                                    <p className="mt-0.5 text-[11px] text-text-secondary sm:mt-1 sm:text-sm">
-                                                                        Select a gateway before continuing.
-                                                                    </p>
-                                                                </div>
-                                                                <span className="shrink-0 rounded-full bg-bg-hover px-2.5 py-1 text-[10px] font-semibold text-text-secondary sm:px-3 sm:text-[11px]">
-                                                                    {currentRouteLabel}
-                                                                </span>
-                                                            </div>
-
-                                                            <div className="mt-2.5 rounded-[16px] bg-bg-base p-1.5 sm:mt-3 sm:rounded-[24px] sm:p-2.5">
-                                                                <div className="space-y-1.5 sm:space-y-2">
-                                                                    {gatewayOptions.map((gateway) => (
-                                                                        <button
-                                                                            key={gateway.id}
-                                                                            onClick={() => {
-                                                                                setSelectedMethod(gateway.id);
-                                                                                setSelectedMethodError('');
-                                                                                setAmountError('');
-                                                                            }}
-                                                                            className={`w-full rounded-[14px] border px-2.5 py-2 text-left transition-all sm:rounded-[20px] sm:px-3 sm:py-2.5 ${selectedMethod === gateway.id
-                                                                                ? 'border-brand-gold/60 bg-brand-gold/10'
-                                                                                : selectedMethodError
-                                                                                    ? 'border-red-500/30 bg-red-500/8'
-                                                                                    : 'border-white/[0.06] bg-bg-hover hover:border-brand-gold/30'
-                                                                                }`}
-                                                                        >
-                                                                            <div className="flex flex-wrap items-center justify-between gap-3">
-                                                                                <div className="flex min-w-0 items-center gap-3">
-                                                                                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-bg-card text-base text-text-primary sm:h-10 sm:w-10 sm:rounded-xl sm:text-lg">
-                                                                                        {gateway.icon}
-                                                                                    </div>
-                                                                                    <div className="min-w-0">
-                                                                                        <div className="flex flex-wrap items-center gap-2">
-                                                                                            <p className="truncate text-[13px] font-semibold text-text-primary sm:text-base">{gateway.label}</p>
-                                                                                            {recommendedGatewayId === gateway.id && (
-                                                                                                <span className="rounded-full bg-brand-gold px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-text-inverse">
-                                                                                                    {gateway.badge || 'Recommend'}
-                                                                                                </span>
-                                                                                            )}
-                                                                                        </div>
-                                                                                        <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-text-muted sm:mt-1 sm:text-[11px]">
-                                                                                            <span>{gateway.sub}</span>
-                                                                                            <span className="text-text-disabled">•</span>
-                                                                                            <span>{gateway.id}</span>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-                                                                                <div className="shrink-0 text-left sm:text-right">
-                                                                                    <p className="text-[13px] font-semibold text-text-primary sm:text-base">
-                                                                                        {fiatSymbol}{formatAmount(gateway.minDeposit)}+
-                                                                                    </p>
-                                                                                    <p className="text-[10px] text-text-muted sm:text-xs">Minimum deposit</p>
-                                                                                </div>
-                                                                            </div>
-                                                                        </button>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-
-                                                            {selectedMethodError && (
-                                                                <div className="mt-3 flex items-center gap-2 rounded-2xl border border-red-500/25 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
-                                                                    <AlertCircle className="h-4 w-4 shrink-0 text-red-300" />
-                                                                    <span>{selectedMethodError}</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-
-                                                    <div className="rounded-[18px] bg-bg-elevated p-2.5 sm:rounded-[26px] sm:p-4">
-                                                        <div className="flex items-center justify-between gap-3">
-                                                            <div className="min-w-0">
-                                                                <h3 className="text-[15px] font-semibold text-text-primary sm:text-xl">{amountHeading}</h3>
-                                                                <p className="mt-0.5 text-[11px] text-text-secondary sm:mt-1 sm:text-sm">
-                                                                    {isFiatFlow
-                                                                        ? 'Enter the amount you want to deposit.'
-                                                                        : 'Enter the USD value you want to deposit.'}
-                                                                </p>
-                                                            </div>
-                                                            <span className="shrink-0 rounded-full bg-bg-hover px-2.5 py-1 text-[10px] font-semibold text-text-secondary sm:px-3 sm:text-[11px]">
-                                                                Min {currentMinimumLabel}
-                                                            </span>
-                                                        </div>
-
-                                                        <div className="mt-2.5 rounded-[16px] border border-white/[0.06] bg-bg-hover p-2.5 sm:mt-3 sm:rounded-[24px] sm:p-4">
-                                                            <label className="text-[11px] font-semibold uppercase tracking-[0.22em] text-text-muted">
-                                                                {isFiatFlow ? 'Deposit Amount' : 'Amount In USD'}
-                                                            </label>
-                                                            <div className="mt-2.5 flex items-end gap-2.5 sm:mt-3 sm:gap-3">
-                                                                <span className="text-xl font-semibold text-brand-gold sm:text-2xl">{isFiatFlow ? fiatSymbol : '$'}</span>
-                                                                <input
-                                                                    type="text"
-                                                                    inputMode="decimal"
-                                                                    pattern="[0-9]*"
-                                                                    value={amount}
-                                                                    onChange={(e) => {
-                                                                        const value = sanitizeAmountInput(e.target.value);
-                                                                        setAmount(value);
-                                                                        setMessage(null);
-                                                                        const numericValue = parseFloat(value);
-                                                                        if (isFiatFlow) {
-                                                                            if (value && activeGatewayMinDeposit && numericValue < activeGatewayMinDeposit) {
-                                                                                setAmountError(`Minimum deposit is ${fiatSymbol}${activeGatewayMinDeposit}`);
-                                                                            } else {
-                                                                                setAmountError('');
-                                                                            }
-                                                                        } else {
-                                                                            if (value && numericValue < minDepositCrypto) {
-                                                                                setCryptoAmountError(`Minimum crypto deposit is $${minDepositCrypto}`);
-                                                                            } else {
-                                                                                setCryptoAmountError('');
-                                                                            }
-                                                                        }
-                                                                    }}
-                                                                    placeholder="0"
-                                                                    className="w-full bg-transparent text-[28px] font-semibold text-text-primary placeholder:text-text-disabled focus:outline-none sm:text-4xl"
-                                                                />
-                                                                {amount && (
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setAmount('');
-                                                                            setAmountError('');
-                                                                            setCryptoAmountError('');
-                                                                        }}
-                                                                        className="mb-0.5 rounded-full border border-white/[0.06] bg-bg-card p-1.5 text-text-muted transition-colors hover:bg-bg-base hover:text-text-primary sm:mb-1 sm:p-2"
-                                                                    >
-                                                                        <X className="h-4 w-4" />
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="mt-2.5 flex flex-wrap gap-1.5 sm:mt-4 sm:gap-2">
-                                                            {currentQuickAmounts.map((value) => (
-                                                                <button
-                                                                    key={value}
-                                                                    onClick={() => {
-                                                                        setAmount(value);
-                                                                        setMessage(null);
-                                                                        if (isFiatFlow) {
-                                                                            if (activeGatewayMinDeposit && parseFloat(value) < activeGatewayMinDeposit) {
-                                                                                setAmountError(`Minimum deposit is ${fiatSymbol}${activeGatewayMinDeposit}`);
-                                                                            } else {
-                                                                                setAmountError('');
-                                                                            }
-                                                                        } else {
-                                                                            if (parseFloat(value) < minDepositCrypto) {
-                                                                                setCryptoAmountError(`Minimum crypto deposit is $${minDepositCrypto}`);
-                                                                            } else {
-                                                                                setCryptoAmountError('');
-                                                                            }
-                                                                        }
-                                                                    }}
-                                                                    className={`rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-all sm:px-4 sm:py-2 sm:text-sm ${amount === value
-                                                                        ? 'border-brand-gold bg-brand-gold text-text-inverse'
-                                                                        : 'border-white/[0.06] bg-bg-hover text-text-secondary hover:border-brand-gold/30 hover:text-text-primary'
-                                                                        }`}
-                                                                >
-                                                                    {isFiatFlow ? fiatSymbol : '$'}{value}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-
-                                                        {currentAmountError && (
-                                                            <div className="mt-3 flex items-center gap-2 rounded-2xl border border-red-500/25 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
-                                                                <AlertCircle className="h-4 w-4 shrink-0 text-red-300" />
-                                                                <span>{currentAmountError}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    {message && (
-                                                        <div className={`flex items-start gap-2.5 rounded-[16px] border p-2.5 text-[11px] sm:rounded-[24px] sm:gap-3 sm:p-4 sm:text-sm ${message.type === 'error'
-                                                            ? 'border-red-500/25 bg-red-500/10 text-red-200'
-                                                            : 'border-brand-gold/25 bg-brand-gold/10 text-text-primary'
-                                                            }`}>
-                                                            {message.type === 'error'
-                                                                ? <AlertCircle className="mt-0.5 h-4.5 w-4.5 shrink-0" />
-                                                                : <ShieldCheck className="mt-0.5 h-4.5 w-4.5 shrink-0" />}
-                                                            <span>{message.text}</span>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="shrink-0 border-t border-white/[0.06] bg-bg-card px-3 py-3 sm:px-6 sm:py-4">
-                                            <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                                <div>
-                                                    <p className="text-sm font-semibold text-text-primary">Deposit</p>
-                                                    <p className={`mt-1 text-[11px] ${promoBlockingError || currentAmountError || selectedMethodError ? 'text-red-200' : 'text-text-secondary'}`}>
-                                                        {currentSubmitHint}
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    onClick={isFiatFlow
-                                                        ? isForcedManualFlow
-                                                            ? () => handleManualFallback(gatewayRetryState?.message, false)
-                                                            : handleFiatSubmit
-                                                        : handleGenerateCryptoAddress}
-                                                    disabled={currentSubmitDisabled}
-                                                    className="inline-flex w-full min-w-[180px] items-center justify-center gap-2 rounded-[18px] bg-gradient-gold px-6 py-3.5 text-sm font-semibold text-text-inverse shadow-glow-gold transition-all hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-                                                >
-                                                    {loading ? (
-                                                        <>
-                                                            <Loader2 className="h-4 w-4 animate-spin" />
-                                                            Processing…
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <ArrowUpRight className="h-4 w-4" />
-                                                            {isForcedManualFlow ? 'Continue to Manual UPI' : 'Deposit'}
-                                                        </>
-                                                    )}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {!isFiatFlow && cryptoStep === 'awaiting' && paymentData && (
-                                    <div className="flex min-h-0 flex-1 flex-col">
-                                        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
-                                            <div className="mx-auto grid max-w-5xl gap-4 lg:grid-cols-[340px_minmax(0,1fr)]">
-                                                <div className="rounded-[32px] border border-white/[0.06] bg-bg-card p-5 text-center">
-                                                    <div className="flex items-center justify-center gap-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-brand-gold">
-                                                        <Clock className="h-3.5 w-3.5" />
-                                                        Awaiting Payment
-                                                    </div>
-                                                    <div className="mx-auto mt-5 inline-flex rounded-[28px] border border-white/[0.06] bg-white p-4 shadow-hard">
-                                                        <QRCode value={paymentData.payAddress} size={168} bgColor="#FFFFFF" fgColor="#07111b" />
-                                                    </div>
-                                                    <p className="mt-4 text-sm font-semibold text-text-primary">Scan with your {selectedCoin.label} wallet</p>
-                                                    <p className="mt-2 text-xs leading-relaxed text-text-secondary">
-                                                        Use the exact amount and network below. This address is unique to the current deposit session.
-                                                    </p>
-                                                    {timeLeft > 0 && (
-                                                        <div className="mt-5 inline-flex items-center gap-2 rounded-full border border-brand-gold/25 bg-brand-gold/10 px-4 py-2 text-sm font-semibold text-brand-gold">
-                                                            <Clock className="h-4 w-4" />
-                                                            {formatTime(timeLeft)} left
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="space-y-4">
-                                                    <div className="rounded-[32px] border border-white/[0.06] bg-bg-card p-5">
-                                                        <div className="flex flex-wrap items-center justify-between gap-3">
-                                                            <div>
-                                                                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-brand-gold">Transfer Details</p>
-                                                                <h3 className="mt-2 text-xl font-semibold text-text-primary">Send exactly this payment</h3>
-                                                            </div>
-                                                            <div className={`rounded-full border border-white/[0.06] bg-bg-hover px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] ${statusMap[paymentStatus]?.color || 'text-text-secondary'}`}>
-                                                                {statusMap[paymentStatus]?.label || paymentStatus}
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                                            <div className="rounded-[24px] border border-white/[0.06] bg-bg-elevated p-4">
-                                                                <p className="text-[10px] uppercase tracking-[0.22em] text-text-muted">Send Exactly</p>
-                                                                <p className="mt-2 text-2xl font-semibold text-text-primary">
-                                                                    {paymentData.payAmount} <span className="text-brand-gold">{paymentData.payCurrency}</span>
-                                                                </p>
-                                                                <p className="mt-1 text-xs text-text-secondary">Approx. ${amount} USD</p>
-                                                            </div>
-                                                            <div className="rounded-[24px] border border-white/[0.06] bg-bg-elevated p-4">
-                                                                <p className="text-[10px] uppercase tracking-[0.22em] text-text-muted">Network</p>
-                                                                <p className="mt-2 text-2xl font-semibold text-text-primary">{selectedCoin.network}</p>
-                                                                <p className="mt-1 text-xs text-text-secondary">{selectedCoin.label} route</p>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="mt-4">
-                                                            <label className="text-[11px] font-semibold uppercase tracking-[0.24em] text-text-muted">
-                                                                {selectedCoin.label} Address
-                                                            </label>
-                                                            <div className="relative mt-2">
-                                                                <input
-                                                                    readOnly
-                                                                    value={paymentData.payAddress}
-                                                                    className="w-full rounded-[22px] border border-white/[0.06] bg-bg-elevated py-3 pl-4 pr-12 text-xs font-mono text-text-primary focus:outline-none"
-                                                                />
-                                                                <button
-                                                                    onClick={() => handleCopy(paymentData.payAddress)}
-                                                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-xl p-2 text-text-muted transition-colors hover:bg-bg-hover hover:text-text-primary"
-                                                                >
-                                                                    {copied ? <Check className="h-4 w-4 text-brand-gold" /> : <Copy className="h-4 w-4" />}
-                                                                </button>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="mt-4 rounded-[22px] border border-brand-gold/25 bg-brand-gold/10 p-4 text-sm leading-relaxed text-text-primary">
-                                                            Send <span className="font-semibold text-text-primary">{paymentData.payAmount} {paymentData.payCurrency}</span> only on <span className="font-semibold text-text-primary">{selectedCoin.network}</span>. Wrong network transfers cannot be recovered.
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="rounded-[30px] border border-white/[0.06] bg-bg-card p-5">
-                                                        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-brand-gold">
-                                                            <RefreshCw className={`h-3.5 w-3.5 ${statusLoading ? 'animate-spin' : ''}`} />
-                                                            Live Monitoring
-                                                        </div>
-                                                        <p className="mt-3 text-sm text-text-secondary">
-                                                            We check the network status every 12 seconds and auto-credit your balance when the payment is confirmed.
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="shrink-0 border-t border-white/[0.06] bg-bg-card px-4 py-3 backdrop-blur-xl sm:px-6">
-                                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                                <button
-                                                    onClick={() => { stopPolling(); stopTimer(); resetCryptoState(); }}
-                                                    className="inline-flex items-center gap-2 rounded-[18px] border border-white/[0.06] bg-bg-elevated px-4 py-2.5 text-sm font-medium text-text-secondary transition-colors hover:bg-bg-hover hover:text-text-primary"
-                                                >
-                                                    <ArrowLeft className="h-4 w-4" />
-                                                    Back
-                                                </button>
-                                                <div className="text-right">
-                                                    <p className="text-sm font-semibold text-text-primary">{statusMap[paymentStatus]?.label || paymentStatus}</p>
-                                                    <p className="mt-1 text-[11px] text-text-secondary">Waiting for confirmation on the network.</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {!isFiatFlow && cryptoStep === 'success' && (
-                                    <div className="flex flex-1 items-center justify-center px-4 py-8 sm:px-6">
-                                        <div className="w-full max-w-xl rounded-[36px] border border-brand-gold/25 bg-bg-card p-8 text-center shadow-hard">
-                                            <div className="mx-auto flex h-24 w-24 items-center justify-center rounded-full bg-brand-gold/10">
-                                                <CheckCircle2 className="h-12 w-12 text-brand-gold" />
-                                            </div>
-                                            <h3 className="mt-6 text-3xl font-semibold text-text-primary">Deposit Confirmed</h3>
-                                            <p className="mt-3 text-sm leading-relaxed text-text-secondary">
-                                                Your crypto deposit of <span className="font-semibold text-text-primary">${amount} USD</span> has been credited and your balance is ready.
-                                            </p>
-                                            <button
-                                                onClick={() => { resetCryptoState(); onClose(); }}
-                                                className="mt-8 inline-flex items-center justify-center rounded-[20px] bg-gradient-gold px-8 py-3 text-sm font-semibold text-text-inverse shadow-glow-gold transition-all hover:opacity-95"
-                                            >
-                                                Done
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-                            </>
-                        )}
+                        {iframeUrl
+                            ? renderIframeView()
+                            : (isFiatFlow || cryptoStep === 'configure')
+                                ? renderConfigureView()
+                                : cryptoStep === 'awaiting' && paymentData
+                                    ? renderAwaitingView()
+                                    : renderSuccessView()}
                     </div>
                 </div>
             </div>

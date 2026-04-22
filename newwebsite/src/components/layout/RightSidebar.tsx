@@ -1,13 +1,18 @@
 'use client';
 
-import { Ticket, History, X, CheckCircle, AlertCircle, Trash2, ChevronUp } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { usePathname } from 'next/navigation';
+import { useModal } from '@/context/ModalContext';
+import {
+    X, ChevronUp, ChevronDown, CheckCircle, AlertCircle,
+    Clock, Trash2, BookMarked, Zap, User, AlignJustify, Clipboard, Share2
+} from 'lucide-react';
 import { useBets } from '@/context/BetContext';
 import { useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
-import { useState, useEffect } from 'react';
-import { useModal } from '@/context/ModalContext';
 import SportsBetCashoutWidget from '@/components/sports/SportsBetCashoutWidget';
 import { showBetErrorToast, showBetPlacedToast } from '@/utils/betToasts';
+import { useEarlySixMatches } from '@/hooks/useEarlySixMatches';
 import {
     getBetNetPnL,
     getBetOriginalStake,
@@ -18,445 +23,898 @@ import {
 } from '@/utils/sportsBetDisplay';
 import { isLineBasedFancyMarket } from '@/utils/sportsBetPricing';
 
-/* ─── BetCard — extracted so React never re-creates it on parent re-renders ─── */
-interface BetCardProps {
-    bet: {
-        id: string;
-        eventName: string;
-        marketName: string;
-        selectionName: string;
-        odds: number;
-        marketType?: string;
-        stake: number;
-        potentialWin: number;
+// ─── constants ────────────────────────────────────────────────────────────────
+const QUICK_STAKES = [100, 500, 1_000, 5_000];
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
+function fmtOdds(odds: number, lb: boolean) {
+    return lb ? String(odds) : `×${Number(odds).toFixed(2)}`;
+}
+function potentialProfit(stake: number, odds: number) {
+    return Math.max(0, (Number(stake) || 0) * ((Number(odds) || 1) - 1));
+}
+function fmtMoney(n: number) {
+    return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function statusStyle(s: string) {
+    const m: Record<string, { chip: string; bar: string }> = {
+        WON:        { chip: 'bg-success-alpha-12 text-success-bright border-success/25',           bar: 'bg-success-primary' },
+        LOST:       { chip: 'bg-danger-alpha-10 text-danger border-danger/25',                    bar: 'bg-danger-primary' },
+        CASHED_OUT: { chip: 'bg-warning-alpha-12 text-warning border-warning/25',                bar: 'bg-warning' },
+        VOID:       { chip: 'bg-white/[0.06] text-white/30 border-white/[0.06]',                          bar: 'bg-white/20' },
+        PENDING:    { chip: 'bg-warning-soft/80 text-warning-bright border-warning-bright/25',   bar: 'bg-warning-bright' },
     };
-    activeSymbol: string;
-    onRemove: (id: string) => void;
-    onStake: (id: string, value: number) => void;
+    return m[s] ?? m.PENDING;
 }
 
-function BetCard({ bet, activeSymbol, onRemove, onStake }: BetCardProps) {
-    const [stakeStr, setStakeStr] = useState<string>(
-        bet.stake ? String(bet.stake) : ''
-    );
+interface RightSidebarProps {
+    mode?: 'floating' | 'static';
+    className?: string;
+}
 
-    const contextVal = bet.stake ? String(bet.stake) : '';
-    useEffect(() => {
-        const syncTimer = setTimeout(() => {
-            setStakeStr((prev) => (prev !== contextVal ? contextVal : prev));
-        }, 0);
-        return () => clearTimeout(syncTimer);
-    }, [contextVal]);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const raw = e.target.value.replace(/[^0-9.]/g, '');
-        setStakeStr(raw);
-        const num = parseFloat(raw);
-        onStake(bet.id, isNaN(num) ? 0 : num);
+// ─── SingleBetCard ─────────────────────────────────────────────────────────────
+interface BetCardProps {
+    bet: {
+        id: string; eventId: string; eventName: string;
+        marketName: string; selectionName: string;
+        odds: number; marketType?: string; rate?: number;
+        stake: number; potentialWin: number;
     };
+    sym: string;
+    onRemove: (id: string) => void;
+    onStake:  (id: string, v: number) => void;
+}
 
-    const isLine = isLineBasedFancyMarket({
-        marketType: bet.marketType,
-        marketName: bet.marketName,
-        selectionName: bet.selectionName,
-    });
+function BetCard({ bet, sym, onRemove, onStake }: BetCardProps) {
+    const [raw, setRaw] = useState(bet.stake > 0 ? String(bet.stake) : '');
+    const ctxVal = bet.stake > 0 ? String(bet.stake) : '';
+    useEffect(() => {
+        const t = setTimeout(() => setRaw(p => p !== ctxVal ? ctxVal : p), 0);
+        return () => clearTimeout(t);
+    }, [ctxVal]);
+
+    const lb = isLineBasedFancyMarket({ marketType: bet.marketType, marketName: bet.marketName, selectionName: bet.selectionName });
+    const stakeNum = parseFloat(raw) || 0;
+    const profit   = lb ? null : potentialProfit(stakeNum || bet.stake, bet.odds);
 
     return (
-        <div className="group relative bg-gradient-to-br from-white/[0.04] to-white/[0.01] rounded-2xl p-4 border border-white/[0.06] hover:border-white/[0.1] transition-all duration-200">
-            {/* Remove button */}
-            <button
-                onClick={() => onRemove(bet.id)}
-                className="absolute top-3 right-3 p-1.5 rounded-full bg-white/[0.04] text-white/20 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
-            >
-                <X size={12} />
-            </button>
-
-            {/* Event + Market */}
-            <div className="pr-8">
-                <div className="text-[12px] text-white/90 font-semibold leading-tight line-clamp-1">{bet.eventName}</div>
-                <div className="text-[10px] text-white/25 uppercase tracking-wider mt-0.5">{bet.marketName}</div>
-            </div>
-
-            {/* Selection pill + Odds */}
-            <div className="flex items-center justify-between mt-3 gap-2">
-                <span className="text-[12px] font-bold text-emerald-400 truncate">{bet.selectionName}</span>
-                <span className="text-[13px] font-black text-white bg-emerald-500/15 border border-emerald-500/20 px-3 py-1 rounded-full flex-shrink-0">
-                    {isLine ? `${bet.odds} runs` : bet.odds}
-                </span>
-            </div>
-
-            {/* Stake + Potential Win */}
-            <div className="mt-3 flex gap-2">
-                <div className="flex-1 relative">
-                    <input
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={stakeStr}
-                        placeholder="Stake"
-                        onChange={handleChange}
-                        className="w-full bg-black/30 text-white text-[13px] font-bold pl-3 pr-8 py-2.5 rounded-xl outline-none border border-white/[0.06] focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/20 transition-all placeholder:text-white/15"
-                    />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-white/20 font-bold pointer-events-none">{activeSymbol}</span>
-                </div>
-                <div className="flex flex-col items-end justify-center min-w-[80px]">
-                    <span className="text-[9px] text-white/25 uppercase">Win</span>
-                    <span className="text-[14px] font-black text-emerald-400 leading-tight">
-                        {activeSymbol}{Math.floor(bet.potentialWin).toLocaleString('en-IN')}
+        <div className="relative rounded-xl bg-bg-surface-2 border border-white/[0.07] overflow-hidden">
+            {/* gold left accent */}
+            <div className="absolute left-0 inset-y-0 w-[3px] bg-brand-gold rounded-r-full" />
+            <div className="pl-3.5 pr-2.5 py-2 space-y-1.5">
+                {/* Row 1: Selection + odds badge + X */}
+                <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-black text-brand-gold truncate leading-none">{bet.selectionName}</p>
+                        <p className="text-[9px] text-white/30 leading-none mt-0.5 truncate">{bet.eventName} · {bet.marketName}</p>
+                    </div>
+                    <span className="flex-shrink-0 text-[12px] font-black text-white bg-brand-gold/10 border border-brand-gold/20 px-1.5 py-0.5 rounded-lg leading-none tabular-nums">
+                        {fmtOdds(bet.odds, lb)}
                     </span>
+                    <button
+                        onClick={() => onRemove(bet.id)}
+                        className="p-1 rounded-lg text-white/15 hover:text-danger hover:bg-danger-alpha-08 transition-all active:scale-90 flex-shrink-0"
+                    >
+                        <X size={10} />
+                    </button>
+                </div>
+
+                {/* Row 2: Stake input + profit inline */}
+                <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-white/25 pointer-events-none">{sym}</span>
+                        <input
+                            type="text"
+                            inputMode="decimal"
+                            value={raw}
+                            placeholder="Stake"
+                            onChange={e => {
+                                const v = e.target.value.replace(/[^0-9.]/g, '');
+                                setRaw(v);
+                                onStake(bet.id, isNaN(parseFloat(v)) ? 0 : parseFloat(v));
+                            }}
+                            className="w-full rounded-lg bg-bg-deep-4 border border-white/[0.07] focus:border-brand-gold/30 text-text-white text-[12px] font-black pl-6 pr-2 py-1.5 outline-none transition-colors placeholder:text-white/10 tabular-nums"
+                        />
+                    </div>
+                    <div className="text-right flex-shrink-0 min-w-[54px]">
+                        <p className="text-[8px] text-white/25 leading-none">{profit !== null ? 'Profit' : 'Return'}</p>
+                        <p className="text-[11px] font-black text-brand-gold tabular-nums leading-tight">
+                            {sym}{fmtMoney(profit !== null ? profit : bet.potentialWin)}
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>
     );
 }
 
-/* ─── Main Floating Betslip ─── */
-export default function RightSidebar({ className = '' }: { className?: string }) {
-    const {
-        bets,
-        removeBet,
-        updateStake,
-        placeBet,
-        totalStake,
-        totalPotentialWin,
-        myBets,
-        refreshMyBets,
-        isBetslipOpen,
-        toggleBetslip,
-    } = useBets();
-    const { isAuthenticated } = useAuth();
-    const { openLogin } = useModal();
-    const { activeSymbol, selectedWallet, activeBalance, refreshWallet } = useWallet();
-    const [placing, setPlacing] = useState(false);
-    const [activeTab, setActiveTab] = useState<'betslip' | 'mybets'>('betslip');
-    const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+// ─── BetslipList ──────────────────────────────────────────────────────────────
+function isMatchOddsMarket(bet: BetCardProps['bet']) {
+    const mt = String((bet as any).marketType || '').trim().toLowerCase();
+    const mn = String(bet.marketName || '').trim().toLowerCase();
+    return mt === 'match' || mt === 'match1' || mt === 'match_odds' || mn.includes('match odds') || mn.includes('match winner');
+}
 
-    const quickStakes = [100, 500, 1000, 5000];
+function BetslipList({ bets, sym, onRemove, onStake }: {
+    bets: BetCardProps['bet'][]; sym: string;
+    onRemove: (id: string) => void; onStake: (id: string, v: number) => void;
+}) {
+    const e6 = useEarlySixMatches();
+    return (
+        <div className="space-y-1.5">
+            {bets.map(bet => (
+                <div key={bet.id} className="space-y-1">
+                    <BetCard bet={bet} sym={sym} onRemove={onRemove} onStake={onStake} />
+                    {e6.has(bet.eventId) && isMatchOddsMarket(bet) && (
+                        <div className="rounded-xl px-2.5 py-1.5 text-[9px] bg-emerald-500/8 border border-emerald-500/15 text-emerald-300/90">
+                            <p className="font-black text-[9px] text-emerald-400">🎯 EARLY 6 REFUND OFFER</p>
+                            <p>Qualifies for cashback · Pre-match Match Odds only</p>
+                        </div>
+                    )}
+                </div>
+            ))}
+        </div>
+    );
+}
+
+// ─── AnimatedBadge ──────────────────────────────────────────────────────
+/** Count pill with bounce-pop + floating "+(n)" particle on increment */
+function AnimatedBadge({ count }: { count: number }) {
+    const prevRef  = useRef(count);
+    const [popKey,  setPopKey]  = useState(0);
+    const [plusKey, setPlusKey] = useState(0);
+    const [delta,   setDelta]   = useState(0);
+
+    useEffect(() => {
+        const prev = prevRef.current;
+        if (count > prev) {
+            setDelta(count - prev);
+            setPopKey(k => k + 1);
+            setPlusKey(k => k + 1);
+        }
+        prevRef.current = count;
+    }, [count]);
+
+    if (count === 0) return null;
+    return (
+        <span className="relative inline-flex items-center justify-center">
+            {delta > 0 && (
+                <span
+                    key={`plus-${plusKey}`}
+                    className="betslip-plus-float absolute -top-3 left-1/2 -translate-x-1/2 text-[9px] font-black text-brand-gold whitespace-nowrap"
+                >
+                    +{delta}
+                </span>
+            )}
+            <span
+                key={`badge-${popKey}`}
+                className="betslip-badge-pop betslip-badge-alive h-5 min-w-[20px] px-1.5 rounded-full text-[9px] font-black flex items-center justify-center leading-none"
+            >
+
+                {count}
+            </span>
+        </span>
+    );
+}
+
+// ─── main component ───────────────────────────────────────────────────────────
+export default function RightSidebar({ mode = 'floating', className = '' }: RightSidebarProps) {
+    const {
+        bets, removeBet, updateStake, placeBet, clearBets,
+        totalStake, totalPotentialWin,
+        myBets, refreshMyBets,
+        isBetslipOpen, toggleBetslip,
+        oneClickEnabled, setOneClickEnabled,
+        oneClickStake, setOneClickStake,
+        bookBets, loadBookedBet,
+    } = useBets();
+
+    const { isAuthenticated }  = useAuth();
+    const { openLogin }        = useModal();
+    const { activeSymbol: sym, selectedWallet, selectedSubWallet, activeBalance, refreshWallet } = useWallet();
+    const pathname = usePathname();
+    const isSportsRoute = pathname === '/sports'
+        || pathname.startsWith('/sports/')
+        || pathname.startsWith('/sportsbook');
+
+    const [placing,  setPlacing]  = useState(false);
+    const [booking,  setBooking]  = useState(false);
+    const [bookedId, setBookedId] = useState<string | null>(null);
+    const [bookedExpiresAt, setBookedExpiresAt] = useState<number | null>(null);
+    const [bookedCountdown, setBookedCountdown] = useState(0);
+    const [loadCode, setLoadCode] = useState('');
+    const [loadingCode, setLoadingCode] = useState(false);
+    const [tab,      setTab]      = useState<'slip' | 'mybets'>('slip');
+    const [feedback, setFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
 
     useEffect(() => {
         if (!feedback) return;
-        const t = setTimeout(() => setFeedback(null), 3000);
+        const t = setTimeout(() => setFeedback(null), 3500);
         return () => clearTimeout(t);
     }, [feedback]);
 
+    // Booking countdown timer
     useEffect(() => {
-        if (bets.length > 0 && !isBetslipOpen) toggleBetslip();
-    }, [bets.length]); // eslint-disable-line react-hooks/exhaustive-deps
+        if (!bookedExpiresAt) { setBookedCountdown(0); return; }
+        const tick = () => {
+            const remaining = Math.max(0, Math.ceil((bookedExpiresAt - Date.now()) / 1000));
+            setBookedCountdown(remaining);
+            if (remaining <= 0) {
+                setBookedId(null);
+                setBookedExpiresAt(null);
+            }
+        };
+        tick();
+        const interval = setInterval(tick, 1000);
+        return () => clearInterval(interval);
+    }, [bookedExpiresAt]);
+
+    // Auto-open when bet is added + dismiss any active booking
+    useEffect(() => {
+        if (bets.length > 0) {
+            if (!isBetslipOpen) toggleBetslip();
+            if (bookedId) dismissBooking();
+        }
+    }, [bets.length]); // eslint-disable-line
 
     useEffect(() => {
-        if (!isAuthenticated || activeTab !== 'mybets') return;
+        if (!isAuthenticated || tab !== 'mybets') return;
         void refreshMyBets();
-        const timer = setInterval(() => { void refreshMyBets(); }, 15000);
-        return () => clearInterval(timer);
-    }, [activeTab, isAuthenticated, refreshMyBets]);
+        const t = setInterval(() => void refreshMyBets(), 15_000);
+        return () => clearInterval(t);
+    }, [tab, isAuthenticated, refreshMyBets]);
 
-    const handlePlaceBet = async () => {
+    const desktopDrawerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!isBetslipOpen || mode !== 'floating') return;
+
+        const handleClickOutside = (e: MouseEvent) => {
+            if (window.innerWidth < 768) return; // Only apply on desktop view
+            
+            const target = e.target as HTMLElement;
+            // Never aggressive-close if clicking buttons/links (to not interrupt betting flow)
+            if (target.closest('button') || target.closest('a')) return;
+
+            if (desktopDrawerRef.current && !desktopDrawerRef.current.contains(target)) {
+                toggleBetslip();
+            }
+        };
+
+        const timer = setTimeout(() => {
+            document.addEventListener('mousedown', handleClickOutside);
+        }, 50);
+
+        return () => {
+            clearTimeout(timer);
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isBetslipOpen, mode, toggleBetslip]);
+
+    const handlePlace = async () => {
         if (!isAuthenticated) { openLogin(); return; }
-        if (bets.length === 0) return;
+        if (!bets.some(b => b.stake > 0)) return;
         setPlacing(true);
         try {
             await placeBet();
             showBetPlacedToast();
-            setFeedback({ type: 'success', message: 'Bet placed!' });
-            setTimeout(() => setActiveTab('mybets'), 1200);
+            setFeedback({ ok: true, msg: 'Bet placed successfully!' });
+            setTimeout(() => setTab('mybets'), 1200);
         } catch (e: unknown) {
-            const errorMessage = e instanceof Error ? e.message : 'Failed to place bet.';
-            setFeedback({ type: 'error', message: errorMessage });
+            const msg = e instanceof Error ? e.message : 'Failed to place bet.';
+            setFeedback({ ok: false, msg });
             showBetErrorToast(e);
+        } finally { setPlacing(false); }
+    };
+
+    const dismissBooking = () => {
+        setBookedId(null);
+        setBookedExpiresAt(null);
+        setBookedCountdown(0);
+    };
+
+    const handleBookBet = async () => {
+        if (!bets.some(b => b.stake > 0)) {
+            setFeedback({ ok: false, msg: 'Enter a stake to book bets.' });
+            return;
+        }
+        setBooking(true);
+        try {
+            const id = await bookBets();
+            setBookedId(id);
+            setBookedExpiresAt(Date.now() + 2 * 60 * 1000); // 2 minutes validity
+            clearBets(); // Lock this booking — bets are frozen in the code
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Failed to book bet.';
+            setFeedback({ ok: false, msg });
         } finally {
-            setPlacing(false);
+            setBooking(false);
         }
     };
 
-    const handleCashoutSuccess = async () => {
-        await Promise.all([refreshMyBets(), refreshWallet()]);
-        setFeedback({ type: 'success', message: 'Cash out completed.' });
+    const copyBookingId = () => {
+        if (!bookedId) return;
+        navigator.clipboard.writeText(bookedId);
+        setFeedback({ ok: true, msg: 'Booking ID copied!' });
     };
 
-    /* ─── Floating Pill (collapsed) ─── */
-    if (!isBetslipOpen) {
-        return (
-            <div className={`fixed right-4 xl:right-6 z-50 ${className}`} style={{ bottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
+    const handleLoadCode = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        const code = loadCode.trim();
+        if (!code) return;
+        setLoadingCode(true);
+        try {
+            await loadBookedBet(code);
+            setFeedback({ ok: true, msg: 'Bets loaded — place your bet now!' });
+            setLoadCode('');
+            // Dismiss any active booking since this code is now consumed
+            dismissBooking();
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Invalid or expired booking code.';
+            setFeedback({ ok: false, msg });
+        } finally {
+            setLoadingCode(false);
+        }
+    };
+
+    const totalProfit = Math.max(0, totalPotentialWin - totalStake);
+    const canPlace    = bets.some(b => b.stake > 0);
+
+    // ── Shared sub-components ─────────────────────────────────────────────────
+
+    /** Slim header bar — always visible in floating mode, acts as the toggle handle */
+    const SlimHeader = ({ showTabs = true }: { showTabs?: boolean }) => (
+        <div
+            className={`w-full h-[52px] flex items-center justify-between px-4 ${mode === 'floating' ? '' : 'cursor-default'} bg-bg-deep-3 border-b border-white/[0.06]`}
+        >
+            {/* Left: click zone → toggle betslip */}
+            <div
+                onClick={mode === 'floating' ? toggleBetslip : undefined}
+                className={`flex flex-1 items-center gap-2.5 h-full ${mode === 'floating' ? 'cursor-pointer select-none' : ''}`}
+            >
+                <div className="w-7 h-7 rounded-lg bg-brand-gold/15 flex items-center justify-center flex-shrink-0">
+                    <AlignJustify size={13} className="text-brand-gold" />
+                </div>
+                <span className="text-[13px] font-black text-white tracking-tight">Betslip</span>
+                <AnimatedBadge count={bets.length} />
+            </div>
+
+            {/* Right: isolated controls — no betslip toggle */}
+            <div className="flex items-center gap-2 shrink-0">
+                {/* Quick Bet toggle */}
                 <button
-                    onClick={toggleBetslip}
-                    className="group relative flex items-center gap-3 bg-[#1a1d21]/90 backdrop-blur-xl text-white pl-4 pr-5 py-3.5 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.5)] hover:shadow-[0_8px_40px_rgba(59,193,23,0.15)] transition-all duration-300 border border-white/[0.08] hover:border-emerald-500/20 hover:scale-[1.02]"
+                    type="button"
+                    onClick={() => setOneClickEnabled(!oneClickEnabled)}
+                    title="Quick Bet"
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg transition-all hover:bg-white/[0.05] active:scale-90"
                 >
-                    {/* Green icon badge */}
-                    <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-[0_0_12px_rgba(59,193,23,0.3)]">
-                        <Ticket size={16} className="text-white" />
-                    </div>
-                    <div className="flex flex-col items-start">
-                        <span className="text-[10px] text-white/40 font-semibold uppercase tracking-wider leading-none">
-                            Betslip
-                        </span>
-                        <span className="text-[14px] font-bold leading-tight mt-0.5">
-                            {bets.length} bet{bets.length !== 1 ? 's' : ''}
-                        </span>
-                    </div>
-                    {bets.length > 0 && (
-                        <span className="absolute -top-2 -right-2 bg-emerald-500 text-white text-[11px] font-black w-6 h-6 rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(59,193,23,0.4)] animate-bounce">
-                            {bets.length}
-                        </span>
-                    )}
+                    <Zap size={11} className={oneClickEnabled ? 'text-brand-gold' : 'text-white/30'} />
+                    <span className={`text-[10px] font-bold ${oneClickEnabled ? 'text-brand-gold' : 'text-white/25'}`}>
+                        Quick Bet
+                    </span>
+                    {/* pill toggle */}
+                    <span className={`relative flex w-8 h-[18px] rounded-full transition-colors duration-200 ${
+                        oneClickEnabled ? 'bg-brand-gold' : 'bg-white/[0.08]'
+                    }`}>
+                        <span className={`absolute top-[3px] w-3 h-3 rounded-full shadow transition-all duration-200 ${
+                            oneClickEnabled ? 'translate-x-[17px] bg-black' : 'translate-x-[3px] bg-white/30'
+                        }`} />
+                    </span>
                 </button>
+
+                {mode === 'floating' && (
+                    <button
+                        type="button"
+                        onClick={toggleBetslip}
+                        className="flex items-center justify-center w-6 h-6 rounded-lg hover:bg-white/[0.05] text-white/30 hover:text-white/60 transition-all active:scale-90"
+                    >
+                        {isBetslipOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+
+    /** One-click stake picker — shown just below header when Quick Bet is on */
+    const QuickStakeBar = () => (
+        <div className="flex items-center gap-2 px-3 py-2 bg-bg-deep border-b border-white/[0.04]">
+            <Zap size={11} className="text-brand-gold shrink-0" />
+            <span className="text-[10px] font-bold text-brand-gold/80 shrink-0">Stake</span>
+            <input
+                type="number"
+                min={1}
+                value={oneClickStake}
+                onChange={(e) => setOneClickStake(Math.max(1, Number(e.target.value) || 1))}
+                onClick={(e) => e.stopPropagation()}
+                className="flex-1 min-w-0 bg-white/[0.04] border border-white/[0.08] focus:border-brand-gold/40 rounded-lg px-2 py-1 text-[12px] font-black text-white tabular-nums outline-none w-full text-right"
+            />
+            <div className="flex gap-1">
+                {[100, 500, 1000, 5000].map(amt => (
+                    <button key={amt} type="button"
+                        onClick={(e) => { e.stopPropagation(); setOneClickStake(amt); }}
+                        className={`text-[9px] font-black px-1.5 py-0.5 rounded-md transition-all active:scale-90 ${
+                            oneClickStake === amt
+                                ? 'bg-brand-gold text-text-inverse'
+                                : 'bg-white/[0.04] text-white/30 hover:bg-white/[0.08] hover:text-white'
+                        }`}>
+                        {amt >= 1000 ? `${amt / 1000}K` : amt}
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+
+    /** Slip / My Bets tab row */
+    const TabRow = () => (
+        <div className="flex border-b border-white/[0.06] bg-bg-game-dark flex-shrink-0">
+            {(['slip', 'mybets'] as const).map((t, i) => (
+                <button
+                    key={t}
+                    onClick={() => setTab(t)}
+                    className={`flex-1 py-2.5 text-[11px] font-black tracking-tight transition-all border-b-2 ${tab === t ? 'text-brand-gold border-brand-gold' : 'text-white/25 border-transparent hover:text-white/50'}`}
+                >
+                    {['Slip', 'My Bets'][i]}
+                </button>
+            ))}
+        </div>
+    );
+
+    /** Scrollable content */
+    const Content = () => (
+        <div className="flex-1 overflow-y-auto overscroll-contain p-3 bg-bg-game-dark"
+            style={{ scrollbarWidth: 'thin', scrollbarColor: '#1e2228 transparent' }}>
+            {tab === 'slip' ? (
+                bets.length === 0 ? (
+                    <div className="flex flex-col h-full items-center justify-center py-6">
+                        {/* Empty state icon */}
+                        {!(bookedId && bookedCountdown > 0) && (
+                            <div className="flex flex-col items-center justify-center gap-3 text-center select-none mb-6">
+                                <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.05] flex items-center justify-center">
+                                    <span className="text-2xl">🎟️</span>
+                                </div>
+                                <div>
+                                    <p className="text-[12px] font-bold text-white/20">Betslip is empty</p>
+                                    <p className="text-[10px] text-white/10 mt-0.5">Tap any odds to add a selection</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Load Booked Bet Form — hidden while an active booking is showing */}
+                        {!(bookedId && bookedCountdown > 0) && (
+                            <div className="w-full max-w-[280px] mt-auto border-t border-white/[0.06] pt-4">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <BookMarked size={12} className="text-white/30" />
+                                    <p className="text-[10px] font-bold text-white/30 uppercase tracking-wider">Load Booking Code</p>
+                                </div>
+                                <form onSubmit={handleLoadCode} className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        placeholder="e.g. 0-NLCCV4"
+                                        value={loadCode}
+                                        onChange={(e) => setLoadCode(e.target.value.toUpperCase())}
+                                        className="flex-1 bg-white/[0.04] border border-white/[0.08] focus:border-brand-gold/40 rounded-xl px-3 py-2.5 text-[12px] font-black tracking-widest text-white uppercase outline-none placeholder:text-white/20 placeholder:font-normal placeholder:tracking-normal"
+                                    />
+                                    <button
+                                        type="submit"
+                                        disabled={!loadCode.trim() || loadingCode}
+                                        className={`px-4 rounded-xl font-bold text-[11px] transition-all ${!loadCode.trim() || loadingCode ? 'bg-white/[0.04] text-white/20 cursor-not-allowed border border-white/[0.04]' : 'bg-brand-gold hover:bg-brand-gold-hover text-text-inverse shadow-glow-gold active:scale-[0.97]'}`}
+                                    >
+                                        {loadingCode ? <span className="w-3 h-3 border-2 border-black/20 border-t-black rounded-full animate-spin inline-block align-middle" /> : 'Load'}
+                                    </button>
+                                </form>
+                                <p className="text-[9px] text-white/15 mt-2 text-center">Booking codes are valid for 2 minutes · one-time use</p>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <BetslipList bets={bets} sym={sym} onRemove={removeBet} onStake={updateStake} />
+                )
+            ) : myBets.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-14 gap-3 text-center select-none">
+                    <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.05] flex items-center justify-center">
+                        <BookMarked size={22} className="text-white/10" />
+                    </div>
+                    <p className="text-[12px] font-bold text-white/20">No bets yet</p>
+                </div>
+            ) : (
+                <div className="space-y-2">
+                    {myBets.map(bet => {
+                        const { chip, bar } = statusStyle(bet.status);
+                        const partial = hasPartialCashout(bet);
+                        const lb = isLineBasedFancyMarket({ marketType: (bet as any).gtype, marketName: bet.marketName, selectionName: bet.selectionName });
+                        const pnl = getBetNetPnL(bet);
+                        return (
+                            <div key={bet.id} className="relative rounded-xl bg-bg-surface-2 border border-white/[0.07] overflow-hidden">
+                                <span className={`absolute inset-y-0 left-0 w-[3px] rounded-r-full ${bar}`} />
+                                <div className="pl-4 pr-3 pt-3 pb-3 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border uppercase tracking-wider ${chip}`}>{bet.status.replace('_', ' ')}</span>
+                                        <span className="text-[9px] text-white/20 flex items-center gap-1"><Clock size={9} />{new Date(bet.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                    </div>
+                                    <div>
+                                        <p className="text-[11px] font-bold text-white truncate">{bet.eventName}</p>
+                                        <p className="text-[10px] text-white/30 mt-0.5 flex items-center gap-1.5">
+                                            <span className="text-white/55 font-semibold truncate">{bet.selectionName}</span>
+                                            <span className="text-white/10">·</span>
+                                            {lb ? <span>Runs <span className="text-white/55 font-bold">{bet.odds}</span></span>
+                                                : <span>Odds <span className="text-white/55 font-bold">×{Number(bet.odds).toFixed(2)}</span></span>}
+                                        </p>
+                                    </div>
+                                    {partial && (
+                                        <p className="text-[10px] text-warning/80 bg-warning-alpha-08 rounded-lg px-2.5 py-1.5">
+                                            Partial cash out: {sym}{getBetPartialCashoutValue(bet).toFixed(2)}
+                                        </p>
+                                    )}
+                                    <div className="rounded-xl bg-white/[0.03] border border-white/[0.04] px-3 py-2.5 text-[10px] grid grid-cols-2 gap-x-4 gap-y-1.5">
+                                        <span className="text-white/30">{partial ? 'Remaining' : 'Stake'}</span>
+                                        <span className="text-right font-bold text-white/55 tabular-nums">{sym}{bet.stake}</span>
+                                        {partial && (<><span className="text-white/30">Original</span><span className="text-right font-bold text-white/55 tabular-nums">{sym}{getBetOriginalStake(bet).toFixed(2)}</span></>)}
+                                        <span className="text-white/30">{bet.status === 'PENDING' ? 'Max Return' : 'Returned'}</span>
+                                        <span className={`text-right font-bold tabular-nums ${bet.status === 'WON' ? 'text-success-bright' : bet.status === 'CASHED_OUT' ? 'text-warning' : bet.status === 'PENDING' ? 'text-warning-bright' : 'text-white/55'}`}>
+                                            {sym}{(bet.status === 'PENDING' ? getBetPendingMaxReturn(bet) : (getBetSettledReturn(bet) ?? bet.potentialWin)).toFixed(2)}
+                                        </span>
+                                        {bet.status !== 'PENDING' && pnl !== null && (
+                                            <><span className="text-white/30">Net P&amp;L</span><span className={`text-right font-bold tabular-nums ${pnl >= 0 ? 'text-success-bright' : 'text-danger'}`}>{pnl >= 0 ? '+' : '-'}{sym}{Math.abs(pnl).toFixed(2)}</span></>
+                                        )}
+                                    </div>
+                                    {bet.status === 'PENDING' && <SportsBetCashoutWidget bet={bet} onSuccess={async () => { await Promise.all([refreshMyBets(), refreshWallet()]); }} compact />}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+
+    /** Footer with quick stakes + summary + CTA */
+    const Footer = () => (
+        <div className="px-3 pt-3 pb-4 border-t border-white/[0.06] bg-bg-deep-3 space-y-3 flex-shrink-0">
+            {/* Quick stakes */}
+            <div className="grid grid-cols-4 gap-1.5">
+                {QUICK_STAKES.map(amt => (
+                    <button key={amt}
+                        onClick={() => bets.forEach(b => updateStake(b.id, amt))}
+                        className="py-2 rounded-xl bg-white/[0.04] hover:bg-brand-gold/10 text-white/35 hover:text-brand-gold text-[10px] font-bold border border-white/[0.04] hover:border-brand-gold/20 transition-all active:scale-95">
+                        {amt >= 1000 ? `${amt / 1000}K` : amt}
+                    </button>
+                ))}
+            </div>
+
+            {/* Summary */}
+            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+                <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/[0.04] text-[10px]">
+                    <span className="text-white/30">Wallet</span>
+                    <span className={`font-bold text-[9px] px-2 py-0.5 rounded-lg border ${selectedWallet === 'crypto' ? 'bg-brand-alpha-08 text-accent-purple border-accent-purple/20' : 'bg-brand-alpha-08 text-brand-gold border-brand-gold/20'}`}>
+                        {selectedSubWallet.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' ')} · {sym}{activeBalance.toFixed(2)}
+                    </span>
+                </div>
+                <div className="px-3.5 py-3 space-y-1.5 text-[11px]">
+                    <div className="flex justify-between"><span className="text-white/30">Total Stake</span><span className="font-black text-white tabular-nums">{sym}{totalStake.toLocaleString('en-IN')}</span></div>
+                    <div className="flex justify-between"><span className="text-white/30">Potential Profit</span><span className="font-black text-brand-gold tabular-nums">{sym}{fmtMoney(totalProfit)}</span></div>
+                    <div className="flex justify-between border-t border-white/[0.04] pt-1.5 mt-0.5">
+                        <span className="text-white/50 font-bold">Total Return</span>
+                        <span className="font-black text-white tabular-nums text-[13px]">{sym}{fmtMoney(totalPotentialWin)}</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Feedback banner */}
+            {feedback && (
+                <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 text-[11px] font-semibold ${feedback.ok ? 'bg-success-alpha-10 text-success-bright border border-success/15' : 'bg-danger-alpha-10 text-danger border border-danger/15'}`}>
+                    {feedback.ok ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
+                    {feedback.msg}
+                </div>
+            )}
+
+            {/* Active booking code banner with countdown + dismiss */}
+            {bookedId && bookedCountdown > 0 && (
+                <div className="rounded-xl bg-brand-gold/10 border border-brand-gold/30 overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2.5 gap-2">
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-[9px] text-brand-gold/60 uppercase font-bold tracking-wider">Booking Code</span>
+                            <span className="text-[15px] font-black text-brand-gold tracking-[0.2em]">{bookedId}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <div className="flex flex-col items-end">
+                                <span className="text-[8px] text-white/30 uppercase font-bold">Expires</span>
+                                <span className={`text-[12px] font-black tabular-nums ${bookedCountdown <= 30 ? 'text-danger' : bookedCountdown <= 60 ? 'text-warning-bright' : 'text-brand-gold'}`}>
+                                    {Math.floor(bookedCountdown / 60)}:{String(bookedCountdown % 60).padStart(2, '0')}
+                                </span>
+                            </div>
+                            <button onClick={copyBookingId} title="Copy code" className="p-1.5 bg-brand-gold/20 hover:bg-brand-gold/30 rounded-lg text-brand-gold transition-colors active:scale-90">
+                                <Clipboard size={13} />
+                            </button>
+                            <button onClick={dismissBooking} title="Dismiss" className="p-1.5 bg-white/[0.04] hover:bg-danger-alpha-08 rounded-lg text-white/30 hover:text-danger transition-colors active:scale-90">
+                                <X size={13} />
+                            </button>
+                        </div>
+                    </div>
+                    <div className="h-[2px] bg-black/20">
+                        <div
+                            className={`h-full transition-all duration-1000 ease-linear rounded-full ${bookedCountdown <= 30 ? 'bg-danger' : bookedCountdown <= 60 ? 'bg-warning-bright' : 'bg-brand-gold'}`}
+                            style={{ width: `${(bookedCountdown / 120) * 100}%` }}
+                        />
+                    </div>
+                    <p className="text-[9px] text-brand-gold/40 px-3 py-1.5 text-center">Share this code. It can only be used once within the timer.</p>
+                </div>
+            )}
+
+            {/* Load booking code (shown when slip is empty and no active booking) */}
+            {bets.length === 0 && !(bookedId && bookedCountdown > 0) && (
+                <form onSubmit={handleLoadCode} className="flex gap-2">
+                    <div className="relative flex-1">
+                        <BookMarked size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none" />
+                        <input
+                            type="text"
+                            placeholder="Enter Booking Code"
+                            value={loadCode}
+                            onChange={(e) => setLoadCode(e.target.value.toUpperCase())}
+                            className="w-full bg-white/[0.04] border border-white/[0.08] focus:border-brand-gold/40 rounded-xl pl-8 pr-3 py-2.5 text-[12px] font-black tracking-widest text-white uppercase outline-none placeholder:text-white/20 placeholder:font-normal placeholder:tracking-normal"
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={!loadCode.trim() || loadingCode}
+                        className={`px-4 rounded-xl font-bold text-[11px] transition-all ${!loadCode.trim() || loadingCode ? 'bg-white/[0.04] text-white/20 cursor-not-allowed border border-white/[0.04]' : 'bg-brand-gold hover:bg-brand-gold-hover text-text-inverse shadow-glow-gold active:scale-[0.97]'}`}
+                    >
+                        {loadingCode ? <span className="w-3 h-3 border-2 border-black/20 border-t-black rounded-full animate-spin inline-block align-middle" /> : 'Load'}
+                    </button>
+                </form>
+            )}
+
+            {/* CTA row — only show when there are bets to act on (not during active booking view) */}
+            {bets.length > 0 && (
+                <div className="flex gap-2">
+                    {bets.length > 1 && (
+                        <button onClick={() => clearBets()} title="Clear all"
+                            className="w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-xl bg-white/[0.04] border border-white/[0.06] hover:bg-danger-alpha-08 hover:border-danger/20 text-white/20 hover:text-danger transition-all active:scale-90">
+                            <Trash2 size={13} />
+                        </button>
+                    )}
+                    {!isAuthenticated ? (
+                        <>
+                            <button onClick={handleBookBet} disabled={booking || !canPlace}
+                                className={`flex-1 h-11 flex items-center justify-center gap-1.5 rounded-xl font-bold text-[11px] uppercase tracking-wider transition-all active:scale-[0.97] ${booking || !canPlace ? 'bg-white/[0.04] text-white/20 cursor-not-allowed border border-white/[0.04]' : 'bg-white/[0.08] hover:bg-white/[0.12] text-white border border-white/[0.06]'}`}>
+                                {booking ? <span className="w-3 h-3 border-2 border-white/[0.12] border-t-white rounded-full animate-spin" /> : <Share2 size={13} />}
+                                Book
+                            </button>
+                            <button onClick={openLogin}
+                                className="flex-[1.5] h-11 flex items-center justify-center gap-1.5 rounded-xl bg-brand-gold hover:bg-brand-gold-hover text-white font-black text-[11px] uppercase tracking-wider transition-all active:scale-[0.97] shadow-glow-gold">
+                                <User size={13} /> Login
+                            </button>
+                        </>
+                    ) : (
+                        <button onClick={handlePlace} disabled={placing || !canPlace}
+                            className={`flex-1 h-11 flex items-center justify-center gap-2 rounded-xl font-black text-[12px] uppercase tracking-wider transition-all active:scale-[0.97] ${placing || !canPlace ? 'bg-white/[0.04] text-white/20 cursor-not-allowed border border-white/[0.04]' : 'bg-brand-gold hover:bg-brand-gold-hover text-white shadow-glow-gold'}`}>
+                            {placing && <span className="w-3.5 h-3.5 border-[2.5px] border-black/20 border-t-black rounded-full animate-spin" />}
+                            {placing ? 'Placing…' : `Place ${bets.length > 1 ? `${bets.length} Bets` : 'Bet'} · ${sym}${totalStake.toLocaleString('en-IN')}`}
+                        </button>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+
+    // ── STATIC mode (match detail sidebar) ────────────────────────────────────
+    if (mode === 'static') {
+        return (
+            <div className={`w-full flex flex-col bg-bg-game-dark border border-white/[0.08] rounded-2xl overflow-hidden h-auto ${className}`}>
+                <SlimHeader showTabs={false} />
+                <TabRow />
+                <div className="flex-1 overflow-hidden flex flex-col max-h-[440px]">
+                    <Content />
+                    {tab === 'slip' && (bets.length > 0 || (bookedId && bookedCountdown > 0)) && <Footer />}
+                </div>
             </div>
         );
     }
 
-    /* ─── Expanded Panel ─── */
+    // ── FLOATING mode ─────────────────────────────────────────────────────────
+    // Mobile:  Sheet slides up from bottom-0, sits BEHIND the nav (z-45 < z-50).
+    //          FAB pill floats ABOVE the nav (z-51) as the toggle trigger.
+    // Desktop: right-aligned 360px slide-up panel (z-60, unchanged).
+    const CARD_H   = 68;
+    const GAP      = 6;
+    const maxBetsH = CARD_H * 3 + GAP * 2; // 216px — 3 cards
+
     return (
-        <aside
-            className={`fixed left-2 right-2 md:left-auto md:right-4 xl:right-6 md:w-[380px] z-50 flex flex-col font-sans overflow-hidden ${className}`}
-            style={{
-                bottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
-                maxHeight: 'calc(100vh - 160px)',
-            }}
-        >
-            {/* Glass background container */}
-            <div className="bg-[#12141a]/95 backdrop-blur-2xl rounded-3xl shadow-[0_16px_64px_rgba(0,0,0,0.6)] border border-white/[0.08] flex flex-col overflow-hidden" style={{ maxHeight: 'inherit' }}>
+        <>
+            {/* ════════════════════════════════════════════════════════════════
+                MOBILE — only on /sports & /sports/match/... routes
+             ════════════════════════════════════════════════════════════════ */}
 
-                {/* ── Header ── */}
-                <div className="flex items-center justify-between px-5 py-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-[0_0_8px_rgba(59,193,23,0.2)]">
-                            <Ticket size={14} className="text-white" />
-                        </div>
-                        <div>
-                            <span className="text-[14px] font-bold text-white">Betslip</span>
-                            {bets.length > 0 && (
-                                <span className="ml-2 bg-emerald-500/15 text-emerald-400 text-[10px] font-black px-2 py-0.5 rounded-full">
-                                    {bets.length}
-                                </span>
-                            )}
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                        {/* Tab Switcher */}
-                        <div className="flex bg-white/[0.04] rounded-xl p-0.5">
-                            <button
-                                onClick={() => setActiveTab('betslip')}
-                                className={`text-[11px] font-bold px-3.5 py-1.5 rounded-lg transition-all ${activeTab === 'betslip'
-                                    ? 'bg-emerald-500/15 text-emerald-400 shadow-sm'
-                                    : 'text-white/30 hover:text-white/60'
-                                    }`}
-                            >
-                                Slip
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('mybets')}
-                                className={`text-[11px] font-bold px-3.5 py-1.5 rounded-lg transition-all ${activeTab === 'mybets'
-                                    ? 'bg-emerald-500/15 text-emerald-400 shadow-sm'
-                                    : 'text-white/30 hover:text-white/60'
-                                    }`}
-                            >
-                                My Bets
-                            </button>
-                        </div>
-                        <button
-                            onClick={toggleBetslip}
-                            className="ml-1 p-2 text-white/20 hover:text-white/60 hover:bg-white/[0.06] rounded-xl transition-all"
-                        >
-                            <ChevronUp size={16} className="rotate-180" />
-                        </button>
-                    </div>
-                </div>
-
-                {/* ── Feedback Banner ── */}
-                {feedback && (
-                    <div
-                        className={`mx-4 mb-2 px-4 py-2.5 rounded-xl text-[11px] font-bold flex items-center gap-2 ${feedback.type === 'success'
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/15'
-                            : 'bg-red-500/10 text-red-400 border border-red-500/15'
-                            }`}
-                    >
-                        {feedback.type === 'success' ? <CheckCircle size={13} /> : <AlertCircle size={13} />}
-                        {feedback.message}
-                    </div>
-                )}
-
-                {/* ── Content ── */}
+            {/* ── Backdrop: behind nav (z-44 < nav z-50) ── */}
+            {isBetslipOpen && (
                 <div
-                    className="flex-1 overflow-y-auto px-4 pb-2 space-y-3"
-                    style={{ scrollbarWidth: 'thin', scrollbarColor: '#252830 transparent' }}
+                    className="fixed inset-0 z-[44] bg-black/55 backdrop-blur-[2px] md:hidden"
+                    onClick={toggleBetslip}
+                />
+            )}
+
+            {/* ── Bottom sheet: behind nav (z-45), starts at bottom-0 ── */}
+            <div
+                className={`fixed z-[45] inset-x-0 bottom-0 md:hidden ${className}`}
+                style={{ pointerEvents: isBetslipOpen ? 'auto' : 'none' }}
+            >
+                <div
+                    style={{
+                        transform: isBetslipOpen ? 'translateY(0)' : 'translateY(100%)',
+                        transition: 'transform 0.3s cubic-bezier(0.32,0.72,0,1)',
+                        willChange: 'transform',
+                        height: 'calc(100dvh - 64px)',
+                        paddingBottom: 'var(--mobile-nav-height)',
+                    }}
+                    className="flex flex-col rounded-t-2xl border border-b-0 border-white/[0.08] bg-bg-game-dark overflow-hidden shadow-betslip"
                 >
-                    {activeTab === 'betslip' ? (
-                        bets.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-16 text-center">
-                                <div className="w-16 h-16 rounded-2xl bg-white/[0.03] flex items-center justify-center mb-4">
-                                    <Ticket size={24} className="text-white/10" />
+                    {/* Drag handle */}
+                    <div className="flex justify-center pt-2.5 pb-1">
+                        <div className="w-10 h-1 rounded-full bg-white/15" />
+                    </div>
+
+                    <SlimHeader />
+                    {oneClickEnabled && <QuickStakeBar />}
+                    <TabRow />
+
+                    <div className="flex-1 overflow-y-auto overscroll-contain bg-bg-game-dark flex flex-col pt-2 pb-16">
+                        {tab === 'slip' && (
+                            bets.length === 0 ? (
+                                <div className="flex flex-col h-full items-center justify-center py-24 gap-2 text-center select-none bg-bg-game-dark">
+                                    <span className="text-2xl">🎟️</span>
+                                    <p className="text-[11px] font-bold text-white/20">Betslip is empty</p>
+                                    <p className="text-[9px] text-white/10">Tap any odds to add a selection</p>
                                 </div>
-                                <p className="text-[13px] font-semibold text-white/20">Your betslip is empty</p>
-                                <p className="text-[11px] text-white/10 mt-1">Tap any odds to add a selection</p>
+                            ) : (
+                                <div className="px-2.5 h-full">
+                                    <BetslipList bets={bets} sym={sym} onRemove={removeBet} onStake={updateStake} />
+                                    <div className="h-4" />
+                                </div>
+                            )
+                        )}
+
+                        {tab === 'mybets' && (
+                            myBets.length === 0 ? (
+                                <div className="flex flex-col h-full items-center justify-center py-24 gap-2 text-center select-none bg-bg-game-dark">
+                                    <BookMarked size={18} className="text-white/10" />
+                                    <p className="text-[11px] font-bold text-white/20">No bets yet</p>
+                                </div>
+                            ) : (
+                                <div className="px-2.5 space-y-1.5 h-full pt-2">
+                                    {myBets.map(bet => {
+                                        const { chip, bar } = statusStyle(bet.status);
+                                        const lb = isLineBasedFancyMarket({ marketType: (bet as any).gtype, marketName: bet.marketName, selectionName: bet.selectionName });
+                                        return (
+                                            <div key={bet.id} className="relative rounded-xl bg-bg-surface-2 border border-white/[0.07] overflow-hidden">
+                                                <span className={`absolute inset-y-0 left-0 w-[3px] rounded-r-full ${bar}`} />
+                                                <div className="pl-3.5 pr-2.5 py-2 space-y-1.5">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border ${chip}`}>{bet.status === 'PENDING' ? 'ACCEPTED' : bet.status.replace('_', ' ')}</span>
+                                                        <span className="text-[9px] text-white/20">{new Date(bet.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                    </div>
+                                                    <p className="text-[10px] font-bold text-white truncate">{bet.eventName}</p>
+                                                    <p className="text-[9px] text-white/40 truncate">{bet.selectionName} · {lb ? `Runs ${bet.odds}` : `×${Number(bet.odds).toFixed(2)}`}</p>
+                                                    <div className="flex justify-between text-[9px] pt-1 border-t border-white/[0.04]">
+                                                        <span className="text-white/30">Stake <span className="text-white/55 font-bold">{sym}{bet.stake}</span></span>
+                                                        <span className={`font-bold ${bet.status === 'WON' ? 'text-success-bright' : bet.status === 'CASHED_OUT' ? 'text-warning' : 'text-warning-bright'}`}>
+                                                            {sym}{(bet.status === 'PENDING' ? getBetPendingMaxReturn(bet) : (getBetSettledReturn(bet) ?? bet.potentialWin)).toFixed(2)}
+                                                        </span>
+                                                    </div>
+                                                    {bet.status === 'PENDING' && <SportsBetCashoutWidget bet={bet} onSuccess={async () => { await Promise.all([refreshMyBets(), refreshWallet()]); }} compact />}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )
+                        )}
+                    </div>
+
+                    {tab === 'slip' && (bets.length > 0 || (bookedId && bookedCountdown > 0)) && (
+                        <div className="mt-auto">
+                            <Footer />
+                        </div>
+                    )}
+                </div>
+            </div>
+
+
+
+
+            {/* ── Desktop (md+): Structural right sidebar (pushes main content) ── */}
+            <div
+                ref={desktopDrawerRef}
+                className={`${isSportsRoute ? 'hidden md:block' : 'hidden'} sticky top-0 h-[100dvh] flex-shrink-0 transition-[width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] z-[40] ${className}`}
+                style={{
+                    width: isBetslipOpen ? 360 : 0,
+                    pointerEvents: 'auto', // Always intercept clicks on the drawer (and its left handle)
+                }}
+            >
+                {/* Inner fixed-width container */}
+                <div 
+                    className="absolute top-[64px] left-0 bottom-0 w-[360px] flex flex-col border-l border-white/[0.08] bg-bg-game-dark shadow-[var(--tw-shadow)]"
+                    style={{
+                        boxShadow: isBetslipOpen ? '-8px 0 30px rgba(0,0,0,0.5)' : 'none'
+                    }}
+                >
+                {/* Desktop Toggle Button attached to sliding drawer */}
+                <button
+                    onClick={toggleBetslip}
+                    className={`absolute top-1/2 -translate-y-1/2 -left-[40px] flex items-center justify-center bg-bg-deep-3 border border-white/[0.1] border-r-0 rounded-l-xl shadow-[-8px_0_24px_rgba(0,0,0,0.5)] transition-colors w-[40px] h-24 z-10 ${isBetslipOpen ? 'hover:bg-danger-alpha-10' : 'hover:bg-brand-gold/10'}`}
+                    aria-label={isBetslipOpen ? "Close betslip" : "Open betslip"}
+                >
+                   <div className="flex flex-col items-center gap-2 text-brand-gold">
+                      <AnimatedBadge count={bets.length} />
+                      <span className="[writing-mode:vertical-lr] text-[11px] font-black tracking-widest rotate-180">BETSLIP</span>
+                   </div>
+                </button>
+
+                <div className="flex flex-col h-full overflow-hidden bg-bg-game-dark">
+                    <SlimHeader />
+                    {oneClickEnabled && <QuickStakeBar />}
+                    <TabRow />
+
+                    <div className="flex-1 overflow-auto bg-bg-game-dark flex flex-col pt-2 pb-16">
+                        {tab === 'slip' && (
+                            bets.length === 0 ? (
+                                <div className="flex flex-col h-full items-center justify-center py-24 gap-2 text-center select-none bg-bg-game-dark">
+                                <span className="text-2xl">🎟️</span>
+                                <p className="text-[11px] font-bold text-white/20">Betslip is empty</p>
+                                <p className="text-[9px] text-white/10">Tap any odds to add a selection</p>
                             </div>
                         ) : (
-                            bets.map((bet) => (
-                                <BetCard
-                                    key={bet.id}
-                                    bet={bet}
-                                    activeSymbol={activeSymbol}
-                                    onRemove={removeBet}
-                                    onStake={updateStake}
-                                />
-                            ))
-                        )
-                    ) : myBets.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-16 text-center">
-                            <div className="w-16 h-16 rounded-2xl bg-white/[0.03] flex items-center justify-center mb-4">
-                                <History size={24} className="text-white/10" />
+                            <div className="px-2.5 h-full">
+                                <BetslipList bets={bets} sym={sym} onRemove={removeBet} onStake={updateStake} />
+                                <div className="h-4" />
                             </div>
-                            <p className="text-[13px] font-semibold text-white/20">No bets placed yet</p>
-                        </div>
-                    ) : (
-                        myBets.map((bet) => {
-                            const partialCashoutTaken = hasPartialCashout(bet);
-                            const partialCashoutValue = getBetPartialCashoutValue(bet);
-                            const originalStake = getBetOriginalStake(bet);
-                            const pendingMaxReturn = getBetPendingMaxReturn(bet);
-                            const settledReturn = getBetSettledReturn(bet);
-                            const betNetPnl = getBetNetPnL(bet);
+                        )
+                    )}
 
-                            const statusCls = bet.status === 'WON'
-                                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20'
-                                : bet.status === 'LOST'
-                                    ? 'bg-red-500/15 text-red-400 border-red-500/20'
-                                    : bet.status === 'CASHED_OUT'
-                                        ? 'bg-orange-500/15 text-orange-300 border-orange-500/20'
-                                        : bet.status === 'VOID'
-                                            ? 'bg-white/5 text-white/40 border-white/10'
-                                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
-
-                            return (
-                                <div key={bet.id} className="bg-gradient-to-br from-white/[0.04] to-white/[0.01] rounded-2xl p-4 border border-white/[0.06] space-y-3">
-                                    {/* Status + Time */}
-                                    <div className="flex items-center justify-between">
-                                        <span className={`text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border ${statusCls}`}>
-                                            {bet.status}
-                                        </span>
-                                        <span className="text-[10px] text-white/20">
-                                            {new Date(bet.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                    </div>
-
-                                    {/* Event */}
-                                    <div>
-                                        <div className="text-[12px] text-white/90 font-semibold mb-1 line-clamp-1">{bet.eventName}</div>
-                                        <div className="text-[11px] text-white/30">
-                                            {bet.selectionName} {isLineBasedFancyMarket({
-                                                marketType: (bet as { gtype?: string }).gtype,
-                                                marketName: bet.marketName,
-                                                selectionName: bet.selectionName,
-                                            }) ? <><span className="text-white/15">·</span> Runs: <span className="text-white/60 font-bold">{bet.odds}</span></> : <>@ <span className="text-white/60 font-bold">{bet.odds}</span></>}
-                                        </div>
-                                        {partialCashoutTaken && (
-                                            <div className="mt-1 text-[10px] text-orange-300/75">
-                                                Realized cash out: {activeSymbol}{partialCashoutValue.toFixed(2)}
+                    {tab === 'mybets' && (
+                        myBets.length === 0 ? (
+                            <div className="flex flex-col h-full items-center justify-center py-24 gap-2 text-center select-none bg-bg-game-dark">
+                                <BookMarked size={18} className="text-white/10" />
+                                <p className="text-[11px] font-bold text-white/20">No bets yet</p>
+                            </div>
+                        ) : (
+                            <div className="px-2.5 space-y-1.5 h-full pt-2">
+                                {myBets.map(bet => {
+                                    const { chip, bar } = statusStyle(bet.status);
+                                    const lb = isLineBasedFancyMarket({ marketType: (bet as any).gtype, marketName: bet.marketName, selectionName: bet.selectionName });
+                                    return (
+                                        <div key={bet.id} className="relative rounded-xl bg-bg-surface-2 border border-white/[0.07] overflow-hidden">
+                                            <span className={`absolute inset-y-0 left-0 w-[3px] rounded-r-full ${bar}`} />
+                                            <div className="pl-3.5 pr-2.5 py-2 space-y-1.5">
+                                                <div className="flex items-center justify-between">
+                                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border ${chip}`}>{bet.status === 'PENDING' ? 'ACCEPTED' : bet.status.replace('_', ' ')}</span>
+                                                    <span className="text-[9px] text-white/20">{new Date(bet.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                </div>
+                                                <p className="text-[10px] font-bold text-white truncate">{bet.eventName}</p>
+                                                <p className="text-[9px] text-white/40 truncate">{bet.selectionName} · {lb ? `Runs ${bet.odds}` : `×${Number(bet.odds).toFixed(2)}`}</p>
+                                                <div className="flex justify-between text-[9px] pt-1 border-t border-white/[0.04]">
+                                                    <span className="text-white/30">Stake <span className="text-white/55 font-bold">{sym}{bet.stake}</span></span>
+                                                    <span className={`font-bold ${bet.status === 'WON' ? 'text-success-bright' : bet.status === 'CASHED_OUT' ? 'text-warning' : 'text-warning-bright'}`}>
+                                                        {sym}{(bet.status === 'PENDING' ? getBetPendingMaxReturn(bet) : (getBetSettledReturn(bet) ?? bet.potentialWin)).toFixed(2)}
+                                                    </span>
+                                                </div>
+                                                {bet.status === 'PENDING' && <SportsBetCashoutWidget bet={bet} onSuccess={async () => { await Promise.all([refreshMyBets(), refreshWallet()]); }} compact />}
                                             </div>
-                                        )}
-                                    </div>
-
-                                    {/* Stats Grid */}
-                                    <div className="rounded-xl border border-white/[0.05] bg-black/20 px-3 py-2.5 text-[11px] space-y-1.5">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-white/25">{partialCashoutTaken ? 'Remaining Stake' : 'Stake'}</span>
-                                            <span className="text-white/60 font-bold">{activeSymbol}{bet.stake}</span>
                                         </div>
-                                        {partialCashoutTaken && (
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-white/25">Original Stake</span>
-                                                <span className="text-white/60 font-bold">{activeSymbol}{originalStake.toFixed(2)}</span>
-                                            </div>
-                                        )}
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-white/25">{bet.status === 'PENDING' ? 'Max Return' : 'Total Returned'}</span>
-                                            <span className={`font-bold ${bet.status === 'PENDING' ? 'text-amber-300' : bet.status === 'WON' ? 'text-emerald-400' : bet.status === 'CASHED_OUT' ? 'text-orange-300' : 'text-white/60'}`}>
-                                                {activeSymbol}{(bet.status === 'PENDING' ? pendingMaxReturn : (settledReturn ?? bet.potentialWin)).toFixed(2)}
-                                            </span>
-                                        </div>
-                                        {bet.status !== 'PENDING' && betNetPnl !== null && (
-                                            <div className="flex items-center justify-between pt-1.5 border-t border-white/[0.04]">
-                                                <span className="text-white/25">Net P&L</span>
-                                                <span className={`font-bold ${betNetPnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                    {betNetPnl >= 0 ? '+' : '-'}{activeSymbol}{Math.abs(betNetPnl).toFixed(2)}
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {bet.status === 'PENDING' && (
-                                        <SportsBetCashoutWidget
-                                            bet={bet}
-                                            onSuccess={handleCashoutSuccess}
-                                            compact
-                                        />
-                                    )}
-                                </div>
-                            );
-                        })
+                                    );
+                                })}
+                            </div>
+                        )
                     )}
                 </div>
 
-                {/* ── Footer (only when betslip has bets) ── */}
-                {activeTab === 'betslip' && bets.length > 0 && (
-                    <div className="p-4 border-t border-white/[0.05]">
-                        {/* Quick Stakes */}
-                        <div className="flex gap-2 mb-3">
-                            {quickStakes.map((amount) => (
-                                <button
-                                    key={amount}
-                                    onClick={() => bets.forEach((b) => updateStake(b.id, amount))}
-                                    className="flex-1 bg-white/[0.04] hover:bg-white/[0.08] text-white/40 hover:text-white text-[11px] font-bold py-2 rounded-xl transition-all border border-white/[0.04] hover:border-emerald-500/20"
-                                >
-                                    +{amount >= 1000 ? `${amount / 1000}k` : amount}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Summary */}
-                        <div className="bg-black/20 rounded-2xl px-4 py-3 mb-3 border border-white/[0.04] space-y-2">
-                            <div className="flex justify-between items-center text-[11px]">
-                                <span className="text-white/25">Wallet</span>
-                                <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${selectedWallet === 'crypto' ? 'bg-purple-500/15 text-purple-400' : 'bg-brand-gold/10 text-brand-gold'}`}>
-                                    {selectedWallet === 'crypto' ? '$ Crypto' : `${activeSymbol} Fiat`} · {activeSymbol}{activeBalance.toFixed(2)}
-                                </span>
-                            </div>
-                            <div className="flex justify-between items-center text-[12px]">
-                                <span className="text-white/30">Total Stake</span>
-                                <span className="text-white font-bold">{activeSymbol}{totalStake.toLocaleString('en-IN')}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-[12px]">
-                                <span className="text-white/30">Potential Win</span>
-                                <span className="text-emerald-400 font-black text-[14px]">
-                                    {activeSymbol}{Math.floor(totalPotentialWin).toLocaleString('en-IN')}
-                                </span>
-                            </div>
-                        </div>
-
-                        {/* CTA */}
-                        {!isAuthenticated ? (
-                            <button
-                                onClick={openLogin}
-                                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-black py-3.5 rounded-2xl text-[13px] uppercase tracking-wider transition-all active:scale-[0.98] shadow-[0_4px_20px_rgba(59,193,23,0.25)]"
-                            >
-                                Login to Place Bet
-                            </button>
-                        ) : (
-                            <button
-                                onClick={handlePlaceBet}
-                                disabled={placing || bets.every((b) => !b.stake || b.stake <= 0)}
-                                className={`w-full flex items-center justify-center gap-2 font-black py-3.5 rounded-2xl text-[13px] uppercase tracking-wider transition-all active:scale-[0.98] ${placing || bets.every((b) => !b.stake || b.stake <= 0)
-                                    ? 'bg-white/[0.04] text-white/15 cursor-not-allowed'
-                                    : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white shadow-[0_4px_20px_rgba(59,193,23,0.25)]'
-                                    }`}
-                            >
-                                {placing && (
-                                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                )}
-                                {placing ? 'Placing...' : `Place Bet — ${activeSymbol}${totalStake}`}
-                            </button>
-                        )}
-                    </div>
+                {/* Footer pinned at bottom of drawer */}
+                {tab === 'slip' && (bets.length > 0 || (bookedId && bookedCountdown > 0)) && (
+                   <div className="mt-auto">
+                       <Footer />
+                   </div>
                 )}
+                </div>
+                </div>
             </div>
-        </aside>
+        </>
     );
 }

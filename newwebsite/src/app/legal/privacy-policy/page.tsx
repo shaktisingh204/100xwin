@@ -73,7 +73,17 @@ const SECTIONS = [
         ]
     },
     {
-        title: '9. Contact Us',
+        title: '9. Fraud Detection & Multi-Account Prevention',
+        content: [
+            'To enforce our single-account policy and detect fraudulent activity, we collect and process a broad range of technical signals, including: IP addresses, device fingerprints, browser characteristics, login timestamps, GPS/location data (where permitted), and payment instrument metadata.',
+            'These signals are matched against our existing user database to identify accounts that may belong to the same individual or coordinated group. This processing is conducted in the legitimate interest of maintaining a fair and secure platform.',
+            'Data collected for fraud detection purposes is retained for up to seven (7) years to enable historical cross-referencing and regulatory reporting.',
+            'Attempting to circumvent fraud detection systems — for example, by using VPNs, device emulators, or multiple payment methods — is a Terms of Service violation and does not constitute grounds for objection to this processing.',
+            'If you believe you have been incorrectly flagged, please contact our compliance team with supporting documentation. We will review all credible appeals on a case-by-case basis.',
+        ]
+    },
+    {
+        title: '10. Contact Us',
         content: [
             'For privacy-related enquiries or to exercise your data rights, please contact us through our Support page or email our Data Protection Officer at privacy@zeero.bet.',
         ]
@@ -82,24 +92,24 @@ const SECTIONS = [
 
 export default function PrivacyPolicyPage() {
     return (
-        <div className="min-h-[calc(100vh-64px)] bg-[#0E0F11] text-white pb-24">
+        <div className="min-h-[calc(100vh-64px)] bg-bg-zeero-3 text-white pb-24">
 
             {/* Header */}
-            <div className="relative overflow-hidden bg-gradient-to-b from-purple-500/6 via-[#111315] to-[#0E0F11] border-b border-white/5">
+            <div className="relative overflow-hidden bg-gradient-to-b from-purple-500/6 via-[#0F1016] to-[#0C0D12] border-b border-white/[0.04]">
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_0%,rgba(168,85,247,0.08),transparent_60%)]" />
                 <div className="relative max-w-3xl mx-auto px-4 pt-10 pb-8 text-center">
                     <div className="hidden md:flex absolute top-6 left-4">
-                        <Link href="/" className="flex items-center gap-2 text-text-muted hover:text-white transition-colors text-sm font-medium bg-white/5 hover:bg-white/10 border border-white/5 px-4 py-2 rounded-full">
+                        <Link href="/" className="flex items-center gap-2 text-text-muted hover:text-white transition-colors text-sm font-medium bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.04] px-4 py-2 rounded-full">
                             <Home size={14} /> Back to Home
                         </Link>
                     </div>
-                    <div className="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 rounded-full px-4 py-1.5 text-purple-400 text-xs font-black uppercase tracking-widest mb-5">
+                    <div className="inline-flex items-center gap-2 bg-purple-500/10 border border-purple-500/20 rounded-full px-4 py-1.5 text-accent-purple text-xs font-black uppercase tracking-widest mb-5">
                         <Lock size={13} /> Legal
                     </div>
                     <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-3">
                         Privacy <span className="text-brand-gold">Policy</span>
                     </h1>
-                    <p className="text-text-muted text-sm">Last updated: March 2026</p>
+                    <p className="text-text-muted text-sm">Last updated: April 2026</p>
                     <p className="text-text-muted text-sm mt-2 max-w-xl mx-auto">
                         This policy explains how Zeero (operated by BlockDance B.V.) collects, uses, and protects your personal information.
                     </p>
@@ -109,8 +119,8 @@ export default function PrivacyPolicyPage() {
             {/* Content */}
             <div className="max-w-3xl mx-auto px-4 py-12 space-y-6">
                 {SECTIONS.map(({ title, content }) => (
-                    <div key={title} className="rounded-2xl border border-white/5 bg-[#111315] overflow-hidden">
-                        <div className="px-6 py-4 border-b border-white/5">
+                    <div key={title} className="rounded-2xl border border-white/[0.04] bg-bg-deep overflow-hidden">
+                        <div className="px-6 py-4 border-b border-white/[0.04]">
                             <h2 className="text-white font-bold text-base">{title}</h2>
                         </div>
                         <div className="px-6 py-5 space-y-3">
@@ -122,10 +132,10 @@ export default function PrivacyPolicyPage() {
                 ))}
 
                 <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                    <Link href="/legal/terms" className="flex-1 text-center py-3 rounded-xl border border-white/10 text-text-muted hover:text-white hover:border-brand-gold/30 text-sm font-bold transition-all">
+                    <Link href="/legal/terms" className="flex-1 text-center py-3 rounded-xl border border-white/[0.06] text-text-muted hover:text-white hover:border-brand-gold/30 text-sm font-bold transition-all">
                         Terms of Service →
                     </Link>
-                    <Link href="/legal/rules" className="flex-1 text-center py-3 rounded-xl border border-white/10 text-text-muted hover:text-white hover:border-brand-gold/30 text-sm font-bold transition-all">
+                    <Link href="/legal/rules" className="flex-1 text-center py-3 rounded-xl border border-white/[0.06] text-text-muted hover:text-white hover:border-brand-gold/30 text-sm font-bold transition-all">
                         Betting Rules →
                     </Link>
                 </div>

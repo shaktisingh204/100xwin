@@ -12,22 +12,29 @@ export class DashboardService {
     ) { }
 
     async getStats() {
+        const bannedUsers = await this.prisma.user.findMany({
+            where: { isBanned: true },
+            select: { id: true }
+        });
+        const bannedUserIds = bannedUsers.map(u => u.id);
+
         const [
             totalUsers,
             totalDepositsAgg,
             totalWithdrawalsAgg,
             betStats
         ] = await Promise.all([
-            this.prisma.user.count(),
+            this.prisma.user.count({ where: { isBanned: false } }),
             this.prisma.transaction.aggregate({
                 _sum: { amount: true },
-                where: { type: 'deposit', status: 'success' }
+                where: { type: 'deposit', status: 'success', user: { isBanned: false } }
             }),
             this.prisma.transaction.aggregate({
                 _sum: { amount: true },
-                where: { type: 'withdrawal', status: 'success' }
+                where: { type: 'withdrawal', status: 'success', user: { isBanned: false } }
             }),
             this.betModel.aggregate([
+                { $match: { userId: { $nin: bannedUserIds } } },
                 {
                     $group: {
                         _id: null,
@@ -71,7 +78,8 @@ export class DashboardService {
             where: {
                 type: 'withdrawal',
                 status: 'pending',
-                amount: { gte: 10000 } // Threshold for alarm
+                amount: { gte: 10000 }, // Threshold for alarm
+                user: { isBanned: false }
             },
             take: 5,
             include: { user: { select: { username: true } } }
@@ -96,7 +104,8 @@ export class DashboardService {
         const transactions = await this.prisma.transaction.findMany({
             where: {
                 createdAt: { gte: startDate },
-                status: 'success' // or 'completed' depending on schema enum/string
+                status: 'success', // or 'completed' depending on schema enum/string
+                user: { isBanned: false }
             },
             select: {
                 amount: true,
@@ -139,7 +148,7 @@ export class DashboardService {
         startDate.setDate(startDate.getDate() - days);
 
         const users = await this.prisma.user.findMany({
-            where: { createdAt: { gte: startDate } },
+            where: { createdAt: { gte: startDate }, isBanned: false },
             select: { createdAt: true }
         });
 

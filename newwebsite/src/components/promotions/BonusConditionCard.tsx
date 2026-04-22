@@ -21,24 +21,20 @@ const TYPE_CONFIG = {
     CASINO: {
         icon: Gamepad2,
         label: 'Casino',
-        gradient: 'from-purple-600/20 to-purple-900/5',
-        border: 'border-purple-500/30',
-        badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-        glow: 'shadow-purple-900/20',
-        accent: 'text-purple-400',
-        bar: 'from-purple-500 to-violet-500',
-        ring: 'ring-purple-500/20',
+        accentColor: 'text-purple-400',
+        badgeBg: 'bg-purple-500/15 text-purple-300 border-purple-500/25',
+        gradientBar: 'from-purple-500 to-violet-500',
+        borderHover: 'hover:border-purple-500/25',
+        glowShadow: 'hover:shadow-[0_8px_32px_rgba(139,92,246,0.1)]',
     },
     SPORTS: {
         icon: Trophy,
         label: 'Sports',
-        gradient: 'from-emerald-600/20 to-emerald-900/5',
-        border: 'border-emerald-500/30',
-        badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-        glow: 'shadow-emerald-900/20',
-        accent: 'text-emerald-400',
-        bar: 'from-emerald-500 to-teal-400',
-        ring: 'ring-emerald-500/20',
+        accentColor: 'text-emerald-400',
+        badgeBg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25',
+        gradientBar: 'from-emerald-500 to-teal-500',
+        borderHover: 'hover:border-emerald-500/25',
+        glowShadow: 'hover:shadow-[0_8px_32px_rgba(16,185,129,0.1)]',
     },
 };
 
@@ -49,21 +45,21 @@ const APPLICABLE_LABELS: Record<string, string> = {
 };
 
 const CURRENCY_CONFIG: Record<string, { label: string; color: string }> = {
-    INR: { label: '₹ Fiat / INR', color: 'text-sky-400 bg-sky-500/10 border-sky-500/20' },
-    CRYPTO: { label: '₿ Crypto', color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-    BOTH: { label: 'Fiat & Crypto', color: 'text-violet-400 bg-violet-500/10 border-violet-500/20' },
+    INR: { label: 'Fiat & Crypto', color: 'text-brand-gold' },
+    CRYPTO: { label: 'Crypto', color: 'text-warning-bright' },
+    BOTH: { label: 'Fiat & Crypto', color: 'text-accent-purple' },
 };
 
-function ConditionRow({ icon: Icon, label, value, accent }: {
+function DetailChip({ icon: Icon, label, value, accent }: {
     icon: React.ElementType; label: string; value: React.ReactNode; accent?: string;
 }) {
     return (
-        <div className="flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0">
-            <div className="flex items-center gap-2 text-xs text-white/40">
-                <Icon size={13} className="flex-shrink-0" />
+        <div className="flex items-center justify-between py-2.5 border-b border-white/[0.03] last:border-0">
+            <div className="flex items-center gap-2 text-[12px] text-white/40">
+                <Icon size={12} className="flex-shrink-0" />
                 <span>{label}</span>
             </div>
-            <div className={`text-xs font-bold ${accent || 'text-white/80'}`}>{value}</div>
+            <div className={`text-[12px] font-bold ${accent || 'text-white/70'}`}>{value}</div>
         </div>
     );
 }
@@ -79,6 +75,16 @@ const BonusConditionCard: React.FC<Props> = ({ bonus, currencySymbol = '₹' }) 
     const currCfg = CURRENCY_CONFIG[bonus.currency || 'INR'];
 
     const isPercentage = bonus.percentage > 0;
+    const fiatMinimum = bonus.minDepositFiat ?? bonus.minDeposit ?? 0;
+    const cryptoMinimum = bonus.minDepositCrypto ?? bonus.minDeposit ?? 0;
+    const minimumDepositLabel = bonus.currency === 'CRYPTO'
+        ? (cryptoMinimum > 0 ? `$${cryptoMinimum.toLocaleString()}` : 'No minimum')
+        : bonus.currency === 'BOTH'
+            ? [
+                fiatMinimum > 0 ? `₹${fiatMinimum.toLocaleString()} fiat` : null,
+                cryptoMinimum > 0 ? `$${cryptoMinimum.toLocaleString()} crypto` : null,
+            ].filter(Boolean).join(' / ') || 'No minimum'
+            : (fiatMinimum > 0 ? `${currencySymbol}${fiatMinimum.toLocaleString()}` : 'No minimum');
 
     const handleCopy = () => {
         if (bonus.code) {
@@ -116,171 +122,142 @@ const BonusConditionCard: React.FC<Props> = ({ bonus, currencySymbol = '₹' }) 
     return (
         <div
             className={`
-                relative overflow-hidden rounded-2xl bg-[#13151a]
-                border ${cfg.border}
-                shadow-xl ${cfg.glow}
-                ring-1 ${cfg.ring}
-                flex flex-col transition-all duration-300
-                hover:shadow-2xl hover:scale-[1.01]
+                group relative overflow-hidden rounded-2xl bg-[#1a1d22]
+                border border-white/[0.06]
+                flex flex-col transition-all duration-200
+                ${cfg.borderHover} ${cfg.glowShadow}
+                active:scale-[0.99]
             `}
         >
-            {/* ── TOP GRADIENT BAND ── */}
-            <div className={`absolute inset-x-0 top-0 h-px bg-gradient-to-r ${cfg.bar} opacity-60`} />
+            {/* Top accent line */}
+            <div className={`h-[2px] bg-gradient-to-r ${cfg.gradientBar}`} />
 
-            {/* ── HEADER ── */}
-            <div className={`bg-gradient-to-br ${cfg.gradient} p-5 pb-4`}>
-                <div className="flex items-start justify-between gap-3">
+            {/* Header Section */}
+            <div className="p-5 pb-4">
+                {/* Top row: title + info toggle */}
+                <div className="flex items-start justify-between gap-3 mb-4">
                     <div className="flex items-center gap-3 min-w-0">
-                        <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${cfg.gradient} border ${cfg.border} flex items-center justify-center flex-shrink-0`}>
-                            <TypeIcon size={18} className={cfg.accent} />
+                        <div className={`w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.06] flex items-center justify-center flex-shrink-0`}>
+                            <TypeIcon size={18} className={cfg.accentColor} />
                         </div>
                         <div className="min-w-0">
-                            <h3 className="text-sm font-black text-white leading-tight truncate">{bonus.title}</h3>
+                            <h3 className="text-[14px] font-bold text-white leading-tight truncate">{bonus.title}</h3>
                             {bonus.description && (
-                                <p className="text-[11px] text-white/40 mt-0.5 line-clamp-1">{bonus.description}</p>
+                                <p className="text-[11px] text-white/35 mt-0.5 line-clamp-1">{bonus.description}</p>
                             )}
                         </div>
                     </div>
-                    {/* Info toggle */}
                     <button
                         onClick={() => setShowInfo(v => !v)}
-                        className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 flex-shrink-0 transition-colors"
+                        className="p-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex-shrink-0 transition-colors"
                         title="Toggle wagering info"
                     >
-                        <Info size={13} className="text-white/40" />
+                        <Info size={13} className="text-white/30" />
                     </button>
                 </div>
 
-                {/* ── BONUS VALUE HERO ── */}
-                <div className="mt-4 flex items-end justify-between gap-2">
+                {/* Hero value + badges */}
+                <div className="flex items-end justify-between gap-3">
                     <div>
                         <div className="text-3xl font-black text-white leading-none tracking-tight">
                             {isPercentage
-                                ? <><span className={cfg.accent}>+{bonus.percentage}%</span></>
-                                : <span className={cfg.accent}>{currencySymbol}{bonus.amount.toLocaleString()}</span>
+                                ? <span className={cfg.accentColor}>+{bonus.percentage}%</span>
+                                : <span className={cfg.accentColor}>{currencySymbol}{bonus.amount.toLocaleString()}</span>
                             }
                         </div>
                         {isPercentage && bonus.maxBonus > 0 && (
-                            <div className="text-xs text-white/40 mt-1">
-                                Up to <span className="text-white/70 font-bold">{currencySymbol}{bonus.maxBonus.toLocaleString()}</span> bonus
+                            <div className="text-[12px] text-white/35 mt-1.5">
+                                Up to <span className="text-white/60 font-bold">{currencySymbol}{bonus.maxBonus.toLocaleString()}</span> bonus
                             </div>
                         )}
                         {!isPercentage && bonus.amount > 0 && (
-                            <div className="text-xs text-white/40 mt-1">Flat bonus — no deposit required</div>
+                            <div className="text-[12px] text-white/35 mt-1.5">Flat bonus — no deposit required</div>
                         )}
                     </div>
 
                     <div className="flex flex-col items-end gap-1.5">
-                        {/* Type badge */}
-                        <span className={`text-[10px] font-black uppercase px-2 py-1 rounded-lg border ${cfg.badge} tracking-wider`}>
+                        <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full border ${cfg.badgeBg} tracking-wider`}>
                             {cfg.label}
                         </span>
-                        {/* Currency badge */}
-                        <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-md border ${currCfg.color} tracking-wide`}>
+                        <span className={`text-[10px] font-semibold ${currCfg.color}`}>
                             {currCfg.label}
                         </span>
                     </div>
                 </div>
             </div>
 
-            {/* ── CONDITIONS GRID ── */}
-            <div className="px-5 pt-3 pb-1 flex-1">
-                {/* Wagering explainer */}
+            {/* Conditions */}
+            <div className="px-5 pt-1 pb-1 flex-1">
                 {showInfo && (
-                    <div className="mb-3 p-3 bg-white/[0.03] rounded-xl border border-white/[0.06] text-[11px] text-white/50 leading-relaxed">
-                        <span className="font-bold text-white/70">How wagering works: </span>
-                        You must wager your bonus <span className="font-bold text-white/70">{bonus.wageringRequirement}×</span> before withdrawing.
+                    <div className="mb-3 p-3 bg-white/[0.02] rounded-xl border border-white/[0.04] text-[11px] text-white/45 leading-relaxed">
+                        <span className="font-bold text-white/60">How wagering works: </span>
+                        You must wager your bonus <span className="font-bold text-white/60">{bonus.wageringRequirement}×</span> before withdrawing.
                         {bonus.depositWagerMultiplier > 1 && (
-                            <> You also need to wager your deposit amount <span className="font-bold text-white/70">{bonus.depositWagerMultiplier}×</span>.</>
+                            <> You also need to wager your deposit amount <span className="font-bold text-white/60">{bonus.depositWagerMultiplier}×</span>.</>
                         )}
                     </div>
                 )}
 
-                <ConditionRow
-                    icon={Wallet}
-                    label="Min Deposit"
-                    value={bonus.minDeposit > 0 ? `${currencySymbol}${bonus.minDeposit.toLocaleString()}` : 'No minimum'}
-                    accent={bonus.minDeposit > 0 ? 'text-white/80' : 'text-white/40'}
-                />
-                <ConditionRow
-                    icon={BadgePercent}
-                    label="Max Bonus"
+                <DetailChip icon={Wallet} label="Min Deposit" value={minimumDepositLabel} />
+                <DetailChip icon={BadgePercent} label="Max Bonus"
                     value={bonus.maxBonus > 0 ? `${currencySymbol}${bonus.maxBonus.toLocaleString()}` : 'Uncapped'}
-                    accent={bonus.maxBonus > 0 ? cfg.accent : 'text-white/40'}
+                    accent={bonus.maxBonus > 0 ? cfg.accentColor : 'text-white/35'}
                 />
-                <ConditionRow
-                    icon={Zap}
-                    label="Wagering Req."
-                    value={<span>{bonus.wageringRequirement}<span className="text-white/40 font-normal">× bonus amount</span></span>}
-                    accent={cfg.accent}
+                <DetailChip icon={Zap} label="Wagering Req."
+                    value={<span>{bonus.wageringRequirement}<span className="text-white/35 font-normal">× bonus amount</span></span>}
+                    accent={cfg.accentColor}
                 />
                 {bonus.depositWagerMultiplier > 1 && (
-                    <ConditionRow
-                        icon={Coins}
-                        label="Deposit Wager"
-                        value={<span>{bonus.depositWagerMultiplier}<span className="text-white/40 font-normal">× deposit amount</span></span>}
-                        accent="text-white/70"
+                    <DetailChip icon={Coins} label="Deposit Wager"
+                        value={<span>{bonus.depositWagerMultiplier}<span className="text-white/35 font-normal">× deposit amount</span></span>}
                     />
                 )}
-                <ConditionRow
-                    icon={Gamepad2}
-                    label="Applies To"
+                <DetailChip icon={Gamepad2} label="Applies To"
                     value={APPLICABLE_LABELS[bonus.applicableTo] || bonus.applicableTo}
-                    accent="text-white/80"
                 />
-                <ConditionRow
-                    icon={Clock}
-                    label="Validity"
+                <DetailChip icon={Clock} label="Validity"
                     value={`${bonus.expiryDays} days after claim`}
-                    accent="text-white/80"
                 />
                 {bonus.forFirstDepositOnly && (
-                    <ConditionRow
-                        icon={Star}
-                        label="First Deposit"
+                    <DetailChip icon={Star} label="First Deposit"
                         value="First deposit only"
                         accent="text-amber-400"
                     />
                 )}
                 {bonus.usageLimit > 0 && (
-                    <ConditionRow
-                        icon={Users}
-                        label="Usage"
+                    <DetailChip icon={Users} label="Usage"
                         value={<span>{bonus.usageCount.toLocaleString()} / {bonus.usageLimit.toLocaleString()} claimed</span>}
-                        accent="text-white/60"
+                        accent="text-white/50"
                     />
                 )}
                 {bonus.validUntil && (
-                    <ConditionRow
-                        icon={ShieldCheck}
-                        label="Valid Until"
+                    <DetailChip icon={ShieldCheck} label="Valid Until"
                         value={new Date(bonus.validUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        accent="text-white/70"
                     />
                 )}
             </div>
 
-            {/* ── USAGE PROGRESS BAR (if capped) ── */}
+            {/* Usage progress */}
             {bonus.usageLimit > 0 && (
                 <div className="px-5 pb-3">
-                    <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+                    <div className="h-1 rounded-full bg-white/[0.04] overflow-hidden">
                         <div
-                            className={`h-full rounded-full bg-gradient-to-r ${cfg.bar} transition-all duration-700`}
+                            className={`h-full rounded-full bg-gradient-to-r ${cfg.gradientBar} transition-all duration-700`}
                             style={{ width: `${usagePct}%` }}
                         />
                     </div>
-                    <p className="text-[9px] text-white/25 mt-1 text-right">{usagePct}% claimed</p>
+                    <p className="text-[9px] text-white/20 mt-1 text-right">{usagePct}% claimed</p>
                 </div>
             )}
 
-            {/* ── FOOTER: CODE + CTA ── */}
-            <div className="p-4 pt-2 space-y-2.5 border-t border-white/[0.05]">
+            {/* Footer: code + CTA */}
+            <div className="p-4 pt-2 space-y-2.5 border-t border-white/[0.04]">
                 {/* Promo code */}
-                <div className="flex items-center gap-2 bg-black/30 border border-dashed border-white/10 rounded-xl px-3 py-2">
+                <div className="flex items-center gap-2 bg-white/[0.02] border border-dashed border-white/[0.06] rounded-xl px-3 py-2">
                     <span className="font-mono font-black text-sm tracking-widest text-white flex-1 truncate">{bonus.code}</span>
                     <button
                         onClick={handleCopy}
-                        className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center bg-white/5 hover:bg-white/10 transition-colors"
+                        className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
                         title="Copy code"
                     >
                         {copied
@@ -296,10 +273,11 @@ const BonusConditionCard: React.FC<Props> = ({ bonus, currencySymbol = '₹' }) 
                     onClick={handleClaimBonus}
                     className={`
                         w-full flex items-center justify-center gap-2
-                        py-2.5 rounded-xl font-black text-sm uppercase tracking-wider
-                        bg-gradient-to-r ${cfg.bar}
-                        text-white shadow-lg
-                        hover:opacity-90 hover:scale-[1.02]
+                        py-2.5 rounded-xl font-bold text-sm
+                        bg-gradient-to-r ${cfg.gradientBar}
+                        text-white
+                        hover:opacity-90 hover:scale-[1.01]
+                        active:scale-[0.99]
                         transition-all duration-200
                     `}
                 >

@@ -5,9 +5,9 @@
  */
 export default function SkeletonMatchCard() {
     return (
-        <div className="rounded-xl border border-white/5 bg-[#1a1d21] overflow-hidden animate-pulse">
+        <div className="rounded-xl border border-white/[0.04] bg-bg-modal overflow-hidden animate-pulse">
             {/* Header row — league badge + status */}
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.04]">
                 <div className="w-3 h-3 rounded-full skeleton-block" />
                 <div className="w-28 h-2.5 rounded skeleton-block" />
                 <div className="ml-auto w-10 h-4 rounded skeleton-block" />

@@ -10,6 +10,8 @@ export interface Bonus {
     amount: number;
     percentage: number;
     minDeposit: number;
+    minDepositFiat?: number;
+    minDepositCrypto?: number;
     maxBonus: number;
     wageringRequirement: number;
     isActive: boolean;

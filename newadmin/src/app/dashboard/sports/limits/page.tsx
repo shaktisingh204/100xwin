@@ -27,7 +27,7 @@ export default function BetLimitsPage() {
                 // Initialize edits
                 const initialEdits: Record<string, { minBet: number; maxBet: number }> = {};
                 data.forEach((s: any) => {
-                    initialEdits[s.sport_id] = {
+                    initialEdits[s.sportId] = {
                         minBet: s.minBet || 100,
                         maxBet: s.maxBet || 100000
                     };
@@ -66,7 +66,7 @@ export default function BetLimitsPage() {
             await updateSportLimits(sportId, minBet, maxBet);
 
             // Update local sports data to reflect save
-            setSports(sports.map(s => s.sport_id === sportId ? { ...s, minBet, maxBet } : s));
+            setSports(sports.map(s => s.sportId === sportId ? { ...s, minBet, maxBet } : s));
 
             setMessage({ type: 'success', text: 'Limits updated successfully.' });
             setTimeout(() => setMessage(null), 3000);
@@ -80,7 +80,7 @@ export default function BetLimitsPage() {
 
     if (loading) return <div className="p-8 text-center text-slate-500">Loading sports...</div>;
 
-    const filteredSports = sports.filter(s => s.sport_name.toLowerCase().includes(search.toLowerCase()));
+    const filteredSports = sports.filter(s => (s.name || '').toLowerCase().includes(search.toLowerCase()));
 
     return (
         <div className="space-y-6">
@@ -112,12 +112,12 @@ export default function BetLimitsPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredSports.map(sport => {
-                    const editValues = edits[sport.sport_id] || { minBet: 100, maxBet: 100000 };
+                    const editValues = edits[sport.sportId] || { minBet: 100, maxBet: 100000 };
 
                     return (
-                        <div key={sport.sport_id} className="bg-slate-800 rounded-lg border border-slate-700 p-5 space-y-4 hover:border-slate-600 transition-colors">
+                        <div key={sport.sportId} className="bg-slate-800 rounded-lg border border-slate-700 p-5 space-y-4 hover:border-slate-600 transition-colors">
                             <div className="flex items-center justify-between">
-                                <h3 className="font-bold text-white text-lg">{sport.sport_name}</h3>
+                                <h3 className="font-bold text-white text-lg">{sport.name}</h3>
                                 <ShieldAlert size={18} className="text-slate-500" />
                             </div>
 
@@ -147,11 +147,11 @@ export default function BetLimitsPage() {
                             </div>
 
                             <button
-                                onClick={() => handleSave(sport.sport_id)}
-                                disabled={saving === sport.sport_id}
+                                onClick={() => handleSave(sport.sportId)}
+                                disabled={saving === sport.sportId}
                                 className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {saving === sport.sport_id ? 'Saving...' : (
+                                {saving === sport.sportId ? 'Saving...' : (
                                     <>
                                         <Save size={16} /> Save Limits
                                     </>

@@ -43,6 +43,12 @@ export class Bonus {
     minDeposit: number;
 
     @Prop({ default: 0 })
+    minDepositFiat: number;
+
+    @Prop({ default: 0 })
+    minDepositCrypto: number;
+
+    @Prop({ default: 0 })
     maxBonus: number;
 
     @Prop({ default: 1 })

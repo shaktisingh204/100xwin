@@ -16,9 +16,13 @@ import { ConfigService } from '@nestjs/config';
 import { Public } from '../auth/public.decorator';
 import { PrismaService } from '../prisma.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { SecurityTokenGuard } from '../auth/security-token.guard';
 import { BonusService } from '../bonus/bonus.service';
 import { UsersService } from '../users/users.service';
+import { ReferralService } from '../referral/referral.service';
+import { EmailService } from '../email/email.service';
 import { buildGatewayRetryContext } from '../payment/payment-retry.util';
+import { assertMinDeposit } from '../payment/payment-limits.util';
 
 /**
  * UPI 2 Gateway Controller
@@ -49,6 +53,8 @@ export class Payment2Controller {
     private configService: ConfigService,
     private readonly bonusService: BonusService,
     private readonly usersService: UsersService,
+    private readonly referralService: ReferralService,
+    private readonly emailService: EmailService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -110,6 +116,11 @@ export class Payment2Controller {
         return res
           .status(HttpStatus.UNAUTHORIZED)
           .json({ success: false, message: 'Not authenticated' });
+      }
+
+      const minErr = await assertMinDeposit(this.prisma, parseFloat(amount), { gatewayKey: 'MIN_DEPOSIT_UPI2' });
+      if (minErr) {
+        return res.status(HttpStatus.BAD_REQUEST).json({ success: false, message: minErr });
       }
 
       const retryContext = await buildGatewayRetryContext(
@@ -295,6 +306,7 @@ export class Payment2Controller {
   //  Params: merchNo, orderNo, sign
   // ─────────────────────────────────────────────────────────────────────────
 
+  @UseGuards(SecurityTokenGuard)
   @Post('query')
   async queryDeposit(@Body() body: any, @Res() res: Response) {
     try {
@@ -327,6 +339,7 @@ export class Payment2Controller {
   //  Params: merchNo, upi, sign
   // ─────────────────────────────────────────────────────────────────────────
 
+  @UseGuards(SecurityTokenGuard)
   @Post('upi/check')
   async checkUpi(@Body() body: any, @Res() res: Response) {
     try {
@@ -357,6 +370,7 @@ export class Payment2Controller {
   //  Params: merchNo, utr, sign
   // ─────────────────────────────────────────────────────────────────────────
 
+  @UseGuards(SecurityTokenGuard)
   @Post('utr/check')
   async checkUtr(@Body() body: any, @Res() res: Response) {
     try {
@@ -386,6 +400,7 @@ export class Payment2Controller {
   //  Gateway endpoint: POST /api/payIn/bind
   // ─────────────────────────────────────────────────────────────────────────
 
+  @UseGuards(SecurityTokenGuard)
   @Post('bind')
   async bindUtr(@Body() body: any, @Res() res: Response) {
     try {
@@ -445,6 +460,28 @@ export class Payment2Controller {
 
       const userId: number = (req as any).user?.id || body.userId;
       const amountNum = parseFloat(String(amount));
+
+      // ── Server-side minimum withdrawal enforcement ───────────────────────────
+      try {
+        const minCfg = await this.prisma.systemConfig.findUnique({
+          where: { key: 'MIN_WITHDRAWAL' },
+        });
+        const parsedMin = minCfg ? parseFloat(minCfg.value) : NaN;
+        const minWithdrawal = !isNaN(parsedMin) && parsedMin > 0 ? parsedMin : 500;
+        if (!amountNum || amountNum < minWithdrawal) {
+          return res.status(HttpStatus.BAD_REQUEST).json({
+            success: false,
+            message: `Minimum withdrawal amount is ₹${minWithdrawal}`,
+          });
+        }
+      } catch {
+        if (!amountNum || amountNum < 500) {
+          return res.status(HttpStatus.BAD_REQUEST).json({
+            success: false,
+            message: 'Minimum withdrawal amount is ₹500',
+          });
+        }
+      }
 
       // ── Fetch auto-approval limit from SystemConfig ──────────────────────────────
       let autoLimit = 1000;
@@ -598,6 +635,134 @@ export class Payment2Controller {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  //  ADMIN — Process an existing PENDING withdrawal via UPI 2 gateway
+  //  Called from the admin panel "Approve" flow when admin picks UPI Gateway 2.
+  //  On successful gateway acceptance the transaction moves to PROCESSING.
+  //  The gateway webhook will later flip it to COMPLETED (or REJECTED + refund).
+  // ─────────────────────────────────────────────────────────────────────────
+
+  @UseGuards(SecurityTokenGuard)
+  @Post('admin/process-withdrawal')
+  async adminProcessWithdrawal(
+    @Body() body: { transactionId: number; adminId?: number; remarks?: string },
+    @Res() res: Response,
+  ) {
+    try {
+      const { transactionId, adminId, remarks } = body;
+      if (!transactionId) {
+        return res
+          .status(HttpStatus.BAD_REQUEST)
+          .json({ success: false, message: 'transactionId is required' });
+      }
+
+      const txn = await this.prisma.transaction.findUnique({
+        where: { id: Number(transactionId) },
+      });
+      if (!txn) {
+        return res
+          .status(HttpStatus.NOT_FOUND)
+          .json({ success: false, message: 'Transaction not found' });
+      }
+      if (txn.type !== 'WITHDRAWAL') {
+        return res
+          .status(HttpStatus.BAD_REQUEST)
+          .json({ success: false, message: 'Not a withdrawal transaction' });
+      }
+      if (!['PENDING', 'PROCESSED'].includes(txn.status)) {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          success: false,
+          message: `Transaction must be in PENDING or PROCESSED status (current: ${txn.status})`,
+        });
+      }
+
+      const pd = (txn.paymentDetails as Record<string, any>) || {};
+      const acctName =
+        pd.acctName || pd.holderName || pd.receive_name || 'Beneficiary';
+      const acctNo =
+        pd.acctNo ||
+        pd.upiId ||
+        pd.receive_account ||
+        pd.receiveAccount ||
+        pd.accountNo;
+      const acctCode = pd.acctCode || pd.ifsc || pd.ifscCode || '';
+      const mobile = pd.mobile || '';
+      if (!acctNo) {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          success: false,
+          message: 'Beneficiary account number / UPI ID missing on transaction',
+        });
+      }
+
+      // Reuse txn.utr as orderNo if already set (admin-hold path already wrote it);
+      // otherwise generate a fresh reference.
+      const orderNo = txn.utr || `UPI2W${txn.id}${Date.now()}`;
+
+      const baseUrl = this.configService.get<string>('PAYMENT2_BASE_URL');
+      if (!baseUrl) {
+        return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+          success: false,
+          message: 'PAYMENT2_BASE_URL is not configured',
+        });
+      }
+
+      const transferData: Record<string, any> = {
+        orderNo,
+        amount: String(txn.amount),
+        currency: 'INR',
+        acctName,
+        acctCode,
+        acctNo,
+        mobile,
+      };
+
+      const payload = this.payment2Service.createPayoutPayload(transferData);
+      const gatewayData = await this.callGateway(
+        `${baseUrl}/api/payOut`,
+        payload,
+      );
+
+      if (gatewayData.code === 0) {
+        await this.prisma.transaction.update({
+          where: { id: txn.id },
+          data: {
+            status: 'PROCESSING',
+            paymentMethod: 'UPI Gateway 2',
+            utr: orderNo,
+            adminId: adminId ?? txn.adminId,
+            remarks: remarks || 'Sent to UPI Gateway 2',
+            paymentDetails: {
+              ...pd,
+              gateway: 'upi2',
+              orderNo,
+            } as any,
+          },
+        });
+        this.logger.log(
+          `[UPI2] Admin triggered payout — txn:${txn.id} orderNo:${orderNo}`,
+        );
+        return res
+          .status(HttpStatus.OK)
+          .json({ success: true, orderNo, data: gatewayData.data });
+      }
+
+      this.logger.warn(
+        `[UPI2] Admin payout rejected by gateway: ${JSON.stringify(gatewayData)}`,
+      );
+      return res.status(HttpStatus.OK).json({
+        success: false,
+        message: gatewayData.msg || 'Gateway rejected the payout',
+      });
+    } catch (error) {
+      this.logger.error(
+        `[UPI2] adminProcessWithdrawal error: ${error.message}`,
+      );
+      return res
+        .status(HttpStatus.INTERNAL_SERVER_ERROR)
+        .json({ success: false, message: error.message });
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   //  PAYOUT — Async Callback
   //  Fired for BOTH success and failure.
   //  MUST respond with plain text "ok".
@@ -637,13 +802,13 @@ export class Payment2Controller {
       const txn = await this.prisma.transaction.findUnique({
         where: { utr: orderNo },
       });
-      if (txn && txn.status === 'PENDING') {
+      if (txn && ['PENDING', 'PROCESSED', 'APPROVED', 'PROCESSING'].includes(txn.status)) {
         if (state === 1) {
           await this.prisma.transaction.update({
             where: { id: txn.id },
-            data: { status: 'APPROVED' },
+            data: { status: 'COMPLETED' },
           });
-          this.logger.log(`[UPI2] Withdrawal APPROVED — ${orderNo}`);
+          this.logger.log(`[UPI2] Withdrawal COMPLETED — ${orderNo}`);
         } else if ([2, 4].includes(state)) {
           await this.prisma.$transaction([
             this.prisma.user.update({
@@ -674,6 +839,7 @@ export class Payment2Controller {
   //  Params: merchNo, orderNo, sign
   // ─────────────────────────────────────────────────────────────────────────
 
+  @UseGuards(SecurityTokenGuard)
   @Post('payout/query')
   async queryPayout(@Body() body: any, @Res() res: Response) {
     try {
@@ -705,6 +871,7 @@ export class Payment2Controller {
   //  Params: merchNo, timestamp (epoch ms), currency, sign
   // ─────────────────────────────────────────────────────────────────────────
 
+  @UseGuards(SecurityTokenGuard)
   @Post('balance')
   async getBalance(@Body() body: any, @Res() res: Response) {
     try {
@@ -751,20 +918,41 @@ export class Payment2Controller {
         return;
       }
 
-      const credit = gatewayAmount > 0 ? gatewayAmount : txn.amount;
+      // SECURITY: pin credit to the stored PENDING txn amount; never accept
+      // the webhook body's amount field which could be replayed/tampered.
+      if (
+        gatewayAmount > 0 &&
+        Math.abs(gatewayAmount - txn.amount) > 0.01
+      ) {
+        this.logger.warn(
+          `[UPI2] Amount mismatch — stored ₹${txn.amount}, gateway reported ₹${gatewayAmount}. Refusing credit.`,
+        );
+        return;
+      }
+      const credit = txn.amount;
       const previousDeposits = await this.prisma.transaction.count({
         where: { userId: txn.userId, type: 'DEPOSIT', status: 'APPROVED' },
       });
-      await this.prisma.$transaction([
-        this.prisma.user.update({
+      // Atomic PENDING→APPROVED guard to prevent race with cancellation and
+      // double-credit from replayed webhooks.
+      const creditApplied = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.transaction.updateMany({
+          where: { id: txn.id, status: 'PENDING' },
+          data: { status: 'APPROVED' },
+        });
+        if (updated.count === 0) return false;
+        await tx.user.update({
           where: { id: txn.userId },
           data: { balance: { increment: credit } },
-        }),
-        this.prisma.transaction.update({
-          where: { id: txn.id },
-          data: { status: 'APPROVED', amount: credit },
-        }),
-      ]);
+        });
+        return true;
+      });
+      if (!creditApplied) {
+        this.logger.warn(
+          `[UPI2] creditDeposit skipped — not PENDING (orderNo: ${orderNo})`,
+        );
+        return;
+      }
       this.logger.log(
         `[UPI2] Deposit APPROVED — userId: ${txn.userId}, amount: ${credit}`,
       );
@@ -779,20 +967,59 @@ export class Payment2Controller {
       }
       // ── Apply bonus if stored at deposit time ──────────────────────────
       const bonusCode = (txn.paymentDetails as any)?.bonusCode;
+      let depositWageringApplied = false;
       if (bonusCode) {
         try {
-          await this.bonusService.redeemBonus(txn.userId, bonusCode, credit, {
+          const result = await this.bonusService.redeemBonus(txn.userId, bonusCode, credit, {
             depositCurrency: 'INR',
             approvedDepositCountBeforeThisDeposit: previousDeposits,
           });
-          this.logger.log(
-            `[UPI2] Bonus redeemed — userId: ${txn.userId}, code: ${bonusCode}`,
-          );
+          if (result) {
+            depositWageringApplied = true;
+            this.logger.log(
+              `[UPI2] Bonus redeemed — userId: ${txn.userId}, code: ${bonusCode}`,
+            );
+          } else {
+            this.logger.warn(
+              `[UPI2] Bonus code "${bonusCode}" not applied (validation failed) — userId: ${txn.userId}`,
+            );
+          }
         } catch (e) {
           this.logger.error(
             `[UPI2] Bonus redemption failed (non-fatal): ${e.message}`,
           );
         }
+      }
+      // Always apply deposit wagering lock (1x) if no bonus code was redeemed
+      if (!depositWageringApplied) {
+        try {
+          await this.bonusService.applyDepositWagering(txn.userId, credit, 1);
+        } catch (e) {
+          this.logger.error(
+            `[UPI2] Deposit wagering lock failed (non-fatal): ${e.message}`,
+          );
+        }
+      }
+      // ── Referral rewards ──────────────────────────────────────────────
+      try {
+        if (previousDeposits === 0) {
+          await this.referralService.checkAndAward(txn.userId, 'DEPOSIT_FIRST', credit, `dep_${txn.id}_first`);
+        }
+        await this.referralService.checkAndAward(txn.userId, 'DEPOSIT_RECURRING', credit, `dep_${txn.id}_rec`);
+      } catch (e) {
+        this.logger.error(
+          `[UPI2] Referral reward failed (non-fatal): ${e.message}`,
+        );
+      }
+
+      // ── Deposit confirmation email ───────────────────────────────────
+      try {
+        const user = await this.prisma.user.findUnique({ where: { id: txn.userId }, select: { email: true, username: true } });
+        if (user?.email) {
+          this.emailService.sendDepositSuccess(user.email, user.username || user.email, credit.toFixed(2), 'INR').catch(() => {});
+        }
+      } catch (e) {
+        this.logger.error(`[UPI2] Deposit email failed (non-fatal): ${e.message}`);
       }
     } catch (e) {
       this.logger.error(`[UPI2] creditDeposit error: ${e.message}`);

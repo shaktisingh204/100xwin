@@ -44,6 +44,13 @@ export interface PlayDiceDto {
   useBonus?: boolean;
 }
 
+type DiceWalletField = 'balance' | 'cryptoBalance' | 'casinoBonus';
+type DiceAllocation = {
+  walletField: DiceWalletField;
+  walletLabel: string;
+  amount: number;
+};
+
 @Injectable()
 export class DiceService {
   constructor(
@@ -54,6 +61,90 @@ export class DiceService {
     private readonly ggrService: GGRService,
     private readonly bonusService: BonusService,
   ) {}
+
+  private roundCurrency(value: number) {
+    return parseFloat(Number(value || 0).toFixed(2));
+  }
+
+  private getWalletFieldLabel(walletField: DiceWalletField) {
+    if (walletField === 'casinoBonus') return 'Casino Bonus Wallet';
+    return walletField === 'cryptoBalance' ? 'Crypto Wallet' : 'Main Wallet';
+  }
+
+  private getPrimaryWalletField(walletType: 'fiat' | 'crypto' | string): DiceWalletField {
+    return walletType === 'crypto' ? 'cryptoBalance' : 'balance';
+  }
+
+  private mapWalletFieldToPaymentMethod(walletField: DiceWalletField) {
+    if (walletField === 'casinoBonus') return 'BONUS_WALLET';
+    return walletField === 'cryptoBalance' ? 'CRYPTO_WALLET' : 'MAIN_WALLET';
+  }
+
+  private buildAllocations(
+    walletType: 'fiat' | 'crypto' | string,
+    bonusAmount: number,
+    betAmount: number,
+    amount: number,
+  ): DiceAllocation[] {
+    const normalizedAmount = this.roundCurrency(amount);
+    if (normalizedAmount <= 0) return [];
+
+    const primaryWalletField = this.getPrimaryWalletField(walletType);
+    if (walletType === 'crypto') {
+      const allocations: DiceAllocation[] = [{
+        walletField: 'cryptoBalance',
+        walletLabel: this.getWalletFieldLabel('cryptoBalance'),
+        amount: normalizedAmount,
+      }];
+      return allocations;
+    }
+
+    const normalizedBetAmount = this.roundCurrency(betAmount);
+    const normalizedBonusAmount = this.roundCurrency(
+      Math.min(normalizedBetAmount, Math.max(0, bonusAmount)),
+    );
+    const mainStakeAmount = this.roundCurrency(
+      Math.max(0, normalizedBetAmount - normalizedBonusAmount),
+    );
+
+    if (normalizedBonusAmount <= 0 || normalizedBetAmount <= 0) {
+      const allocations: DiceAllocation[] = [{
+        walletField: primaryWalletField,
+        walletLabel: this.getWalletFieldLabel(primaryWalletField),
+        amount: normalizedAmount,
+      }];
+      return allocations;
+    }
+
+    if (mainStakeAmount <= 0) {
+      const allocations: DiceAllocation[] = [{
+        walletField: 'casinoBonus',
+        walletLabel: this.getWalletFieldLabel('casinoBonus'),
+        amount: normalizedAmount,
+      }];
+      return allocations;
+    }
+
+    const bonusPayout = this.roundCurrency(
+      (normalizedAmount * normalizedBonusAmount) / normalizedBetAmount,
+    );
+    const mainPayout = this.roundCurrency(normalizedAmount - bonusPayout);
+
+    const allocations: DiceAllocation[] = [
+      {
+        walletField: 'casinoBonus',
+        walletLabel: this.getWalletFieldLabel('casinoBonus'),
+        amount: bonusPayout,
+      },
+      {
+        walletField: primaryWalletField,
+        walletLabel: this.getWalletFieldLabel(primaryWalletField),
+        amount: mainPayout,
+      },
+    ];
+
+    return allocations.filter((allocation) => allocation.amount > 0);
+  }
 
   async playDice(userId: number, dto: PlayDiceDto) {
     const {
@@ -122,18 +213,118 @@ export class DiceService {
       currency: walletType === 'crypto' ? 'USD' : user.currency || 'INR',
     });
 
-    // Credit payout if won (Prisma — atomic)
-    if (won) {
-      await this.prisma.$transaction(async (tx) => {
-        if (walletType === 'crypto') {
-          await tx.user.update({ where: { id: userId }, data: { cryptoBalance: { increment: payout } } });
-        } else {
-          await tx.user.update({ where: { id: userId }, data: { balance: { increment: payout } } });
-        }
-      });
-    }
+    const stakeAllocations = this.buildAllocations(
+      walletType,
+      bonusUsed,
+      betAmount,
+      betAmount,
+    );
+    const stakePrimaryAllocation = stakeAllocations[0];
+    const placePaymentMethod =
+      stakeAllocations.length === 1 && stakePrimaryAllocation
+        ? this.mapWalletFieldToPaymentMethod(stakePrimaryAllocation.walletField)
+        : 'MULTI_WALLET';
 
-    await this.bonusService.recordWagering(userId, betAmount, 'CASINO', bonusUsed > 0 ? 'fiatbonus' : 'main').catch(() => {
+    await this.prisma.transaction.create({
+      data: {
+        userId,
+        amount: betAmount,
+        type: 'BET_PLACE',
+        status: 'COMPLETED',
+        paymentMethod: placePaymentMethod,
+        paymentDetails: {
+          source: 'DICE',
+          gameId: String(game._id),
+          walletField:
+            stakeAllocations.length === 1 && stakePrimaryAllocation
+              ? stakePrimaryAllocation.walletField
+              : null,
+          walletLabel:
+            stakeAllocations.length === 1 && stakePrimaryAllocation
+              ? stakePrimaryAllocation.walletLabel
+              : stakeAllocations.map((allocation) => allocation.walletLabel).join(' + '),
+          allocations: stakeAllocations,
+        },
+        remarks: `Dice bet: ${direction} ${target}`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    // Credit payout if won (Prisma — atomic)
+    const payoutAllocations = won
+      ? this.buildAllocations(walletType, bonusUsed, betAmount, payout)
+      : [];
+    const payoutPrimaryAllocation = payoutAllocations[0];
+    const payoutPaymentMethod =
+      payoutAllocations.length === 1 && payoutPrimaryAllocation
+        ? this.mapWalletFieldToPaymentMethod(payoutPrimaryAllocation.walletField)
+        : 'MULTI_WALLET';
+
+    await this.prisma.$transaction(async (tx) => {
+      if (won) {
+        const updateData: Record<string, any> = {};
+        for (const allocation of payoutAllocations) {
+          updateData[allocation.walletField] = { increment: allocation.amount };
+        }
+
+        await tx.user.update({
+          where: { id: userId },
+          data: updateData,
+        });
+
+        await tx.transaction.create({
+          data: {
+            userId,
+            amount: payout,
+            type: 'BET_WIN',
+            status: 'COMPLETED',
+            paymentMethod: payoutPaymentMethod,
+            paymentDetails: {
+              source: 'DICE',
+              gameId: String(game._id),
+              walletField:
+                payoutAllocations.length === 1 && payoutPrimaryAllocation
+                  ? payoutPrimaryAllocation.walletField
+                  : null,
+              walletLabel:
+                payoutAllocations.length === 1 && payoutPrimaryAllocation
+                  ? payoutPrimaryAllocation.walletLabel
+                  : payoutAllocations.map((allocation) => allocation.walletLabel).join(' + '),
+              allocations: payoutAllocations,
+            },
+            remarks: `Dice win: ${direction} ${target}`,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+        return;
+      }
+
+      await tx.transaction.create({
+        data: {
+          userId,
+          amount: betAmount,
+          type: 'BET_LOSS',
+          status: 'COMPLETED',
+          paymentDetails: {
+            source: 'DICE',
+            gameId: String(game._id),
+          },
+          remarks: `Dice loss: ${direction} ${target}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
+    });
+
+    await this.bonusService.recordWagering(
+      userId,
+      betAmount,
+      'CASINO',
+      bonusUsed > 0 ? 'fiatbonus' : 'main',
+      bonusUsed,
+    ).catch(() => {
       this.bonusService.emitWalletRefresh(userId);
     });
 

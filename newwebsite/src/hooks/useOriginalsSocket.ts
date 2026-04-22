@@ -102,6 +102,7 @@ export function useOriginalsSocket(opts: OriginalsSocketOptions) {
   const socketRef = useRef<Socket | null>(null);
   const optsRef = useRef(opts);
   const [connected, setConnected] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   useEffect(() => {
     optsRef.current = opts;
@@ -116,24 +117,41 @@ export function useOriginalsSocket(opts: OriginalsSocketOptions) {
     const socket = io(endpoint.url, {
       path: endpoint.path,
       auth: { token: token || "" },
-      transports: ["websocket"],
+      transports: ["websocket", "polling"],
+      upgrade: true,
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionAttempts: 5,
+      reconnectionDelayMax: 15000,
+      reconnectionAttempts: Infinity,
     });
 
     socketRef.current = socket;
 
     socket.on("connect", () => {
       setConnected(true);
+      setReconnecting(false);
       socket.emit("join-originals", { game: optsRef.current.game });
       if (optsRef.current.game === "mines" && isAuthenticated) {
         socket.emit("mines:active");
       }
     });
 
-    socket.on("disconnect", () => setConnected(false));
-    socket.on("connect_error", () => setConnected(false));
+    socket.on("disconnect", (reason) => {
+      setConnected(false);
+      if (reason === "io server disconnect") {
+        setTimeout(() => socket.connect(), 2000);
+      }
+    });
+    socket.on("connect_error", (err) => {
+      setConnected(false);
+      console.error("[useOriginalsSocket] connect_error:", err.message);
+    });
+    socket.on("reconnect_attempt", () => {
+      setReconnecting(true);
+    });
+    socket.on("reconnect", () => {
+      setReconnecting(false);
+    });
 
     socket.on("mines:started", (data: MinesStartedPayload) => optsRef.current.onStarted?.(data));
     socket.on("mines:tile-result", (data: MinesTileResultPayload) => optsRef.current.onTileResult?.(data));
@@ -179,5 +197,5 @@ export function useOriginalsSocket(opts: OriginalsSocketOptions) {
     socketRef.current?.emit("mines:cashout", { gameId });
   }, []);
 
-  return { connected, emit, startGame, revealTile, cashout };
+  return { connected, reconnecting, emit, startGame, revealTile, cashout };
 }

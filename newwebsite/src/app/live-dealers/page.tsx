@@ -1,46 +1,83 @@
 "use client";
 
-import React, { useState, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { Search } from 'lucide-react';
+import React, { useState, useRef, useEffect, Suspense } from 'react';
+import {
+    Search, X, PlayCircle, Dice5, Coffee, Gamepad2,
+    Tv, Layers, ChevronRight
+} from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/layout/Header';
 import LeftSidebar from '@/components/layout/LeftSidebar';
 import GameGrid from '@/components/casino/GameGrid';
-import ProviderList from '@/components/casino/ProviderList';
 import GamePlayInterface from '@/components/casino/GamePlayInterface';
 import LiveCasinoMobileView from '@/components/casino/LiveCasinoMobileView';
 
+// ─── Live sections ─────────────────────────────────────────────────────────────
+const LIVE_SECTIONS = [
+    { title: 'Popular Live',   icon: <PlayCircle size={15} className="text-red-400"      />, category: 'popular',    sectionKey: 'live'      },
+    { title: 'Live Roulette',  icon: <PlayCircle size={15} className="text-amber-400"    />, category: 'roulette',   sectionKey: 'roulette'  },
+    { title: 'Live Blackjack', icon: <Dice5      size={15} className="text-brand-gold"   />, category: 'blackjack',  sectionKey: 'blackjack' },
+    { title: 'Live Baccarat',  icon: <Coffee     size={15} className="text-violet-400"   />, category: 'baccarat',   sectionKey: 'baccarat'  },
+    { title: 'Game Shows',     icon: <Tv         size={15} className="text-pink-400"     />, category: 'game_shows', sectionKey: 'shows'     },
+    { title: 'Live Poker',     icon: <Gamepad2   size={15} className="text-teal-400"     />, category: 'poker',      sectionKey: 'poker'     },
+];
+
+const LIVE_CATS = [
+    { key: 'all',        label: 'All Games'  },
+    { key: 'roulette',   label: 'Roulette'   },
+    { key: 'blackjack',  label: 'Blackjack'  },
+    { key: 'baccarat',   label: 'Baccarat'   },
+    { key: 'game_shows', label: 'Game Shows' },
+    { key: 'poker',      label: 'Poker'      },
+];
+
 function LiveDealersContent() {
+    const router = useRouter();
     const searchParams = useSearchParams();
     const categoryParam = searchParams.get('category');
-    // Default to 'all' if not present
-    const selectedCategory = categoryParam || 'all';
 
-    const [selectedProvider, setSelectedProvider] = useState('all');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [activeGame, setActiveGame] = useState<{ id: string; name: string; provider: string; url: string } | null>(null);
+    const [activeCat, setActiveCat]       = useState(categoryParam || 'all');
+    const [searchInput, setSearchInput]   = useState('');
+    const [search, setSearch]             = useState('');
+    const [activeGame, setActiveGame]     = useState<{ id: string; name: string; provider: string; url: string } | null>(null);
+    const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-    const handleProviderSelect = (provider: string) => {
-        setSelectedProvider(provider);
-        if (searchQuery) setSearchQuery('');
+    // Sync activeCat with URL param
+    useEffect(() => {
+        setActiveCat(categoryParam || 'all');
+    }, [categoryParam]);
+
+    const handleSearchChange = (val: string) => {
+        setSearchInput(val);
+        clearTimeout(searchTimer.current);
+        searchTimer.current = setTimeout(() => setSearch(val), 350);
     };
-
-    const handleGameLaunch = (gameData: any) => {
-        setActiveGame(gameData);
+    const clearSearch = () => { setSearchInput(''); setSearch(''); };
+    const handleCatSelect = (key: string) => {
+        clearSearch();
+        if (key === 'all') {
+            router.push('/live-dealers');
+        } else {
+            router.push(`/live-dealers?category=${key}`);
+        }
     };
+    const handleGameLaunch = (gameData: any) => setActiveGame(gameData);
+
+    const isSearching = !!search.trim();
+    const showLobby   = !isSearching && activeCat === 'all';
 
     return (
         <div className="h-screen overflow-hidden bg-bg-base flex flex-col">
             <Header />
 
-            {/* ── MOBILE VIEW (< md) ─────────────────────────────── */}
-            <div className="md:hidden flex-1 overflow-y-auto pt-[110px] pb-[80px]">
+            {/* ── MOBILE ─────────────────────────────────────────────────── */}
+            <div className="md:hidden flex-1 overflow-y-auto pt-[70px] pb-[80px]">
                 {activeGame ? (
                     <div className="h-full bg-bg-base">
                         <GamePlayInterface
                             game={activeGame}
                             onClose={() => setActiveGame(null)}
-                            isEmbedded={true}
+                            isEmbedded
                             onLaunch={handleGameLaunch}
                             key={activeGame.id}
                         />
@@ -50,138 +87,97 @@ function LiveDealersContent() {
                 )}
             </div>
 
-            {/* ── DESKTOP VIEW (≥ md) ──────────────────────────── */}
-            <div className="hidden md:flex flex-1 overflow-hidden pt-[64px] max-w-[1920px] mx-auto w-full">
-                {/* Global Sidebar */}
+            {/* ── DESKTOP ────────────────────────────────────────────────── */}
+            <div className="hidden md:flex flex-1 overflow-hidden pt-[60px] md:pt-[64px] max-w-[1920px] mx-auto w-full">
                 <LeftSidebar />
 
-                <main className="flex-1 min-w-0 border-l border-white/5 border-r border-white/5 bg-bg-base overflow-y-auto overflow-x-hidden">
+                <main className="flex-1 min-w-0 border-l border-white/[0.04] border-r border-white/[0.04] bg-bg-base overflow-y-auto overflow-x-hidden">
                     {activeGame ? (
                         <div className="h-full bg-bg-base">
                             <GamePlayInterface
                                 game={activeGame}
                                 onClose={() => setActiveGame(null)}
-                                isEmbedded={true}
+                                isEmbedded
                                 onLaunch={handleGameLaunch}
                                 key={activeGame.id}
                             />
                         </div>
                     ) : (
-                        <div className="p-4 md:p-6 space-y-8">
-                            {/* Banner Carousel */}
-                            {selectedCategory === 'all' && (
-                                <div className="relative w-full h-[180px] md:h-[320px] rounded-2xl overflow-hidden shadow-2xl group">
-                                    <img
-                                        src="/assets/banner-casino-main.jpg"
-                                        alt="Live Casino Banner"
-                                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                                        onError={(e) => {
-                                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1596838132731-3301c3fd4317?q=80&w=2070&auto=format&fit=crop';
-                                        }}
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 to-transparent flex flex-col justify-center p-8 md:p-12">
-                                        <span className="text-brand-gold font-bold tracking-widest text-xs md:text-sm mb-2 animate-pulse">LIVE ACTION</span>
-                                        <h1 className="text-3xl md:text-5xl font-extrabold text-text-primary mb-4 leading-tight">
-                                            LIVE DEALERS <br />
-                                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-gold to-brand-gold-hover">REAL EXPERIENCE</span>
-                                        </h1>
-                                        <p className="text-text-secondary text-sm md:text-base max-w-lg mb-6 line-clamp-2">
-                                            Interact with professional dealers in real-time. Roulette, Blackjack, Baccarat and more.
-                                        </p>
-                                        <button className="w-max bg-brand-gold hover:bg-brand-gold-hover text-text-inverse font-bold py-3 px-8 rounded-lg transition-all transform hover:scale-105 shadow-glow-gold">
-                                            PLAY LIVE
-                                        </button>
-                                    </div>
+                        <div className="p-4 md:p-5 space-y-5">
+
+                            {/* ── Search bar ── */}
+                            <div className={`flex items-center gap-3 bg-bg-elevated px-4 py-3 rounded-2xl border transition-colors ${searchInput ? 'border-red-400/50' : 'border-white/[0.06]'}`}>
+                                <Search size={16} className={`flex-shrink-0 transition-colors ${searchInput ? 'text-danger' : 'text-white/30'}`} />
+                                <input
+                                    type="text"
+                                    placeholder="Search live games…"
+                                    value={searchInput}
+                                    onChange={e => handleSearchChange(e.target.value)}
+                                    className="flex-1 bg-transparent text-white text-sm font-semibold outline-none placeholder:text-white/30"
+                                />
+                                {searchInput && (
+                                    <button onClick={clearSearch} className="p-1 rounded-lg bg-white/[0.04] text-white/40 hover:text-white/70 transition-colors">
+                                        <X size={13} />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* ── Category pills ── */}
+                            {!isSearching && (
+                                <div className="flex gap-2 flex-wrap">
+                                    {LIVE_CATS.map(({ key, label }) => {
+                                        const active = activeCat === key;
+                                        return (
+                                            <button
+                                                key={key}
+                                                onClick={() => handleCatSelect(key)}
+                                                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border text-xs font-black tracking-wide transition-all ${
+                                                    active
+                                                        ? 'bg-danger-alpha-10 border-red-400/40 text-danger'
+                                                        : 'bg-bg-elevated border-white/[0.06] text-white/50 hover:text-white hover:border-white/[0.1]'
+                                                }`}
+                                            >
+                                                {label}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             )}
 
-                            {/* Search Bar */}
-                            <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={20} />
-                                <input
-                                    type="text"
-                                    placeholder="Search live games..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-bg-elevated text-text-primary rounded-lg py-3 pl-10 pr-4 outline-none transition-all shadow-inner focus:shadow-[0_0_0_2px_var(--action-primary)] placeholder-text-muted"
-                                />
-                            </div>
-
-                            {searchQuery ? (
+                            {/* ── Content ── */}
+                            {isSearching ? (
                                 <GameGrid
-                                    title={`Search Results for "${searchQuery}"`}
+                                    title={`Results for "${search}"`}
                                     category="all"
-                                    search={searchQuery}
+                                    search={search}
                                     layout="grid"
                                     onLaunch={handleGameLaunch}
                                     type="live"
                                 />
-                            ) : (
-                                <>
-                                    {/* Provider List */}
-                                    {selectedCategory === 'all' && (
-                                        <ProviderList
-                                            selectedCategory={selectedCategory === 'all' ? 'live' : selectedCategory}
-                                            selectedProvider={selectedProvider}
-                                            onSelectProvider={handleProviderSelect}
-                                        />
-                                    )}
-
-                                    {/* Game Grids */}
-                                    {selectedProvider === 'all' && selectedCategory === 'all' ? (
-                                        <div className="space-y-8">
-                                            <GameGrid
-                                                title="Popular Live Games"
-                                                category="popular"
-                                                layout="row"
-                                                onViewAll={() => { }}
-                                                onLaunch={handleGameLaunch}
-                                                type="live"
-                                            />
-                                            <GameGrid
-                                                title="New Live Games"
-                                                category="new"
-                                                layout="row"
-                                                onViewAll={() => { }}
-                                                onLaunch={handleGameLaunch}
-                                                type="live"
-                                            />
-                                            <GameGrid
-                                                title="Live Roulette"
-                                                category="roulette"
-                                                layout="row"
-                                                onViewAll={() => { }}
-                                                onLaunch={handleGameLaunch}
-                                                type="live"
-                                            />
-                                            <GameGrid
-                                                title="Live Blackjack"
-                                                category="blackjack"
-                                                layout="row"
-                                                onViewAll={() => { }}
-                                                onLaunch={handleGameLaunch}
-                                                type="live"
-                                            />
-                                            <GameGrid
-                                                title="Live Baccarat"
-                                                category="baccarat"
-                                                layout="row"
-                                                onViewAll={() => { }}
-                                                onLaunch={handleGameLaunch}
-                                                type="live"
-                                            />
-                                        </div>
-                                    ) : (
+                            ) : showLobby ? (
+                                <div className="space-y-6">
+                                    {LIVE_SECTIONS.map(section => (
                                         <GameGrid
-                                            title={`${selectedProvider !== 'all' ? selectedProvider : ''} ${selectedCategory !== 'all' ? selectedCategory : 'Live Games'}`}
-                                            category={selectedCategory}
-                                            provider={selectedProvider}
-                                            layout="grid"
+                                            key={section.sectionKey}
+                                            title={section.title}
+                                            icon={section.icon}
+                                            sectionKey={section.sectionKey}
+                                            category={section.category}
+                                            layout="row"
+                                            onViewAll={() => handleCatSelect(section.category)}
                                             onLaunch={handleGameLaunch}
                                             type="live"
                                         />
-                                    )}
-                                </>
+                                    ))}
+                                </div>
+                            ) : (
+                                <GameGrid
+                                    title={LIVE_CATS.find(c => c.key === activeCat)?.label || 'Live Games'}
+                                    category={activeCat}
+                                    layout="grid"
+                                    onLaunch={handleGameLaunch}
+                                    type="live"
+                                />
                             )}
                         </div>
                     )}
@@ -193,7 +189,11 @@ function LiveDealersContent() {
 
 export default function LiveDealersPage() {
     return (
-        <Suspense fallback={<div className="min-h-screen bg-bg-base flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-gold"></div></div>}>
+        <Suspense fallback={
+            <div className="min-h-screen bg-bg-base flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-gold" />
+            </div>
+        }>
             <LiveDealersContent />
         </Suspense>
     );

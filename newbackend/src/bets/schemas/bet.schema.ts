@@ -108,6 +108,54 @@ export class Bet {
   @Prop()
   computedMarketName: string; // derived by getMarketNameFromGtype ('India vs Australia' or nat)
   // ──────────────────────────────────────────────────────────────────────────
+
+  // ── Sportradar-specific fields (provider = 'sportradar') ──────────────────
+  // Populated only for bets on sr:match:* events.
+  // Used to match bets against market-result API responses for settlement.
+  @Prop({ default: 'diamond' })
+  provider: string; // 'diamond' | 'sportradar'
+
+  @Prop({ index: true })
+  srEventId: string; // e.g. 'sr:match:70210632'
+
+  @Prop()
+  srSportId: string; // e.g. 'sr:sport:21'
+
+  /**
+   * Full marketId from the market-result API response.
+   * Examples:
+   *   '340'                                              → Winner (incl. super over)
+   *   '878:sp:total=211.5|inningnr=1|maxovers=20'       → 1st innings total
+   *   '1230:sp:overnr=15|total=152.5|inningnr=1|...'   → Overs 0–15 total
+   *   '357:sp:overnr=9|total=8.5|inningnr=1'           → Per-over total
+   *   '363:sp:overnr=8|total=1.5|inningnr=1|deliverynr=2' → Per-delivery total
+   *   '360:sp:overnr=7|inningnr=1'                     → Odd/even
+   *   '642:sp:overnr=6|inningnr=1'                     → Dismissal
+   *   '342'                                              → Tie
+   */
+  @Prop()
+  srMarketFullId: string;
+
+  /**
+   * runnerId from the API e.g. '12' (over), '13' (under),
+   * '70' (odd), '72' (even), '74' (yes), '76' (no),
+   * '4'/'5' (team runners), etc.
+   */
+  @Prop()
+  srRunnerId: string;
+
+  /** Human-readable runner name e.g. 'over 152.5', 'Brisbane Napoleons' */
+  @Prop()
+  srRunnerName: string;
+
+  /** Full market name from the API e.g. '1st innings over 7 - Iconic Super Knights total' */
+  @Prop()
+  srMarketName: string;
+
+  /** marketStatus at time of placement: 'OPEN' | 'SUSPENDED' */
+  @Prop()
+  srMarketStatus: string;
+  // ──────────────────────────────────────────────────────────────────────────
 }
 
 export const BetSchema = SchemaFactory.createForClass(Bet);

@@ -1,13 +1,17 @@
-import { Injectable, UnauthorizedException, ConflictException, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, Logger, BadRequestException, NotFoundException, HttpException, HttpStatus } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from './prisma.service';
 import * as bcrypt from 'bcrypt';
 import { SignupDto } from './auth/dto/auth.dto';
 import { v4 as uuidv4 } from 'uuid';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { UserTrafficEvent, UserTrafficEventDocument } from './auth/schemas/user-traffic-event.schema';
 
 import { ReferralService } from './referral/referral.service';
 import { EmailService } from './email/email.service';
 import { SmsService } from './sms/sms.service';
+import { RedisService } from './redis/redis.service';
 
 // ─── Random username generator ───────────────────────────────────────────────
 
@@ -43,34 +47,60 @@ export class AuthService {
         private referralService: ReferralService,
         private emailService: EmailService,
         private smsService: SmsService,
+        private redisService: RedisService,
+        @InjectModel(UserTrafficEvent.name)
+        private trafficEventModel: Model<UserTrafficEventDocument>,
     ) { }
+
+    private normalizeEmail(email?: string | null) {
+        const value = String(email || '').trim().toLowerCase();
+        return value || undefined;
+    }
+
+    private normalizePhoneNumber(phoneNumber?: string | null) {
+        const value = String(phoneNumber || '').trim();
+        return value || undefined;
+    }
 
     async validateUser(identifier: string, pass: string): Promise<any> {
         try {
+            const normalizedIdentifier = String(identifier || '').trim();
+            const normalizedEmail = normalizedIdentifier.includes('@')
+                ? this.normalizeEmail(normalizedIdentifier)
+                : undefined;
+            const orConditions: any[] = [
+                { phoneNumber: normalizedIdentifier },
+                { username: normalizedIdentifier },
+            ];
+
+            if (normalizedEmail) {
+                orConditions.unshift({
+                    email: { equals: normalizedEmail, mode: 'insensitive' },
+                });
+            } else {
+                orConditions.unshift({ email: normalizedIdentifier });
+            }
+
             const user = await this.prisma.user.findFirst({
                 where: {
-                    OR: [
-                        { email: identifier },
-                        { phoneNumber: identifier },
-                        { username: identifier }
-                    ]
-                }
+                    OR: orConditions,
+                },
             });
 
             if (!user) {
-                this.logger.warn(`User not found: ${identifier}`);
+                this.logger.warn(`User not found: ${normalizedIdentifier}`);
                 return { __reason: 'NOT_FOUND' };
             }
 
             const isMatch = await bcrypt.compare(pass, user.password);
             if (!isMatch) {
-                this.logger.warn(`Password mismatch for user: ${identifier}`);
+                this.logger.warn(`Password mismatch for user: ${normalizedIdentifier}`);
                 return { __reason: 'WRONG_PASSWORD' };
             }
 
             // Block banned users from logging in
             if ((user as any).isBanned) {
-                this.logger.warn(`Banned user attempted login: ${identifier}`);
+                this.logger.warn(`Banned user attempted login: ${normalizedIdentifier}`);
                 return { __reason: 'BANNED' };
             }
 
@@ -82,9 +112,20 @@ export class AuthService {
         }
     }
 
-    async login(user: any) {
+    async login(user: any, ip: string = '', userAgent: string = '') {
         try {
             const payload = { username: user.username, sub: user.id, role: user.role };
+            
+            // Log traffic event mapped to login
+            if (ip) {
+                this.trafficEventModel.create({
+                    userId: user.id,
+                    utm_source: 'login',
+                    ip: ip || null,
+                    userAgent: userAgent || null,
+                }).catch(e => this.logger.warn('Traffic event save failed on login', e?.message));
+            }
+
             return {
                 access_token: this.jwtService.sign(payload),
                 user: user,
@@ -95,19 +136,129 @@ export class AuthService {
         }
     }
 
-    async signup(data: SignupDto & { referralCode?: string }) {
-        if (!data.email && !data.phoneNumber) {
+    async loginWithOtp(identifier: string, code: string, ip: string = '', userAgent: string = '') {
+        try {
+            const normalizedIdentifier = String(identifier || '').trim();
+            const normalizedEmail = normalizedIdentifier.includes('@')
+                ? this.normalizeEmail(normalizedIdentifier)
+                : undefined;
+            const orConditions: any[] = [
+                { phoneNumber: normalizedIdentifier },
+                { username: normalizedIdentifier },
+            ];
+
+            if (normalizedEmail) {
+                orConditions.unshift({
+                    email: { equals: normalizedEmail, mode: 'insensitive' },
+                });
+            } else {
+                orConditions.unshift({ email: normalizedIdentifier });
+            }
+
+            const user = await this.prisma.user.findFirst({
+                where: { OR: orConditions },
+            });
+
+            if (!user) {
+                this.logger.warn(`User not found for OTP login: ${normalizedIdentifier}`);
+                throw new UnauthorizedException('No account found with this identifier.');
+            }
+
+            if ((user as any).isBanned) {
+                this.logger.warn(`Banned user attempted OTP login: ${normalizedIdentifier}`);
+                throw new UnauthorizedException('Your account has been suspended. Please contact support.');
+            }
+
+            // Verify OTP
+            let verifiedOtp = null;
+            if (normalizedEmail || (user.email && identifier === user.email)) {
+                verifiedOtp = await (this.prisma as any).emailOtp.findFirst({
+                    where: {
+                        email: user.email,
+                        code: code,
+                        purpose: 'LOGIN',
+                        used: false,
+                        expiresAt: { gt: new Date() },
+                    },
+                });
+                if (verifiedOtp) {
+                    await (this.prisma as any).emailOtp.update({
+                        where: { id: verifiedOtp.id },
+                        data: { used: true },
+                    });
+                }
+            }
+            
+            if (!verifiedOtp && (user.phoneNumber && (identifier === user.phoneNumber || !normalizedEmail))) {
+                verifiedOtp = await (this.prisma as any).phoneOtp.findFirst({
+                    where: {
+                        phoneNumber: user.phoneNumber,
+                        code: code,
+                        purpose: 'LOGIN',
+                        used: false,
+                        expiresAt: { gt: new Date() },
+                    },
+                });
+                if (verifiedOtp) {
+                    await (this.prisma as any).phoneOtp.update({
+                        where: { id: verifiedOtp.id },
+                        data: { used: true },
+                    });
+                }
+            }
+
+            if (!verifiedOtp) {
+                throw new UnauthorizedException('Invalid or expired OTP.');
+            }
+
+            const { password, ...result } = user;
+            return this.login(result, ip, userAgent);
+        } catch (error) {
+            this.logger.error(`Error validating OTP login for: ${identifier}`, error.stack);
+            throw error;
+        }
+    }
+
+    async signup(data: SignupDto & { referralCode?: string }, ip = '', userAgent = '') {
+        // ── Guard: IP registration rate limit (max 3 accounts per IP per 24h) ────────────
+        /*
+        if (ip && ip !== 'unknown') {
+            const normalizedIp = ip.split(',')[0].trim().replace(/^::ffff:/, '');
+            if (normalizedIp) {
+                const rateLimitKey = `auth:signup:ip:${normalizedIp}`;
+                try {
+                    const allowed = await this.redisService.checkRateLimit(rateLimitKey, 3, 60 * 60 * 24);
+                    if (!allowed) {
+                        this.logger.warn(`[Auth] Registration blocked — IP ${normalizedIp} exceeded daily account limit`);
+                        throw new HttpException(
+                            'Too many accounts created from this network. Please try again tomorrow or contact support.',
+                            HttpStatus.TOO_MANY_REQUESTS,
+                        );
+                    }
+                } catch (e) {
+                    if (e instanceof HttpException) throw e;
+                    // Redis unavailable — allow signup to proceed (fail-open)
+                    this.logger.warn('[Auth] Redis unavailable for IP rate limit check — allowing signup');
+                }
+            }
+        }
+        */
+
+        const normalizedEmail = this.normalizeEmail(data.email);
+        const normalizedPhoneNumber = this.normalizePhoneNumber(data.phoneNumber);
+
+        if (!normalizedEmail && !normalizedPhoneNumber) {
             throw new ConflictException('Email or Phone Number is required');
         }
 
         // ── Phone signup: require a verified OTP ─────────────────────────────────
-        if (data.phoneNumber) {
+        if (normalizedPhoneNumber) {
             const verifiedOtp = await (this.prisma as any).phoneOtp.findFirst({
                 where: {
-                    phoneNumber: data.phoneNumber,
+                    phoneNumber: normalizedPhoneNumber,
                     purpose: 'REGISTER',
-                    used: true,                          // OTP must have been verified
-                    expiresAt: { gt: new Date(Date.now() - 10 * 60 * 1000) }, // within 10 min of OTP lifecycle
+                    used: true,
+                    expiresAt: { gt: new Date(Date.now() - 2 * 60 * 1000) }, // 2-min grace for phone OTP
                 },
                 orderBy: { createdAt: 'desc' },
             });
@@ -118,26 +269,84 @@ export class AuthService {
             }
         }
 
+        // ── Email signup: require a verified OTP ─────────────────────────────────
+        if (normalizedEmail) {
+            const verifiedOtp = await (this.prisma as any).emailOtp.findFirst({
+                where: {
+                    email: normalizedEmail,
+                    purpose: 'REGISTER',
+                    used: true,
+                    expiresAt: { gt: new Date(Date.now() - 10 * 60 * 1000) }, // 10-min grace for email OTP
+                },
+                orderBy: { createdAt: 'desc' },
+            });
+            if (!verifiedOtp) {
+                throw new BadRequestException(
+                    'Email not verified. Please complete OTP verification before signing up.'
+                );
+            }
+        }
+
         const hashedPassword = await bcrypt.hash(data.password, 10);
 
         // Generate a new referral code for this user
         const myReferralCode = await this.referralService.generateReferralCode();
 
         try {
-            // Exclude fields that aren't Prisma User columns, and always ignore any client-supplied username
-            const { referralCode: _inRef, promoCode: _inPromo, username: _clientUsername, ...prismaData } = data as any;
+            // Accept client-supplied username if available
+            const {
+                referralCode: _inRef,
+                promoCode: _inPromo,
+                username: _clientUsername,
+                utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+                referrerUrl, landingPage,
+                ...prismaData
+            } = data as any;
 
-            // Generate a unique username (retry up to 5 times on collision)
-            let username = generateUsername();
-            for (let i = 0; i < 4; i++) {
-                const exists = await this.prisma.user.findUnique({ where: { username } });
-                if (!exists) break;
-                username = generateUsername();
+            if (normalizedEmail) {
+                const existingEmailUser = await this.prisma.user.findFirst({
+                    where: {
+                        email: { equals: normalizedEmail, mode: 'insensitive' },
+                    },
+                    select: { id: true },
+                });
+                if (existingEmailUser) {
+                    throw new ConflictException('User with this Email already exists');
+                }
+            }
+
+            if (normalizedPhoneNumber) {
+                const existingPhoneUser = await this.prisma.user.findUnique({
+                    where: { phoneNumber: normalizedPhoneNumber },
+                    select: { id: true },
+                });
+                if (existingPhoneUser) {
+                    throw new ConflictException('User with this Phone Number already exists');
+                }
+            }
+
+            let username = _clientUsername ? _clientUsername.trim() : generateUsername();
+            
+            if (_clientUsername) {
+                const usernameRegex = /^[a-zA-Z0-9_]{3,15}$/;
+                if (!usernameRegex.test(username)) {
+                    throw new BadRequestException('Username must be 3-15 characters and contain only letters, numbers, and underscores');
+                }
+                const exists = await this.prisma.user.findFirst({ where: { username: { equals: username, mode: 'insensitive' } } });
+                if (exists) throw new ConflictException('Username is already taken');
+            } else {
+                for (let i = 0; i < 4; i++) {
+                    const exists = await this.prisma.user.findUnique({ where: { username } });
+                    if (!exists) break;
+                    username = generateUsername();
+                }
             }
 
             const user = await this.prisma.user.create({
                 data: {
                     ...prismaData,
+                    email: normalizedEmail,
+                    phoneNumber: normalizedPhoneNumber,
                     username,
                     password: hashedPassword,
                     balance: 0,
@@ -145,6 +354,22 @@ export class AuthService {
                     referralCode: myReferralCode,
                 },
             });
+
+            // ── Write traffic attribution to MongoDB (fire & forget) ───────────────────────
+            if (utm_source || referrerUrl || landingPage || ip) {
+                this.trafficEventModel.create({
+                    userId: user.id,
+                    utm_source: utm_source || null,
+                    utm_medium: utm_medium || null,
+                    utm_campaign: utm_campaign || null,
+                    utm_content: utm_content || null,
+                    utm_term: utm_term || null,
+                    referrerUrl: referrerUrl || null,
+                    landingPage: landingPage || null,
+                    ip: ip || null,
+                    userAgent: userAgent || null,
+                }).catch(e => this.logger.warn('Traffic event save failed', e?.message));
+            }
 
             // Apply referral code if provided (separate from promoCode)
             if (data.referralCode) {
@@ -175,13 +400,28 @@ export class AuthService {
         }
     }
 
+    // ─── Refresh Token ─────────────────────────────────────────────────────────
+
+    async refreshToken(userId: number): Promise<{ access_token: string }> {
+        const user = await this.prisma.user.findUnique({ where: { id: userId } });
+        if (!user || (user as any).isBanned) {
+            throw new UnauthorizedException('Cannot refresh token');
+        }
+        const payload = { username: user.username, sub: user.id, role: user.role };
+        return { access_token: this.jwtService.sign(payload) };
+    }
+
     // ─── Forgot Password ────────────────────────────────────────────────────────
 
     async forgotPassword(email: string, frontendUrl: string = ''): Promise<{ message: string }> {
         // Always return the same message to avoid user enumeration
         const genericMsg = { message: 'If an account with that email exists, a reset link has been sent.' };
+        const normalizedEmail = this.normalizeEmail(email);
+        if (!normalizedEmail) return genericMsg;
 
-        const user = await this.prisma.user.findUnique({ where: { email } });
+        const user = await this.prisma.user.findFirst({
+            where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+        });
         if (!user) return genericMsg;
 
         // Invalidate any existing tokens for this user
@@ -202,7 +442,7 @@ export class AuthService {
         const resetLink = `${baseUrl}/reset-password?token=${token}`;
 
         // Send email (non-blocking)
-        this.emailService.sendForgotPassword(email, resetLink, user.username || undefined).catch(e =>
+        this.emailService.sendForgotPassword(normalizedEmail, resetLink, user.username || undefined).catch(e =>
             this.logger.warn('Forgot password email failed', e?.message)
         );
 
@@ -236,6 +476,99 @@ export class AuthService {
         return { message: 'Password has been reset successfully. You can now log in.' };
     }
 
+    // ─── Email OTP: Send ────────────────────────────────────────────────────────
+
+    async sendEmailOtp(email: string, purpose: string): Promise<{ message: string }> {
+        return this.emailService.sendOtpEmail(this.normalizeEmail(email) || email, purpose);
+    }
+
+    // ─── Email OTP: Verify ──────────────────────────────────────────────────────
+
+    async verifyEmailOtp(email: string, code: string, purpose: string): Promise<{ verified: boolean }> {
+        const normalizedEmail = this.normalizeEmail(email) || email;
+        const otpRecord = await this.prisma.emailOtp.findFirst({
+            where: { email: normalizedEmail, purpose, used: false },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        if (!otpRecord) throw new BadRequestException('No pending OTP found. Please request a new one.');
+        if (new Date() > otpRecord.expiresAt) throw new BadRequestException('OTP has expired. Please request a new one.');
+        if (otpRecord.attempts >= 5) throw new BadRequestException('Too many failed attempts. Please request a new OTP.');
+        if (otpRecord.code !== code) {
+            await this.prisma.emailOtp.update({
+                where: { id: otpRecord.id },
+                data: { attempts: { increment: 1 } },
+            });
+            throw new BadRequestException('Invalid OTP.');
+        }
+
+        await this.prisma.emailOtp.update({
+            where: { id: otpRecord.id },
+            data: { used: true },
+        });
+
+        return { verified: true };
+    }
+
+    // ─── Email Forgot Password: Send OTP ────────────────────────────────────────
+
+    async emailForgotPassword(email: string): Promise<{ message: string }> {
+        const genericMsg = { message: 'If an account with that email exists, an OTP has been sent.' };
+        const normalizedEmail = this.normalizeEmail(email);
+        if (!normalizedEmail) return genericMsg;
+
+        const user = await this.prisma.user.findFirst({
+            where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+        });
+        if (!user) return genericMsg; // don't reveal existence
+
+        await this.emailService.sendOtpEmail(normalizedEmail, 'FORGOT_PASSWORD');
+        return genericMsg;
+    }
+
+    // ─── Email Reset Password ───────────────────────────────────────────────────
+
+    async resetPasswordByEmail(email: string, code: string, newPassword: string): Promise<{ message: string }> {
+        const normalizedEmail = this.normalizeEmail(email);
+        if (!normalizedEmail) throw new BadRequestException('Invalid email.');
+
+        const verifiedOtp = await (this.prisma as any).emailOtp.findFirst({
+            where: {
+                email: normalizedEmail,
+                code,
+                purpose: 'FORGOT_PASSWORD',
+                used: true,
+                expiresAt: { gt: new Date(Date.now() - 10 * 60 * 1000) }, // 10-min grace for email OTP
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        if (!verifiedOtp) {
+            throw new BadRequestException('OTP verification required. Please verify your OTP first.');
+        }
+
+        const user = await this.prisma.user.findFirst({
+            where: { email: { equals: normalizedEmail, mode: 'insensitive' } },
+        });
+        if (!user) throw new BadRequestException('No account found with this email.');
+
+        const hashed = await bcrypt.hash(newPassword, 10);
+
+        await this.prisma.$transaction([
+            this.prisma.user.update({
+                where: { id: user.id },
+                data: { password: hashed },
+            }),
+            this.prisma.passwordResetToken.updateMany({
+                where: { userId: user.id, used: false },
+                data: { used: true },
+            }),
+        ]);
+
+        this.logger.log(`Email-OTP password reset for userId: ${user.id}`);
+        return { message: 'Password has been reset successfully. You can now log in.' };
+    }
+
     // ─── Phone OTP: Send ────────────────────────────────────────────────────────
 
     async sendPhoneOtp(phoneNumber: string, purpose: string): Promise<{ message: string }> {
@@ -247,6 +580,56 @@ export class AuthService {
     async verifyPhoneOtp(phoneNumber: string, code: string, purpose: string): Promise<{ verified: boolean }> {
         await this.smsService.verifyOtp(phoneNumber, code, purpose);
         return { verified: true };
+    }
+
+    // ─── Bind Mobile Number ─────────────────────────────────────────────────────
+
+    async bindMobileNumber(userId: number, phoneNumber: string, code: string): Promise<{ message: string }> {
+        // 1. Verify OTP
+        await this.verifyPhoneOtp(phoneNumber, code, 'BIND_MOBILE');
+
+        // 2. Check if the phone number is already taken
+        const existingToken = await this.prisma.user.findFirst({
+            where: { phoneNumber }
+        });
+        
+        if (existingToken && existingToken.id !== userId) {
+            throw new ConflictException('This phone number is already registered to another account.');
+        }
+
+        // 3. Update User
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: { phoneNumber }
+        });
+
+        return { message: 'Mobile number bound successfully.' };
+    }
+
+    // ─── Bind Email Address ─────────────────────────────────────────────────────
+
+    async bindEmailAddress(userId: number, email: string, code: string): Promise<{ message: string }> {
+        // 1. Normalize and Verify OTP
+        const normalizedEmail = this.normalizeEmail(email);
+        if (!normalizedEmail) throw new BadRequestException('Invalid email address.');
+        await this.verifyEmailOtp(email, code, 'BIND_EMAIL');
+
+        // 2. Check if the email is already taken
+        const existing = await this.prisma.user.findFirst({
+            where: { email: { equals: normalizedEmail, mode: 'insensitive' } }
+        });
+        
+        if (existing && existing.id !== userId) {
+            throw new ConflictException('This email is already registered to another account.');
+        }
+
+        // 3. Update User
+        await this.prisma.user.update({
+            where: { id: userId },
+            data: { email: normalizedEmail }
+        });
+
+        return { message: 'Email bound successfully.' };
     }
 
     // ─── Phone Forgot Password: Send OTP ────────────────────────────────────────
@@ -275,7 +658,7 @@ export class AuthService {
                 code,
                 purpose: 'FORGOT_PASSWORD',
                 used: true,
-                expiresAt: { gt: new Date(Date.now() - 15 * 60 * 1000) }, // grace: 15 min after TTL
+                expiresAt: { gt: new Date(Date.now() - 2 * 60 * 1000) }, // 2-min grace for phone OTP
             },
             orderBy: { createdAt: 'desc' },
         });

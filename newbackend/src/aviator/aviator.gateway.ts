@@ -71,7 +71,8 @@ export class AviatorGateway implements OnGatewayConnection, OnGatewayDisconnect,
     const token = (client.handshake.auth?.token as string) || (client.handshake.query?.token as string) || '';
     if (token) {
       try {
-        const secret = this.configService.get<string>('JWT_SECRET') || 'secret';
+        const secret = this.configService.get<string>('JWT_SECRET');
+        if (!secret) throw new Error('JWT_SECRET not configured');
         const payload: any = jwt.verify(token, secret);
         const userInfo = { userId: Number(payload.sub), username: payload.username || 'Player' };
         this.socketUsers.set(client.id, userInfo);
@@ -101,7 +102,7 @@ export class AviatorGateway implements OnGatewayConnection, OnGatewayDisconnect,
   @SubscribeMessage('aviator:bet')
   async handleBet(
     @ConnectedSocket() client: AuthedSocket,
-    @MessageBody() data: { roundId: number; betAmount: number; autoCashoutAt?: number; walletType?: string },
+    @MessageBody() data: { roundId: number; betAmount: number; autoCashoutAt?: number; walletType?: string; useBonus?: boolean },
   ) {
     const userInfo = this.socketUsers.get(client.id);
     if (!userInfo) { client.emit('aviator:error', { message: 'Unauthorized. Please log in.' }); return; }
@@ -113,7 +114,7 @@ export class AviatorGateway implements OnGatewayConnection, OnGatewayDisconnect,
     try {
       const result = await this.aviatorService.placeBet(
         userInfo.userId, data.roundId, data.betAmount,
-        data.autoCashoutAt ?? 0, data.walletType ?? 'fiat',
+        data.autoCashoutAt ?? 0, data.walletType ?? 'fiat', data.useBonus ?? false,
       );
       client.emit('aviator:bet-placed', result);
 

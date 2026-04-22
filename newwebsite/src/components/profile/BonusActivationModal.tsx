@@ -94,7 +94,7 @@ export default function BonusActivationModal({ isOpen, onClose }: Props) {
                     <span>Wagering progress</span>
                     <span className="font-bold text-white/60">{pct}%</span>
                 </div>
-                <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
+                <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                     <div
                         className={`h-full rounded-full transition-all duration-500 ${color}`}
                         style={{ width: `${pct}%` }}
@@ -123,18 +123,18 @@ export default function BonusActivationModal({ isOpen, onClose }: Props) {
         const pct = wageringRequired > 0 ? Math.min(100, Math.round((wageringDone / wageringRequired) * 100)) : 0;
 
         return (
-            <div className={`rounded-xl border-2 transition-all duration-200 overflow-hidden ${isSelected ? activeBorderColor : 'border-white/10'}`}>
+            <div className={`rounded-xl border-2 transition-all duration-200 overflow-hidden ${isSelected ? activeBorderColor : 'border-white/[0.06]'}`}>
                 {/* Card header */}
                 <div className={`p-4 ${bgColor}`}>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2.5">
-                            <div className={`w-9 h-9 rounded-xl ${bgColor} border border-white/10 flex items-center justify-center`}>
+                            <div className={`w-9 h-9 rounded-xl ${bgColor} border border-white/[0.06] flex items-center justify-center`}>
                                 <Icon size={16} className={iconColor} />
                             </div>
                             <div>
                                 <div className="flex items-center gap-1.5">
                                     <span className="text-xs font-bold text-white">{bonusObj?.bonusTitle || label}</span>
-                                    <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full border border-emerald-500/20 flex items-center gap-0.5">
+                                    <span className="text-[9px] font-bold text-success-bright bg-success-alpha-10 px-1.5 py-0.5 rounded-full border border-success-primary/20 flex items-center gap-0.5">
                                         <CheckCircle2 size={7} /> Active
                                     </span>
                                 </div>
@@ -149,7 +149,7 @@ export default function BonusActivationModal({ isOpen, onClose }: Props) {
                                 disabled={toggling === revokeType}
                                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold border transition-all duration-200 ${isSelected
                                     ? `${activeBorderColor.replace('border-', 'bg-').replace('/50', '/20')} border-current text-white shadow-[0_0_10px_rgba(0,0,0,0.2)]`
-                                    : 'bg-white/5 border-white/10 text-white/40 hover:border-white/25 hover:text-white/60'
+                                    : 'bg-white/[0.04] border-white/[0.06] text-white/40 hover:border-white/25 hover:text-white/60'
                                     }`}
                             >
                                 {toggling === revokeType
@@ -164,7 +164,7 @@ export default function BonusActivationModal({ isOpen, onClose }: Props) {
                 </div>
 
                 {/* Card body */}
-                <div className="p-4 space-y-3 border-t border-white/5">
+                <div className="p-4 space-y-3 border-t border-white/[0.04]">
                     {/* Balance + wagering side by side */}
                     <div className="grid grid-cols-2 gap-2">
                         <div className="bg-black/20 rounded-lg px-3 py-2">
@@ -180,12 +180,12 @@ export default function BonusActivationModal({ isOpen, onClose }: Props) {
                     {/* Chips */}
                     <div className="flex gap-1.5 flex-wrap">
                         {bonusObj?.percentage > 0 && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded-md border border-amber-500/15">
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-warning-bright bg-warning-alpha-08 px-1.5 py-0.5 rounded-md border border-amber-500/15">
                                 <BadgePercent size={8} />{bonusObj.percentage}% BONUS
                             </span>
                         )}
                         {bonusObj?.amount > 0 && (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded-md border border-blue-500/15">
+                            <span className="inline-flex items-center gap-1 text-[9px] font-bold text-brand-gold bg-brand-gold/10 px-1.5 py-0.5 rounded-md border border-brand-gold/15">
                                 <Coins size={8} />₹{Number(bonusObj.amount).toLocaleString()} FLAT
                             </span>
                         )}
@@ -206,7 +206,7 @@ export default function BonusActivationModal({ isOpen, onClose }: Props) {
                     <ProgressBar
                         done={wageringDone}
                         required={wageringRequired}
-                        color={revokeType === 'CASINO' ? 'bg-purple-500' : 'bg-emerald-500'}
+                        color={revokeType === 'CASINO' ? 'bg-accent-purple' : 'bg-success-primary'}
                     />
 
                     {/* Revoke — hidden for synthetic (direct-credit) bonuses */}
@@ -218,7 +218,7 @@ export default function BonusActivationModal({ isOpen, onClose }: Props) {
                         <button
                             onClick={() => handleRevoke(revokeType)}
                             disabled={revoking === revokeType}
-                            className="w-full flex items-center justify-center gap-1.5 text-[10px] font-bold text-red-400 bg-red-500/8 border border-red-500/15 px-3 py-2 rounded-lg hover:bg-red-500/15 transition-colors disabled:opacity-50"
+                            className="w-full flex items-center justify-center gap-1.5 text-[10px] font-bold text-danger bg-red-500/8 border border-danger/15 px-3 py-2 rounded-lg hover:bg-danger-alpha-10 transition-colors disabled:opacity-50"
                         >
                             {revoking === revokeType ? <Loader2 size={10} className="animate-spin" /> : <ShieldOff size={10} />}
                             Revoke {revokeType === 'CASINO' ? 'Casino' : 'Sports'} Bonus
@@ -232,7 +232,7 @@ export default function BonusActivationModal({ isOpen, onClose }: Props) {
     return (
         <>
             {/* Overlay */}
-            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[99]" onClick={onClose} />
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[99]" onClick={onClose} />
 
             {/* Panel */}
             <div className="
@@ -240,16 +240,16 @@ export default function BonusActivationModal({ isOpen, onClose }: Props) {
                 bottom-0 left-0 right-0
                 md:bottom-auto md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2
                 md:max-w-md md:w-full
-                bg-[#13151a] border-t md:border border-white/10
+                bg-bg-deep-3 border-t md:border border-white/[0.06]
                 md:rounded-2xl rounded-t-2xl
                 max-h-[90vh] flex flex-col
-                shadow-2xl shadow-black/60
+                shadow-xl shadow-black/60
             ">
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-white/8 shrink-0">
+                <div className="flex items-center justify-between p-4 border-b border-white/[0.05] shrink-0">
                     <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/20 flex items-center justify-center">
-                            <Gift size={16} className="text-amber-400" />
+                            <Gift size={16} className="text-warning-bright" />
                         </div>
                         <div>
                             <h3 className="text-sm font-bold text-white">Active Bonuses</h3>
@@ -258,7 +258,7 @@ export default function BonusActivationModal({ isOpen, onClose }: Props) {
                             </p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors">
+                    <button onClick={onClose} className="w-7 h-7 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center transition-colors">
                         <X size={13} className="text-white/70" />
                     </button>
                 </div>
@@ -270,7 +270,7 @@ export default function BonusActivationModal({ isOpen, onClose }: Props) {
                 >
                     {hasNoBonuses ? (
                         <div className="flex flex-col items-center justify-center py-14 space-y-3">
-                            <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center">
+                            <div className="w-14 h-14 rounded-2xl bg-white/[0.04] flex items-center justify-center">
                                 <Sparkles size={24} className="text-white/20" />
                             </div>
                             <p className="text-sm font-bold text-white/30">No Active Bonuses</p>
@@ -286,9 +286,9 @@ export default function BonusActivationModal({ isOpen, onClose }: Props) {
                                 <ActiveBonusCard
                                     label="Casino Bonus"
                                     icon={Gamepad2}
-                                    iconColor="text-purple-400"
+                                    iconColor="text-accent-purple"
                                     bgColor="bg-purple-500/8"
-                                    borderColor="border-white/10"
+                                    borderColor="border-white/[0.06]"
                                     activeBorderColor="border-purple-500/50"
                                     bonusObj={activeCasinoBonus}
                                     wageringDone={activeCasinoBonus.wageringDone ?? 0}
@@ -302,10 +302,10 @@ export default function BonusActivationModal({ isOpen, onClose }: Props) {
                                 <ActiveBonusCard
                                     label="Sports Bonus"
                                     icon={Trophy}
-                                    iconColor="text-emerald-400"
-                                    bgColor="bg-emerald-500/8"
-                                    borderColor="border-white/10"
-                                    activeBorderColor="border-emerald-500/50"
+                                    iconColor="text-success-bright"
+                                    bgColor="bg-success-alpha-10"
+                                    borderColor="border-white/[0.06]"
+                                    activeBorderColor="border-success-primary/50"
                                     bonusObj={activeSportsBonus}
                                     wageringDone={activeSportsBonus.wageringDone ?? 0}
                                     wageringRequired={activeSportsBonus.wageringRequired ?? 0}

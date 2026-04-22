@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Gamepad2, Trophy, Dices, ArrowRight, Flag, Tags, Rocket, Circle, Sparkles, Zap } from 'lucide-react';
+import { Gamepad2, Trophy, Target, Zap, Star, Dices, ArrowRight, Flag, Tags, Rocket, Circle, Spade } from 'lucide-react';
 import Link from 'next/link';
 import api from '@/services/api';
+import { cfImage, cfImageSrcSet } from '@/utils/cfImages';
 
 interface HomeCategory {
     _id: string;
@@ -19,13 +20,13 @@ interface HomeCategory {
     style?: any;
 }
 
-const QUICK_ACCESS = [
-    { id: 'poker', name: 'Poker', Icon: Dices, path: '/casino?category=poker', gradient: 'from-green-500/20 to-green-900/30', accent: 'text-green-400', glow: 'shadow-green-500/10' },
-    { id: 'racing', name: 'Racing', Icon: Flag, path: '/casino?category=racing', gradient: 'from-blue-500/20 to-blue-900/30', accent: 'text-blue-400', glow: 'shadow-blue-500/10' },
-    { id: 'lottery', name: 'Lottery', Icon: Tags, path: '/casino?category=lottery', gradient: 'from-purple-500/20 to-purple-900/30', accent: 'text-purple-400', glow: 'shadow-purple-500/10' },
-    { id: 'crash', name: 'Instant', Icon: Rocket, path: '/casino?category=crash', gradient: 'from-orange-500/20 to-orange-900/30', accent: 'text-orange-400', glow: 'shadow-orange-500/10' },
-    { id: 'bingo', name: 'Bingo', Icon: Circle, path: '/casino?category=bingo', gradient: 'from-red-500/20 to-red-900/30', accent: 'text-red-400', glow: 'shadow-red-500/10' },
-    { id: 'live', name: 'Live', Icon: Zap, path: '/live-dealers', gradient: 'from-amber-500/20 to-amber-900/30', accent: 'text-amber-400', glow: 'shadow-amber-500/10' },
+// Fixed mini categories like BC.GAME (Poker, Racing, Lottery, etc.)
+const MINI_CATEGORIES = [
+    { id: 'poker', name: 'Poker', Icon: Dices, path: '/casino?category=poker', color: 'from-green-900/50 to-green-800/30', iconColor: 'text-green-400' },
+    { id: 'racing', name: 'Racing', Icon: Flag, path: '/casino?category=racing', color: 'from-blue-900/50 to-blue-800/30', iconColor: 'text-brand-gold' },
+    { id: 'lottery', name: 'Lottery', Icon: Tags, path: '/casino?category=lottery', color: 'from-purple-900/50 to-purple-800/30', iconColor: 'text-accent-purple' },
+    { id: 'crash', name: 'Crash', Icon: Rocket, path: '/casino?category=crash', color: 'from-orange-900/50 to-orange-800/30', iconColor: 'text-warning' },
+    { id: 'bingo', name: 'Bingo', Icon: Circle, path: '/casino?category=bingo', color: 'from-red-900/50 to-red-800/30', iconColor: 'text-danger' },
 ];
 
 export default function CategoryGrid() {
@@ -36,128 +37,169 @@ export default function CategoryGrid() {
         const fetchCategories = async () => {
             try {
                 const response = await api.get('/home-category');
+                // Normalize: API may return an array or a wrapped object { data: [...] }
                 const raw = response.data;
-                const arr: HomeCategory[] = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : Array.isArray(raw?.categories) ? raw.categories : [];
+                const arr: HomeCategory[] = Array.isArray(raw)
+                    ? raw
+                    : Array.isArray(raw?.data)
+                        ? raw.data
+                        : Array.isArray(raw?.categories)
+                            ? raw.categories
+                            : [];
                 setCategories(arr.filter((c: HomeCategory) => c.isActive));
-            } catch (error) { console.error("Failed to load home categories", error); }
-            finally { setLoading(false); }
+            } catch (error) {
+                console.error("Failed to load home categories", error);
+            } finally {
+                setLoading(false);
+            }
         };
         fetchCategories();
     }, []);
 
     if (loading) {
         return (
-            <div className="space-y-3">
-                <div className="grid grid-cols-6 gap-2">
-                    {[1, 2, 3, 4, 5, 6].map(i => (
-                        <div key={i} className="h-[80px] bg-white/[0.02] rounded-xl animate-pulse" />
-                    ))}
-                </div>
+            <div className="space-y-2">
                 <div className="grid grid-cols-2 gap-2">
-                    <div className="h-[110px] bg-white/[0.02] rounded-2xl animate-pulse" />
-                    <div className="h-[110px] bg-white/[0.02] rounded-2xl animate-pulse" />
+                    <div className="h-[140px] md:h-[180px] bg-white/[0.04] rounded-2xl animate-pulse" />
+                    <div className="h-[140px] md:h-[180px] bg-white/[0.04] rounded-2xl animate-pulse" />
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                    {[1, 2, 3, 4, 5].map(i => (
+                        <div key={i} className="h-[80px] md:h-[100px] bg-white/[0.04] rounded-xl animate-pulse" />
+                    ))}
                 </div>
             </div>
         );
     }
 
+    // Use admin categories if available, else fallback
     const hasAdminCats = categories.length > 0;
-    const largeCats = hasAdminCats ? categories.filter(c => c.isLarge).slice(0, 2) : null;
+    const largeCats = hasAdminCats
+        ? categories.filter(c => c.isLarge).slice(0, 2)
+        : null;
     const hasTwoLarge = largeCats && largeCats.length >= 2;
 
     return (
-        <div className="space-y-3">
-            {/* ── Quick Access — 6-icon horizontal strip with glow effects ── */}
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                {QUICK_ACCESS.map((cat) => {
+        <div className="space-y-2">
+            {/* Row 1: Two large cards - Casino & Sports style */}
+            <div className="grid grid-cols-2 gap-2">
+                {/* Casino Large Card */}
+                <Link
+                    href={hasTwoLarge ? largeCats![0].link : '/casino'}
+                    className="relative h-[140px] md:h-[180px] rounded-2xl overflow-hidden group cursor-pointer border border-white/[0.04] hover:border-brand-gold/20 transition-all hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] block"
+                    style={{ background: 'linear-gradient(135deg, #141824 0%, #0C0D14 100%)' }}
+                >
+                    {/* Background pattern */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-brand-gold/8 via-transparent to-transparent" />
+
+                    {/* Image — above-the-fold Category card, eager + high
+                        priority so it's in the LCP critical path. */}
+                    {hasTwoLarge && largeCats![0].image ? (
+                        <img
+                            src={cfImage(largeCats![0].image, { width: 600, fit: 'contain' })}
+                            srcSet={cfImageSrcSet(largeCats![0].image, [300, 600, 900], { fit: 'contain' })}
+                            sizes="(max-width: 768px) 50vw, 400px"
+                            alt={largeCats![0].title}
+                            loading="eager"
+                            fetchPriority="high"
+                            decoding="async"
+                            className="absolute right-0 bottom-0 h-[85%] w-auto object-contain object-right-bottom group-hover:scale-105 transition-transform duration-500 drop-shadow-xl"
+                        />
+                    ) : (
+                        <div className="absolute right-2 bottom-2 opacity-20 group-hover:opacity-30 transition-opacity">
+                            <Dices size={80} className="text-brand-gold" />
+                        </div>
+                    )}
+
+                    {/* Label */}
+                    <div className="absolute top-4 left-4 z-10">
+                        <div className="flex items-center gap-2 mb-1">
+                            <div className="w-6 h-6 rounded-lg bg-brand-gold/20 flex items-center justify-center">
+                                <Gamepad2 size={13} className="text-brand-gold" />
+                            </div>
+                        </div>
+                        <h3 className="text-white font-black text-xl uppercase leading-tight tracking-tight drop-shadow">
+                            {hasTwoLarge ? largeCats![0].title : 'CASINO'}
+                        </h3>
+                        {hasTwoLarge && largeCats![0].subtitle && (
+                            <p className="text-white/60 text-[10px] font-medium mt-0.5">{largeCats![0].subtitle}</p>
+                        )}
+                    </div>
+                    <div className="absolute bottom-3 left-4 z-10">
+                        <span className="text-brand-gold text-[10px] font-bold uppercase flex items-center gap-1">
+                            Play Now <ArrowRight size={10} />
+                        </span>
+                    </div>
+                </Link>
+
+                {/* Sports Large Card */}
+                <Link
+                    href={hasTwoLarge ? largeCats![1].link : '/sports'}
+                    className="relative h-[140px] md:h-[180px] rounded-2xl overflow-hidden group cursor-pointer border border-white/[0.04] hover:border-teal-400/20 transition-all hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] block"
+                    style={{ background: 'linear-gradient(135deg, #0F1A20 0%, #0C0D14 100%)' }}
+                >
+                    {/* Background pattern */}
+                    <div className="absolute inset-0 bg-gradient-to-br from-teal-500/8 via-transparent to-transparent" />
+
+                    {/* Image — second above-the-fold Category card, eager +
+                        high priority for LCP critical path. */}
+                    {hasTwoLarge && largeCats![1].image ? (
+                        <img
+                            src={cfImage(largeCats![1].image, { width: 600, fit: 'contain' })}
+                            srcSet={cfImageSrcSet(largeCats![1].image, [300, 600, 900], { fit: 'contain' })}
+                            sizes="(max-width: 768px) 50vw, 400px"
+                            alt={largeCats![1].title}
+                            loading="eager"
+                            fetchPriority="high"
+                            decoding="async"
+                            className="absolute right-0 bottom-0 h-[85%] w-auto object-contain object-right-bottom group-hover:scale-105 transition-transform duration-500 drop-shadow-xl"
+                        />
+                    ) : (
+                        <div className="absolute right-2 bottom-2 opacity-20 group-hover:opacity-30 transition-opacity">
+                            <Trophy size={80} className="text-teal-400" />
+                        </div>
+                    )}
+
+                    {/* Label */}
+                    <div className="absolute top-4 left-4 z-10">
+                        <div className="flex items-center gap-2 mb-1">
+                            <div className="w-6 h-6 rounded-lg bg-teal-500/20 flex items-center justify-center">
+                                <Trophy size={13} className="text-teal-400" />
+                            </div>
+                        </div>
+                        <h3 className="text-white font-black text-xl uppercase leading-tight tracking-tight drop-shadow">
+                            {hasTwoLarge ? largeCats![1].title : 'SPORTS'}
+                        </h3>
+                        {hasTwoLarge && largeCats![1].subtitle && (
+                            <p className="text-white/60 text-[10px] font-medium mt-0.5">{largeCats![1].subtitle}</p>
+                        )}
+                    </div>
+                    <div className="absolute bottom-3 left-4 z-10">
+                        <span className="text-teal-400 text-[10px] font-bold uppercase flex items-center gap-1">
+                            Bet Now <ArrowRight size={10} />
+                        </span>
+                    </div>
+                </Link>
+            </div>
+
+            {/* Row 2: 5 Mini Category Icons */}
+            <div className="grid grid-cols-5 gap-1.5">
+                {MINI_CATEGORIES.map((cat) => {
                     const IconComp = cat.Icon;
                     return (
                         <Link
                             key={cat.id}
                             href={cat.path}
-                            className={`relative flex items-center gap-2 md:gap-2.5 p-3 md:p-3.5 rounded-xl border border-white/[0.04] hover:border-white/[0.12] transition-all group overflow-hidden bg-gradient-to-br ${cat.gradient} hover:shadow-lg ${cat.glow}`}
+                            className={`relative flex flex-col items-center justify-center gap-2 h-[80px] md:h-[100px] rounded-xl border border-white/[0.04] hover:border-white/[0.1] transition-all group overflow-hidden bg-gradient-to-b ${cat.color}`}
                         >
-                            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                            <IconComp size={18} className={`${cat.accent} z-10 group-hover:scale-110 transition-transform duration-300 flex-shrink-0`} />
-                            <span className="text-[11px] md:text-xs font-bold text-white/60 z-10 group-hover:text-white/90 transition-colors truncate">
+                            <div className="absolute inset-0 bg-bg-modal/70" />
+                            <IconComp size={20} className={`${cat.iconColor} z-10 group-hover:scale-110 transition-transform duration-300`} />
+                            <span className="text-[10px] md:text-[11px] font-bold text-white/80 uppercase tracking-wide z-10 text-center leading-none">
                                 {cat.name}
                             </span>
                         </Link>
                     );
                 })}
-            </div>
-
-            {/* ── Hero Cards — Casino & Sports with mesh gradient bg ── */}
-            <div className="grid grid-cols-2 gap-2">
-                {/* Casino */}
-                <Link
-                    href={hasTwoLarge ? largeCats![0].link : '/casino'}
-                    className="relative h-[110px] md:h-[140px] rounded-2xl overflow-hidden group cursor-pointer border border-white/[0.05] hover:border-amber-500/25 transition-all block"
-                >
-                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(245,158,11,0.12),transparent_50%),radial-gradient(ellipse_at_bottom_right,rgba(168,85,247,0.08),transparent_50%)] bg-[#0a0c10]" />
-
-                    {hasTwoLarge && largeCats![0].image ? (
-                        <img src={largeCats![0].image} alt={largeCats![0].title}
-                            className="absolute right-0 bottom-0 h-[90%] w-auto object-contain object-right-bottom group-hover:scale-105 transition-transform duration-500 drop-shadow-2xl opacity-90" />
-                    ) : (
-                        <div className="absolute right-3 bottom-3 opacity-[0.06] group-hover:opacity-[0.1] transition-opacity">
-                            <Dices size={70} className="text-brand-gold" />
-                        </div>
-                    )}
-
-                    <div className="absolute inset-0 flex flex-col justify-between p-4 z-10">
-                        <div>
-                            <div className="inline-flex items-center gap-1.5 bg-brand-gold/10 border border-brand-gold/15 rounded-lg px-2 py-1 mb-2">
-                                <Gamepad2 size={10} className="text-brand-gold" />
-                                <span className="text-[8px] font-black text-brand-gold uppercase tracking-wider">Casino</span>
-                            </div>
-                            <h3 className="text-white font-black text-lg md:text-xl leading-none">
-                                {hasTwoLarge ? largeCats![0].title : 'CASINO'}
-                            </h3>
-                            {hasTwoLarge && largeCats![0].subtitle && (
-                                <p className="text-white/25 text-[9px] mt-1">{largeCats![0].subtitle}</p>
-                            )}
-                        </div>
-                        <span className="text-brand-gold/60 text-[9px] font-bold flex items-center gap-1 group-hover:text-brand-gold transition-colors">
-                            Start playing <ArrowRight size={9} className="group-hover:translate-x-0.5 transition-transform" />
-                        </span>
-                    </div>
-                </Link>
-
-                {/* Sports */}
-                <Link
-                    href={hasTwoLarge ? largeCats![1].link : '/sports'}
-                    className="relative h-[110px] md:h-[140px] rounded-2xl overflow-hidden group cursor-pointer border border-white/[0.05] hover:border-teal-500/25 transition-all block"
-                >
-                    <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(20,184,166,0.12),transparent_50%),radial-gradient(ellipse_at_bottom_right,rgba(59,130,246,0.08),transparent_50%)] bg-[#0a0c10]" />
-
-                    {hasTwoLarge && largeCats![1].image ? (
-                        <img src={largeCats![1].image} alt={largeCats![1].title}
-                            className="absolute right-0 bottom-0 h-[90%] w-auto object-contain object-right-bottom group-hover:scale-105 transition-transform duration-500 drop-shadow-2xl opacity-90" />
-                    ) : (
-                        <div className="absolute right-3 bottom-3 opacity-[0.06] group-hover:opacity-[0.1] transition-opacity">
-                            <Trophy size={70} className="text-teal-400" />
-                        </div>
-                    )}
-
-                    <div className="absolute inset-0 flex flex-col justify-between p-4 z-10">
-                        <div>
-                            <div className="inline-flex items-center gap-1.5 bg-teal-500/10 border border-teal-500/15 rounded-lg px-2 py-1 mb-2">
-                                <Trophy size={10} className="text-teal-400" />
-                                <span className="text-[8px] font-black text-teal-400 uppercase tracking-wider">Sports</span>
-                            </div>
-                            <h3 className="text-white font-black text-lg md:text-xl leading-none">
-                                {hasTwoLarge ? largeCats![1].title : 'SPORTS'}
-                            </h3>
-                            {hasTwoLarge && largeCats![1].subtitle && (
-                                <p className="text-white/25 text-[9px] mt-1">{largeCats![1].subtitle}</p>
-                            )}
-                        </div>
-                        <span className="text-teal-400/60 text-[9px] font-bold flex items-center gap-1 group-hover:text-teal-400 transition-colors">
-                            Place a bet <ArrowRight size={9} className="group-hover:translate-x-0.5 transition-transform" />
-                        </span>
-                    </div>
-                </Link>
             </div>
         </div>
     );

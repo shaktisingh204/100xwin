@@ -69,7 +69,7 @@ function CasinoTransactionsContent() {
                     <ChevronLeft size={14} /> Back to Profile
                 </Link>
                 <h1 className="text-xl font-bold text-white flex items-center gap-2">
-                    <Gamepad2 size={20} className="text-purple-400" />
+                    <Gamepad2 size={20} className="text-accent-purple" />
                     Casino Transactions
                 </h1>
             </div>
@@ -77,7 +77,7 @@ function CasinoTransactionsContent() {
             <WalletOverview />
 
             {/* Transactions */}
-            <div className="bg-[#1a1d21] rounded-xl border border-white/[0.06] overflow-hidden">
+            <div className="bg-bg-modal rounded-xl border border-white/[0.06] overflow-hidden">
                 <div className="px-4 py-3 border-b border-white/[0.05] flex items-center justify-between">
                     <h2 className="text-sm font-bold text-white">Betting History</h2>
                     <span className="text-[10px] text-white/30 font-medium">Page {page}/{totalPages}</span>
@@ -87,7 +87,7 @@ function CasinoTransactionsContent() {
                 <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="bg-[#252830] text-white/40 text-[11px] uppercase tracking-wider">
+                            <tr className="bg-bg-surface text-white/40 text-[11px] uppercase tracking-wider">
                                 <th className="px-4 py-3 text-left font-semibold">Date</th>
                                 <th className="px-4 py-3 text-left font-semibold">Game / Provider</th>
                                 <th className="px-4 py-3 text-left font-semibold">Type</th>
@@ -105,21 +105,21 @@ function CasinoTransactionsContent() {
                                     <td className="px-4 py-3 text-white/50 text-xs whitespace-nowrap">{formatDate(txn.timestamp)}</td>
                                     <td className="px-4 py-3">
                                         <div className="text-xs font-medium text-white">{txn.game_code}</div>
-                                        <div className="text-[10px] text-purple-400">{txn.provider}</div>
+                                        <div className="text-[10px] text-accent-purple">{txn.provider}</div>
                                     </td>
                                     <td className="px-4 py-3">
                                         <div className="flex items-center gap-1.5">
-                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${txn.type === 'WIN' ? 'bg-[#3BC117]/10 text-[#3BC117]' :
-                                                txn.type === 'BET' ? 'bg-orange-500/10 text-orange-400' :
-                                                    'bg-white/5 text-white/50'
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${txn.type === 'WIN' ? 'bg-success-vivid/10 text-success-bright' :
+                                                txn.type === 'BET' ? 'bg-warning-alpha-08 text-warning' :
+                                                    'bg-white/[0.04] text-white/50'
                                                 }`}>{txn.type}</span>
                                             {txn.wallet_type === 'crypto' && (
-                                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20">USD</span>
+                                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/10 text-accent-purple border border-purple-500/20">USD</span>
                                             )}
                                         </div>
                                     </td>
-                                    <td className={`px-4 py-3 text-right font-bold text-sm ${txn.type === 'WIN' ? 'text-[#3BC117]' :
-                                        txn.type === 'BET' ? 'text-orange-400' : 'text-white'
+                                    <td className={`px-4 py-3 text-right font-bold text-sm ${txn.type === 'WIN' ? 'text-success-bright' :
+                                        txn.type === 'BET' ? 'text-warning' : 'text-white'
                                         }`}>
                                         {txn.type === 'WIN' ? '+' : '-'}{formatAmount(txn.amount, txn.wallet_type, fiatSymbol)}
                                     </td>
@@ -141,18 +141,18 @@ function CasinoTransactionsContent() {
                             <div className="min-w-0">
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs font-bold text-white truncate">{txn.game_code}</span>
-                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase flex-shrink-0 ${txn.type === 'WIN' ? 'bg-[#3BC117]/10 text-[#3BC117]' :
-                                        txn.type === 'BET' ? 'bg-orange-500/10 text-orange-400' :
-                                            'bg-white/5 text-white/50'
+                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase flex-shrink-0 ${txn.type === 'WIN' ? 'bg-success-vivid/10 text-success-bright' :
+                                        txn.type === 'BET' ? 'bg-warning-alpha-08 text-warning' :
+                                            'bg-white/[0.04] text-white/50'
                                         }`}>{txn.type}</span>
                                     {txn.wallet_type === 'crypto' && (
-                                        <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-purple-500/10 text-purple-400 border border-purple-500/20 flex-shrink-0">USD</span>
+                                        <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-purple-500/10 text-accent-purple border border-purple-500/20 flex-shrink-0">USD</span>
                                     )}
                                 </div>
                                 <div className="text-[10px] text-white/25 mt-0.5">{txn.provider} · {formatDate(txn.timestamp)}</div>
                             </div>
-                            <span className={`text-sm font-bold flex-shrink-0 ${txn.type === 'WIN' ? 'text-[#3BC117]' :
-                                txn.type === 'BET' ? 'text-orange-400' : 'text-white'
+                            <span className={`text-sm font-bold flex-shrink-0 ${txn.type === 'WIN' ? 'text-success-bright' :
+                                txn.type === 'BET' ? 'text-warning' : 'text-white'
                                 }`}>
                                 {txn.type === 'WIN' ? '+' : '-'}{formatAmount(txn.amount, txn.wallet_type, fiatSymbol)}
                             </span>
@@ -165,7 +165,7 @@ function CasinoTransactionsContent() {
                         <button
                             disabled={page === 1 || loading}
                             onClick={() => fetchTransactions(page - 1)}
-                            className="p-2 rounded-lg bg-[#252830] hover:bg-[#2e323b] disabled:opacity-30 transition-colors"
+                            className="p-2 rounded-lg bg-bg-surface hover:bg-bg-elevated disabled:opacity-30 transition-colors"
                         >
                             <ChevronLeft size={16} />
                         </button>
@@ -173,7 +173,7 @@ function CasinoTransactionsContent() {
                         <button
                             disabled={page === totalPages || loading}
                             onClick={() => fetchTransactions(page + 1)}
-                            className="p-2 rounded-lg bg-[#252830] hover:bg-[#2e323b] disabled:opacity-30 transition-colors"
+                            className="p-2 rounded-lg bg-bg-surface hover:bg-bg-elevated disabled:opacity-30 transition-colors"
                         >
                             <ChevronRightIcon size={16} />
                         </button>

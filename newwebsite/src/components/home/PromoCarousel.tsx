@@ -67,7 +67,7 @@ export default function PromoCarousel() {
         return () => clearInterval(timer);
     }, [totalSlides]);
 
-    if (loading) return <div className="h-[250px] bg-[#1e1e1e] rounded-2xl animate-pulse" />;
+    if (loading) return <div className="h-[250px] bg-bg-elevated rounded-2xl animate-pulse" />;
 
     if (cards.length === 0) return null; // Or return default hero?
 

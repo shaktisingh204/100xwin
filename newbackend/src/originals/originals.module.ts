@@ -8,6 +8,7 @@ import { OriginalsPublicController } from './originals-public.controller';
 import { GGRService } from './ggr.service';
 import { MinesModule } from '../mines/mines.module';
 import { DiceModule } from '../dice/dice.module';
+import { PlinkoModule } from '../plinko/plinko.module';
 import { EventsModule } from '../events.module';
 
 // Schemas
@@ -17,6 +18,16 @@ import { OriginalsSession, OriginalsSessionSchema } from './schemas/originals-se
 import { OriginalsGGRSnapshot, OriginalsGGRSnapshotSchema } from './schemas/originals-ggr-snapshot.schema';
 import { OriginalsEngagementEvent, OriginalsEngagementEventSchema } from './schemas/originals-engagement-event.schema';
 import { DiceGame, DiceGameSchema } from './schemas/dice-game.schema';
+import { PlinkoGame, PlinkoGameSchema } from './schemas/plinko-game.schema';
+import { KenoGame, KenoGameSchema } from './schemas/keno-game.schema';
+import { HiloGame, HiloGameSchema } from './schemas/hilo-game.schema';
+import { RouletteGame, RouletteGameSchema } from './schemas/roulette-game.schema';
+import { WheelGame, WheelGameSchema } from './schemas/wheel-game.schema';
+import { CoinflipGame, CoinflipGameSchema } from './schemas/coinflip-game.schema';
+import { TowersGame, TowersGameSchema } from './schemas/towers-game.schema';
+import { ColorGame, ColorGameSchema } from './schemas/color-game.schema';
+import { LottoGame, LottoGameSchema } from './schemas/lotto-game.schema';
+import { JackpotGame, JackpotGameSchema } from './schemas/jackpot-game.schema';
 
 const MONGOOSE_FEATURES = MongooseModule.forFeature([
   { name: MinesGame.name,                schema: MinesGameSchema },
@@ -25,6 +36,16 @@ const MONGOOSE_FEATURES = MongooseModule.forFeature([
   { name: OriginalsGGRSnapshot.name,     schema: OriginalsGGRSnapshotSchema },
   { name: OriginalsEngagementEvent.name, schema: OriginalsEngagementEventSchema },
   { name: DiceGame.name,                 schema: DiceGameSchema },
+  { name: PlinkoGame.name,               schema: PlinkoGameSchema },
+  { name: KenoGame.name,                 schema: KenoGameSchema },
+  { name: HiloGame.name,                 schema: HiloGameSchema },
+  { name: RouletteGame.name,             schema: RouletteGameSchema },
+  { name: WheelGame.name,                schema: WheelGameSchema },
+  { name: CoinflipGame.name,             schema: CoinflipGameSchema },
+  { name: TowersGame.name,               schema: TowersGameSchema },
+  { name: ColorGame.name,                schema: ColorGameSchema },
+  { name: LottoGame.name,                schema: LottoGameSchema },
+  { name: JackpotGame.name,              schema: JackpotGameSchema },
 ]);
 
 @Module({
@@ -32,6 +53,7 @@ const MONGOOSE_FEATURES = MongooseModule.forFeature([
     MONGOOSE_FEATURES,
     forwardRef(() => MinesModule),
     forwardRef(() => DiceModule),
+    forwardRef(() => PlinkoModule),
     forwardRef(() => EventsModule),
   ],
   controllers: [OriginalsAdminController, OriginalsAccessController, OriginalsPublicController],

@@ -34,37 +34,122 @@ export class TransactionsService {
                 utr,
                 proof,
                 // Store bonus code in paymentDetails so approveTransaction can redeem it
-                paymentDetails: bonusCode ? { bonusCode: bonusCode.toUpperCase(), currency } : { currency } as any,
+                paymentDetails: bonusCode
+                    ? { bonusCode: bonusCode.toUpperCase(), currency, depositCurrency: currency }
+                    : { currency, depositCurrency: currency } as any,
             },
         });
     }
 
     async createWithdrawal(userId: number, amount: number, paymentDetails: any) {
-        // Check user balance
+        if (!amount || amount <= 0) {
+            throw new BadRequestException('Invalid withdrawal amount');
+        }
+
+        // ── Server-side minimum withdrawal enforcement ────────────────────
+        // Clients must not be able to bypass the min withdrawal limit by
+        // hitting the API directly. Read the configured minimum from
+        // SystemConfig (same source frontend reads via /settings/public).
+        const isCrypto =
+            String(paymentDetails?.method || '').toUpperCase() === 'CRYPTO' ||
+            String(paymentDetails?.currency || '').toUpperCase() === 'CRYPTO';
+        const configKey = isCrypto ? 'MIN_WITHDRAWAL_CRYPTO' : 'MIN_WITHDRAWAL';
+        const defaultMin = isCrypto ? 10 : 500;
+        const cfg = await this.prisma.systemConfig.findUnique({ where: { key: configKey } });
+        const parsedMin = cfg ? parseFloat(cfg.value) : NaN;
+        const minWithdrawal = !isNaN(parsedMin) && parsedMin > 0 ? parsedMin : defaultMin;
+        if (amount < minWithdrawal) {
+            throw new BadRequestException(
+                `Minimum withdrawal amount is ${isCrypto ? '$' : '₹'}${minWithdrawal}`,
+            );
+        }
+
+        // Check user balance — crypto withdrawals must be checked/debited
+        // against the crypto wallet (`cryptoBalance`), NOT the fiat wallet.
         const user = await this.prisma.user.findUnique({
             where: { id: userId },
         });
 
-        if (!user || user.balance < amount) {
+        if (!user) {
+            throw new BadRequestException('Insufficient balance');
+        }
+        const currentWalletBalance = isCrypto
+            ? Number((user as any).cryptoBalance ?? 0)
+            : Number(user.balance ?? 0);
+        if (currentWalletBalance < amount) {
             throw new BadRequestException('Insufficient balance');
         }
 
+        // Require full profile (Name, Surname, City, Country, Email, Phone) before withdrawal
+        const u = user as any;
+        if (
+            !u.firstName?.trim() ||
+            !u.lastName?.trim() ||
+            !u.city?.trim() ||
+            !u.country?.trim() ||
+            !u.email?.trim() ||
+            !u.phoneNumber?.trim()
+        ) {
+            throw new BadRequestException('Please complete your Personal Information in Settings before requesting a withdrawal.');
+        }
+
+        // ── Deposit Wagering Lock ────────────────────────────────────────────
+        // Every deposit applies a 1× wagering requirement. Block withdrawal
+        // until the user has wagered at least the deposited amount.
+        const depositWageringRequired = Number(u.depositWageringRequired || 0);
+        const depositWageringDone = Number(u.depositWageringDone || 0);
+        if (depositWageringRequired > 0 && depositWageringDone < depositWageringRequired) {
+            const remaining = Math.max(0, depositWageringRequired - depositWageringDone);
+            throw new BadRequestException(
+                `Deposit wagering requirement not met. ` +
+                `Please wager ${remaining.toFixed(2)} more before withdrawing.`,
+            );
+        }
+
         // ── iGaming Bonus Policy ──────────────────────────────────────────────
-        // If user has an active bonus, forfeit it before allowing withdrawal.
-        // This matches the standard policy: wagering must be completed to keep bonus.
+        // If user has an active bonus with incomplete wagering, BLOCK the
+        // withdrawal. Auto-forfeiting silently allowed attackers to withdraw
+        // deposit + un-wagered bonus funds from a shared wallet. The user
+        // must explicitly complete wagering or manually forfeit the bonus.
         const activeBonus = await (this.prisma as any).userBonus.findFirst({
             where: { userId, status: 'ACTIVE' }
         });
         if (activeBonus) {
-            await this.bonusService.forfeitActiveBonus(userId, 'Withdrawal requested before wagering complete');
+            const required = Number(activeBonus.wageringRequired || 0);
+            const done = Number(activeBonus.wageringDone || 0);
+            if (done < required) {
+                const remaining = Math.max(0, required - done);
+                throw new BadRequestException(
+                    `You have an active bonus with incomplete wagering. ` +
+                    `Please complete ${remaining.toFixed(2)} more wagering ` +
+                    `or forfeit the bonus from Settings before withdrawing.`,
+                );
+            }
+            // Wagering is complete — mark bonus as completed before withdrawal.
+            await this.bonusService.forfeitActiveBonus(userId, 'Withdrawal after wagering complete');
         }
 
         return this.prisma.$transaction(async (prisma) => {
-            // Deduct balance
-            await prisma.user.update({
-                where: { id: userId },
-                data: { balance: { decrement: amount } },
-            });
+            // SECURITY: conditional decrement — only succeeds if the DB row
+            // still has sufficient balance at commit time. The balance check
+            // at line ~72 above races with concurrent bets/transfers; this
+            // atomic guard prevents negative balances. If count === 0 we know
+            // the balance was drained between the read and this update, so
+            // we abort (rolling back the enclosing $transaction).
+            const deduct = isCrypto
+                ? await prisma.user.updateMany({
+                    where: { id: userId, cryptoBalance: { gte: amount } },
+                    data: { cryptoBalance: { decrement: amount } },
+                })
+                : await prisma.user.updateMany({
+                    where: { id: userId, balance: { gte: amount } },
+                    data: { balance: { decrement: amount } },
+                });
+            if (deduct.count === 0) {
+                throw new BadRequestException(
+                    'Insufficient balance (concurrent update detected). Please retry.',
+                );
+            }
 
             // Derive a clean paymentMethod label for display
             const methodLabel = paymentDetails?.method
@@ -75,7 +160,7 @@ export class TransactionsService {
                 : 'WITHDRAWAL';
 
             // Create transaction record
-            return prisma.transaction.create({
+            const txn = await prisma.transaction.create({
                 data: {
                     userId,
                     amount,
@@ -85,7 +170,42 @@ export class TransactionsService {
                     paymentDetails,
                 },
             });
+
+            // Send pending withdrawal email (non-blocking)
+            if (user.email) {
+                const amountStr = amount.toFixed(2);
+                const currency = paymentDetails?.currency || 'INR';
+                this.emailService.sendWithdrawalPending(
+                    user.email,
+                    user.username || user.email,
+                    amountStr,
+                    currency,
+                ).catch(() => { });
+            }
+
+            return txn;
         });
+    }
+
+    async getLatestPendingDeposit(userId: number) {
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // last 24h
+        const txn = await this.prisma.transaction.findFirst({
+            where: {
+                userId,
+                type: 'DEPOSIT',
+                status: 'PENDING',
+                createdAt: { gte: cutoff },
+            },
+            orderBy: { createdAt: 'desc' },
+            select: {
+                id: true,
+                utr: true,
+                amount: true,
+                paymentMethod: true,
+                createdAt: true,
+            },
+        });
+        return { pending: !!txn, transaction: txn };
     }
 
     async getUserTransactions(userId: number) {
@@ -93,7 +213,7 @@ export class TransactionsService {
             where: {
                 userId,
                 NOT: {
-                    type: { in: ['BET', 'BET_PLACE'] },
+                    type: { in: ['BET', 'BET_PLACE', 'BONUS_CONVERT_REVERSED'] },
                 },
             },
             orderBy: { createdAt: 'desc' },
@@ -136,6 +256,112 @@ export class TransactionsService {
         };
     }
 
+    // ── Withdrawal 4-step flow: PENDING → PROCESSED → APPROVED → COMPLETED ──
+
+    /**
+     * Step 1→2: Mark a PENDING withdrawal as PROCESSED (admin has reviewed it).
+     */
+    async processWithdrawal(id: number, adminId: number, remarks?: string) {
+        const transaction = await this.prisma.transaction.findUnique({
+            where: { id },
+            include: { user: true },
+        });
+        if (!transaction) throw new BadRequestException('Transaction not found');
+        if (transaction.type !== 'WITHDRAWAL') throw new BadRequestException('Transaction is not a withdrawal');
+        if (transaction.status !== 'PENDING') throw new BadRequestException('Transaction is not pending');
+
+        const updated = await this.prisma.transaction.update({
+            where: { id },
+            data: { status: 'PROCESSED', adminId, remarks },
+        });
+
+        // Send processed email (non-blocking)
+        if (transaction.user?.email) {
+            const amountStr = transaction.amount.toFixed(2);
+            const currency = (transaction.paymentDetails as any)?.currency || 'INR';
+            this.emailService.sendWithdrawalProcessed(
+                transaction.user.email,
+                transaction.user.username || transaction.user.email,
+                amountStr,
+                currency,
+            ).catch(() => { });
+        }
+
+        return updated;
+    }
+
+    /**
+     * Step 2→3: Mark a PROCESSED withdrawal as APPROVED (payment initiated).
+     */
+    async approveWithdrawal(id: number, adminId: number, remarks?: string) {
+        const transaction = await this.prisma.transaction.findUnique({
+            where: { id },
+            include: { user: true },
+        });
+        if (!transaction) throw new BadRequestException('Transaction not found');
+        if (transaction.type !== 'WITHDRAWAL') throw new BadRequestException('Transaction is not a withdrawal');
+        if (transaction.status !== 'PROCESSED') throw new BadRequestException('Transaction must be in PROCESSED status to approve');
+
+        const updated = await this.prisma.transaction.update({
+            where: { id },
+            data: { status: 'APPROVED', adminId, remarks },
+        });
+
+        // Send approved email (non-blocking)
+        if (transaction.user?.email) {
+            const amountStr = transaction.amount.toFixed(2);
+            const currency = (transaction.paymentDetails as any)?.currency || 'INR';
+            this.emailService.sendWithdrawalApproved(
+                transaction.user.email,
+                transaction.user.username || transaction.user.email,
+                amountStr,
+                currency,
+            ).catch(() => { });
+        }
+
+        return updated;
+    }
+
+    /**
+     * Step 3→4: Mark an APPROVED withdrawal as COMPLETED (payment confirmed).
+     */
+    async completeWithdrawal(id: number, adminId: number, remarks?: string, transactionIdStr?: string) {
+        const transaction = await this.prisma.transaction.findUnique({
+            where: { id },
+            include: { user: true },
+        });
+        if (!transaction) throw new BadRequestException('Transaction not found');
+        if (transaction.type !== 'WITHDRAWAL') throw new BadRequestException('Transaction is not a withdrawal');
+        if (transaction.status !== 'APPROVED') throw new BadRequestException('Transaction must be in APPROVED status to complete');
+
+        const updated = await this.prisma.transaction.update({
+            where: { id },
+            data: {
+                status: 'COMPLETED',
+                adminId,
+                remarks,
+                ...(transactionIdStr ? { transactionId: transactionIdStr } : {}),
+            },
+        });
+
+        // Send email notification (non-blocking)
+        if (transaction.user?.email) {
+            const amountStr = transaction.amount.toFixed(2);
+            const currency = (transaction.paymentDetails as any)?.currency || 'INR';
+            this.emailService.sendWithdrawalSuccess(
+                transaction.user.email,
+                transaction.user.username || transaction.user.email,
+                amountStr,
+                currency,
+            ).catch(() => { });
+        }
+
+        return updated;
+    }
+
+    /**
+     * Deposit approval (unchanged logic, extracted from old approveTransaction).
+     */
     async approveTransaction(id: number, adminId: number, remarks?: string) {
         const transaction = await this.prisma.transaction.findUnique({
             where: { id },
@@ -147,10 +373,25 @@ export class TransactionsService {
 
         return this.prisma.$transaction(async (prisma) => {
             if (transaction.type === 'DEPOSIT') {
-                // Add balance to user
+                // ── Wallet routing: INR vs CRYPTO ─────────────────────────────
+                // Deposit currency is carried on the transaction's paymentDetails
+                // (set by the gateway / admin UI) or on paymentMethod. Crypto
+                // deposits must credit `cryptoBalance` and skip the INR-only
+                // `totalDeposited` + `depositWagering` lock, since both are
+                // denominated in INR and would corrupt fiat analytics.
+                const details = (transaction.paymentDetails as any) || {};
+                const isCrypto =
+                    String(details?.depositCurrency || '').toUpperCase() === 'CRYPTO' ||
+                    String(details?.currency || '').toUpperCase() === 'CRYPTO' ||
+                    String(details?.wallet || '').toUpperCase() === 'CRYPTO' ||
+                    String(details?.method || '').toUpperCase().includes('CRYPTO') ||
+                    String(transaction.paymentMethod || '').toUpperCase().includes('CRYPTO');
+
                 await prisma.user.update({
                     where: { id: transaction.userId },
-                    data: { balance: { increment: transaction.amount } },
+                    data: isCrypto
+                        ? { cryptoBalance: { increment: transaction.amount } }
+                        : { balance: { increment: transaction.amount } },
                 });
 
                 // Check for First Deposit
@@ -158,36 +399,21 @@ export class TransactionsService {
                     where: {
                         userId: transaction.userId,
                         type: 'DEPOSIT',
-                        status: 'APPROVED',
+                        status: { in: ['APPROVED', 'COMPLETED'] },
                     },
                 });
 
-                // This logic runs inside a transaction, but the referral service methods might not participate in the same transaction unless refactored.
-                // For now, we will run them *after* the transaction or *inside* but acknowledging they might run independent queries.
-                // It's safer to run them after, or accept they are independent.
-                // Since `checkAndAward` effectively just updates balances and adds history, it's fine to call it.
-                // However, `checkAndAward` is async. We should await it.
-                // Ideally, we'd pass the transaction client `prisma` to `checkAndAward` to keep it atomic, but `ReferralService` uses `this.prisma`.
-                // We'll call it, but note that if `checkAndAward` fails, the transaction might still commit if we don't catch/bubble up properly or if we call it outside.
-                // Let's call it here.
-
                 try {
                     if (previousDeposits === 0) {
-                        await this.referralService.checkAndAward(transaction.userId, 'DEPOSIT_FIRST', transaction.amount);
+                        await this.referralService.checkAndAward(transaction.userId, 'DEPOSIT_FIRST', transaction.amount, `dep_${transaction.id}_first`);
                     }
-                    await this.referralService.checkAndAward(transaction.userId, 'DEPOSIT_RECURRING', transaction.amount);
+                    await this.referralService.checkAndAward(transaction.userId, 'DEPOSIT_RECURRING', transaction.amount, `dep_${transaction.id}_rec`);
                 } catch (e) {
                     console.error('Referral award failed', e);
                 }
 
-                // ── Bonus Redemption + Deposit Wagering Lock ─────────────────
-                // If deposit stored a bonusCode in paymentDetails, redeem it now.
-                // redeemBonus() also sets depositWageringRequired for the bonus deposit multiplier.
-                // For deposits WITHOUT a bonus code, apply the default 1x deposit wagering lock.
-                const bonusCode = (transaction.paymentDetails as any)?.bonusCode;
-                const depositCurrency = (transaction.paymentDetails as any)?.depositCurrency === 'CRYPTO'
-                    ? 'CRYPTO'
-                    : 'INR';
+                const bonusCode = details?.bonusCode;
+                const depositCurrency = isCrypto ? 'CRYPTO' : 'INR';
                 let depositWageringApplied = false;
                 if (bonusCode) {
                     try {
@@ -201,26 +427,27 @@ export class TransactionsService {
                     }
                 }
 
-                // Always ensure deposit wagering is set (default 1x if no bonus applied it)
-                if (!depositWageringApplied) {
+                // Deposit wagering lock + totalDeposited are INR analytics —
+                // only applied to fiat deposits.
+                if (!isCrypto) {
+                    if (!depositWageringApplied) {
+                        try {
+                            await this.bonusService.applyDepositWagering(transaction.userId, transaction.amount, 1);
+                        } catch (e) {
+                            console.error('Deposit wagering lock failed (non-fatal):', e);
+                        }
+                    }
+
                     try {
-                        await this.bonusService.applyDepositWagering(transaction.userId, transaction.amount, 1);
+                        await (this.prisma as any).user.update({
+                            where: { id: transaction.userId },
+                            data: { totalDeposited: { increment: transaction.amount } },
+                        });
                     } catch (e) {
-                        console.error('Deposit wagering lock failed (non-fatal):', e);
+                        console.error('totalDeposited increment failed (non-fatal):', e);
                     }
                 }
-
-                // Track total deposited for analytics
-                try {
-                    await (this.prisma as any).user.update({
-                        where: { id: transaction.userId },
-                        data: { totalDeposited: { increment: transaction.amount } },
-                    });
-                } catch (e) {
-                    console.error('totalDeposited increment failed (non-fatal):', e);
-                }
             }
-            // For withdrawal, balance was already deducted on creation.
 
             const approved = await prisma.transaction.update({
                 where: { id },
@@ -242,13 +469,6 @@ export class TransactionsService {
                         amountStr,
                         currency,
                     ).catch(() => { });
-                } else if (transaction.type === 'WITHDRAWAL') {
-                    this.emailService.sendWithdrawalSuccess(
-                        transaction.user.email,
-                        transaction.user.username || transaction.user.email,
-                        amountStr,
-                        currency,
-                    ).catch(() => { });
                 }
             }
 
@@ -256,20 +476,36 @@ export class TransactionsService {
         });
     }
 
+    /**
+     * Reject a withdrawal — allowed from PENDING or PROCESSED status.
+     * Refunds the user's balance.
+     */
     async rejectTransaction(id: number, adminId: number, remarks?: string) {
         const transaction = await this.prisma.transaction.findUnique({
             where: { id },
         });
 
         if (!transaction) throw new BadRequestException('Transaction not found');
-        if (transaction.status !== 'PENDING') throw new BadRequestException('Transaction is not pending');
+        if (!['PENDING', 'PROCESSED'].includes(transaction.status)) {
+            throw new BadRequestException('Transaction can only be rejected from PENDING or PROCESSED status');
+        }
 
         return this.prisma.$transaction(async (prisma) => {
             if (transaction.type === 'WITHDRAWAL') {
-                // Refund balance to user
+                // Refund to the wallet the withdrawal was originally debited
+                // from. Crypto withdrawals debit `cryptoBalance`, so we must
+                // credit the same wallet on reject — not `balance`.
+                const details = (transaction.paymentDetails as any) || {};
+                const wasCrypto =
+                    String(transaction.paymentMethod || '').toUpperCase() === 'CRYPTO' ||
+                    String(details?.method || '').toUpperCase() === 'CRYPTO' ||
+                    String(details?.currency || '').toUpperCase() === 'CRYPTO';
+
                 await prisma.user.update({
                     where: { id: transaction.userId },
-                    data: { balance: { increment: transaction.amount } },
+                    data: wasCrypto
+                        ? { cryptoBalance: { increment: transaction.amount } }
+                        : { balance: { increment: transaction.amount } },
                 });
             }
 

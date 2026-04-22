@@ -27,7 +27,7 @@ export default function MainContent() {
     }, []);
 
     return (
-        <main className="flex-1 bg-[#0a111a] pt-[64px] min-h-screen pb-20 md:ml-[240px] xl:mr-[64px] overflow-hidden">
+        <main className="flex-1 bg-[#0a111a] pt-[60px] md:pt-[64px] min-h-screen pb-20 md:ml-[240px] xl:mr-[64px] overflow-hidden">
             {/* Top Area */}
             <div className="p-4 pb-0">
                 {/* Tabs */}

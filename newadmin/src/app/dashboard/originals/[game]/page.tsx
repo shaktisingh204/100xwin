@@ -65,6 +65,8 @@ export default function GameConfigPage() {
   const params = useParams();
   const router = useRouter();
   const game = params.game as string;
+  const launchReady = ["mines", "crash", "dice", "limbo", "plinko"].includes(game);
+  const historyReady = ["mines", "plinko"].includes(game);
 
   const [config, setConfig] = useState<any>(null);
   const [ggr, setGgr] = useState<any>(null);
@@ -283,9 +285,17 @@ export default function GameConfigPage() {
           {/* Game Status */}
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
             <h2 className="text-sm font-bold text-white mb-1 flex items-center gap-2"><Settings2 size={14} /> Game Status</h2>
-            <FormRow label="Game Active" hint="Allow players to access and bet on this game">
-              <ToggleSwitch value={config.isActive} onChange={(v) => update("isActive", v)} />
+            <FormRow
+              label="Game Active"
+              hint={launchReady ? "Allow players to access and bet on this game" : "This title is visible as coming soon only. Keep it inactive until the gameplay client is built."}
+            >
+              <ToggleSwitch value={config.isActive} onChange={(v) => update("isActive", v)} disabled={!launchReady} />
             </FormRow>
+            {!launchReady && (
+              <div className="mt-3 rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-xs text-sky-200">
+                The new lobby card is live now, but the playable route for this game has not been shipped yet.
+              </div>
+            )}
             <FormRow label="Maintenance Mode" hint="Show maintenance banner and block new games">
               <ToggleSwitch value={config.maintenanceMode} onChange={(v) => update("maintenanceMode", v)} />
             </FormRow>
@@ -536,15 +546,16 @@ export default function GameConfigPage() {
           {/* Quick links */}
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-2">
             <h3 className="text-sm font-bold text-white mb-3">Quick Links</h3>
-            {[
-              { href: `/dashboard/originals/${game}/history`, label: "Game History" },
-              { href: "/dashboard/originals", label: "All Games Dashboard" },
-            ].map((l) => (
-              <Link key={l.href} href={l.href}
+            {historyReady && (
+              <Link href={`/dashboard/originals/${game}/history`}
                 className="flex items-center justify-between p-2.5 bg-slate-900 hover:bg-slate-700 rounded-lg text-sm text-slate-300 hover:text-white transition-colors">
-                {l.label} <ArrowLeft size={12} className="rotate-180 text-slate-500" />
+                Game History <ArrowLeft size={12} className="rotate-180 text-slate-500" />
               </Link>
-            ))}
+            )}
+            <Link href="/dashboard/originals"
+              className="flex items-center justify-between p-2.5 bg-slate-900 hover:bg-slate-700 rounded-lg text-sm text-slate-300 hover:text-white transition-colors">
+              All Games Dashboard <ArrowLeft size={12} className="rotate-180 text-slate-500" />
+            </Link>
           </div>
         </div>
       </div>

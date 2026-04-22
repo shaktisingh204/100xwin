@@ -1,13 +1,23 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { crmService, CrmSegments } from '../../../services/crm.service';
+import React, { useEffect, useState, useTransition } from 'react';
+import { getCrmSegments, getCrmSegmentUsers, sendCrmCampaign } from '@/actions/crm';
+import { useAuth } from '@/context/AuthContext';
 import { Users, UserPlus, UserMinus, Zap, Send, Loader2, Clock } from 'lucide-react';
 import Link from 'next/link';
 
 type CampaignRecord = { segment: string; message: string; type: string; sentAt: string; count: number };
 
+interface CrmSegments {
+    vip: number;
+    new: number;
+    active: number;
+    churned: number;
+    dormant: number;
+}
+
 export default function CrmPage() {
+    const { user: adminUser } = useAuth();
     const [segments, setSegments] = useState<CrmSegments | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedSegment, setSelectedSegment] = useState<string | null>(null);
@@ -21,15 +31,14 @@ export default function CrmPage() {
 
     useEffect(() => {
         fetchSegments();
-        // Load campaigns from localStorage for now
         const stored = localStorage.getItem('admin_campaigns');
         if (stored) setCampaigns(JSON.parse(stored));
     }, []);
 
     const fetchSegments = async () => {
         try {
-            const data = await crmService.getSegments();
-            setSegments(data);
+            const res = await getCrmSegments();
+            if (res.success) setSegments(res.data);
         } catch (error) {
             console.error("Failed to fetch segments", error);
         } finally {
@@ -41,8 +50,8 @@ export default function CrmPage() {
         setSelectedSegment(segment);
         setUsersLoading(true);
         try {
-            const res = await crmService.getSegmentUsers(segment);
-            setUsers(res.users);
+            const res = await getCrmSegmentUsers(segment);
+            if (res.success) setUsers(res.data);
         } catch (error) {
             console.error("Failed to fetch users", error);
         } finally {
@@ -52,27 +61,34 @@ export default function CrmPage() {
 
     const handleSendNotification = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedSegment) return;
+        if (!selectedSegment || !message) return;
 
         setSending(true);
         try {
-            await crmService.sendNotification(selectedSegment, message);
-
-            // Record campaign
-            const record: CampaignRecord = {
-                segment: selectedSegment,
+            const res = await sendCrmCampaign(
+                selectedSegment,
+                title || 'Admin Announcement',
                 message,
-                type: msgType,
-                sentAt: new Date().toISOString(),
-                count: users.length
-            };
-            const updated = [record, ...campaigns].slice(0, 10);
-            setCampaigns(updated);
-            localStorage.setItem('admin_campaigns', JSON.stringify(updated));
+                (adminUser as any)?.id,
+            );
 
-            setMessage('');
-            setTitle('');
-            alert(`✅ Campaign sent to ${users.length} users in ${selectedSegment} segment!`);
+            if (res.success) {
+                const record: CampaignRecord = {
+                    segment: selectedSegment,
+                    message,
+                    type: msgType,
+                    sentAt: new Date().toISOString(),
+                    count: res.sentCount ?? users.length,
+                };
+                const updated = [record, ...campaigns].slice(0, 10);
+                setCampaigns(updated);
+                localStorage.setItem('admin_campaigns', JSON.stringify(updated));
+                setMessage('');
+                setTitle('');
+                alert(`✅ Campaign sent to ${res.sentCount ?? users.length} users in ${selectedSegment} segment!`);
+            } else {
+                alert(res.error || 'Failed to send notification.');
+            }
         } catch (error) {
             console.error("Failed to send", error);
             alert("Failed to send notification.");
@@ -88,13 +104,13 @@ export default function CrmPage() {
         { id: 'NEW', title: 'New Registrations', count: segments?.new || 0, icon: UserPlus, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'hover:border-emerald-500/50' },
         { id: 'ACTIVE', title: 'Active Players', count: segments?.active || 0, icon: Zap, color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'hover:border-indigo-500/50' },
         { id: 'CHURNED', title: 'Churn Risk', count: segments?.churned || 0, icon: UserMinus, color: 'text-red-400', bg: 'bg-red-500/10', border: 'hover:border-red-500/50' },
-        { id: 'DORMANT', title: 'Dormant (30d)', count: 0, icon: Clock, color: 'text-slate-400', bg: 'bg-slate-500/10', border: 'hover:border-slate-500/50' },
+        { id: 'DORMANT', title: 'Dormant (30d)', count: segments?.dormant || 0, icon: Clock, color: 'text-slate-400', bg: 'bg-slate-500/10', border: 'hover:border-slate-500/50' },
     ];
 
     return (
         <div className="space-y-8">
             <div>
-                <h1 className="text-3xl font-bold text-white">CRM & Segmentation</h1>
+                <h1 className="text-3xl font-bold text-white">CRM &amp; Segmentation</h1>
                 <p className="text-slate-400 mt-1">Analyze player segments and engage with targeted campaigns.</p>
             </div>
 
@@ -185,29 +201,13 @@ export default function CrmPage() {
                                 </div>
                                 <div>
                                     <label className="block text-xs text-slate-400 mb-1.5 font-medium">Title</label>
-                                    <input
-                                        type="text"
-                                        value={title}
-                                        onChange={e => setTitle(e.target.value)}
-                                        placeholder="Campaign title..."
-                                        className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm focus:border-indigo-500 focus:outline-none"
-                                    />
+                                    <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Campaign title..." className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white text-sm focus:border-indigo-500 focus:outline-none" />
                                 </div>
                                 <div>
                                     <label className="block text-xs text-slate-400 mb-1.5 font-medium">Message *</label>
-                                    <textarea
-                                        value={message}
-                                        onChange={e => setMessage(e.target.value)}
-                                        placeholder="Enter message..."
-                                        className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white h-28 resize-none focus:border-indigo-500 focus:outline-none text-sm"
-                                        required
-                                    />
+                                    <textarea value={message} onChange={e => setMessage(e.target.value)} placeholder="Enter message..." className="w-full bg-slate-900 border border-slate-700 rounded px-3 py-2 text-white h-28 resize-none focus:border-indigo-500 focus:outline-none text-sm" required />
                                 </div>
-                                <button
-                                    type="submit"
-                                    disabled={sending || !message}
-                                    className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm"
-                                >
+                                <button type="submit" disabled={sending || !message} className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 text-sm">
                                     {sending ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
                                     Send Campaign
                                 </button>

@@ -23,6 +23,9 @@ interface VipApplication {
         email?: string;
         phoneNumber?: string;
         balance: number;
+        totalDeposited: number;
+        totalWagered: number;
+        vipTier: string;
         createdAt: string;
         kycStatus: string;
     };
@@ -65,6 +68,7 @@ export default function VipApplicationsPage() {
     const [selectedApp, setSelectedApp] = useState<VipApplication | null>(null);
     const [reviewStatus, setReviewStatus] = useState<string>('APPROVED');
     const [reviewNotes, setReviewNotes] = useState('');
+    const [assignedTier, setAssignedTier] = useState('SILVER');
     const [reviewing, setReviewing] = useState(false);
 
     const fetchData = async (pg = page, status = filterStatus) => {
@@ -100,7 +104,7 @@ export default function VipApplicationsPage() {
         if (!selectedApp) return;
         setReviewing(true);
         try {
-            const res = await reviewVipApplication(selectedApp.id, reviewStatus, reviewNotes || undefined);
+            const res = await reviewVipApplication(selectedApp.id, reviewStatus, reviewNotes || undefined, 1, reviewStatus === 'APPROVED' ? assignedTier : undefined);
             if (res.success) {
                 setSelectedApp(null);
                 setReviewNotes('');
@@ -220,7 +224,7 @@ export default function VipApplicationsPage() {
                                     <td className="p-3 text-white text-xs">₹{app.user.balance.toLocaleString()}</td>
                                     <td className="p-3 text-slate-400 text-xs">{new Date(app.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                                     <td className="p-3">
-                                        <button onClick={() => { setSelectedApp(app); setReviewStatus('APPROVED'); setReviewNotes(''); }}
+                                        <button onClick={() => { setSelectedApp(app); setReviewStatus('APPROVED'); setReviewNotes(''); setAssignedTier('SILVER'); }}
                                             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-colors">
                                             <Eye size={12} /> Review
                                         </button>
@@ -258,11 +262,13 @@ export default function VipApplicationsPage() {
                             <div className="grid grid-cols-2 gap-3 text-xs">
                                 {[
                                     { label: 'Balance', value: `₹${selectedApp.user.balance.toLocaleString()}` },
+                                    { label: 'Total Deposited', value: `₹${(selectedApp.user.totalDeposited || 0).toLocaleString()}` },
+                                    { label: 'Total Wagered', value: `₹${(selectedApp.user.totalWagered || 0).toLocaleString()}` },
                                     { label: 'KYC', value: selectedApp.user.kycStatus },
+                                    { label: 'Current VIP', value: selectedApp.user.vipTier || 'NONE' },
                                     { label: 'Platform', value: selectedApp.currentPlatform || '—' },
                                     { label: 'Monthly Vol.', value: selectedApp.monthlyVolume ? `₹${selectedApp.monthlyVolume.toLocaleString()}` : '—' },
                                     { label: 'User Since', value: new Date(selectedApp.user.createdAt).toLocaleDateString() },
-                                    { label: 'IP', value: selectedApp.ipAddress || '—' },
                                 ].map(item => (
                                     <div key={item.label} className="bg-slate-900 rounded-lg p-2.5">
                                         <div className="text-slate-500">{item.label}</div>
@@ -294,6 +300,26 @@ export default function VipApplicationsPage() {
                                     ))}
                                 </div>
                             </div>
+
+                            {/* Tier selection (only when approving) */}
+                            {reviewStatus === 'APPROVED' && (
+                                <div>
+                                    <label className="block text-slate-400 text-xs font-bold mb-2">Assign VIP Tier</label>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {[
+                                            { key: 'SILVER', label: '🥈 Silver', color: 'text-slate-300', activeBg: 'bg-slate-400/20 border-slate-400/40' },
+                                            { key: 'GOLD', label: '🥇 Gold', color: 'text-amber-400', activeBg: 'bg-amber-500/20 border-amber-500/40' },
+                                            { key: 'PLATINUM', label: '🏆 Platinum', color: 'text-purple-400', activeBg: 'bg-purple-500/20 border-purple-500/40' },
+                                            { key: 'DIAMOND', label: '💎 Diamond', color: 'text-blue-400', activeBg: 'bg-blue-500/20 border-blue-500/40' },
+                                        ].map(t => (
+                                            <button key={t.key} onClick={() => setAssignedTier(t.key)}
+                                                className={`py-2 rounded-lg text-xs font-black transition-colors border ${assignedTier === t.key ? `${t.activeBg} ${t.color}` : 'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600'}`}>
+                                                {t.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             <div>
                                 <label className="block text-slate-400 text-xs font-bold mb-1">Internal Notes <span className="font-normal opacity-60">— optional, shown to user if rejected</span></label>

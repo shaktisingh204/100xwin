@@ -14,6 +14,8 @@ import {
     deleteSportsPromotion,
     toggleSportsPromotionStatus,
     setSportsPromotionTrigger,
+    getEarlySixBetList,
+    refundEarlySixPromotion,
 } from '@/actions/sports-promotions';
 import { getPromoTeamEvents } from '@/actions/sports';
 import { uploadToCloudflare } from '@/actions/upload';
@@ -50,7 +52,7 @@ const PROMOTION_TYPES = [
     {
         value: 'FIRST_OVER_SIX_CASHBACK',
         label: 'First Overs Six Cashback',
-        description: 'If any team hits a six in the configured opening overs, all losing bets on the match get cashback.',
+        description: 'If the backed pre-match Match Odds team hits a six in the configured opening overs but still loses, that losing bet gets cashback.',
         benefitType: 'REFUND',
         defaultBadge: 'TRIGGER PROMO',
     },
@@ -176,7 +178,7 @@ function isTriggerPromotion(type: PromotionType) {
 }
 
 function isSelectionTriggerPromotion(type: PromotionType) {
-    return type === 'LEAD_MARGIN_PAYOUT' || type === 'LATE_LEAD_REFUND' || type === 'PERIOD_LEAD_PAYOUT';
+    return type === 'FIRST_OVER_SIX_CASHBACK' || type === 'LEAD_MARGIN_PAYOUT' || type === 'LATE_LEAD_REFUND' || type === 'PERIOD_LEAD_PAYOUT';
 }
 
 function isPayoutPromotion(type: PromotionType) {
@@ -239,7 +241,7 @@ function getTriggerSummary(config: any) {
 
     switch (config?.promotionType) {
         case 'FIRST_OVER_SIX_CASHBACK':
-            return `Any team hits a six in first ${oversWindow} over(s)`;
+            return `Selected pre-match Match Odds team hits a six in first ${oversWindow} over(s)`;
         case 'LEAD_MARGIN_PAYOUT':
             return `Selected team leads by ${leadThreshold}+`;
         case 'LATE_LEAD_REFUND':
@@ -256,7 +258,7 @@ function getSuggestedTitle(formData: PromotionForm) {
 
     switch (formData.promotionType) {
         case 'FIRST_OVER_SIX_CASHBACK':
-            return `${eventName} — ${formData.refundPercentage}% back if a 6 lands in first ${formData.triggerOversWindow} over${formData.triggerOversWindow > 1 ? 's' : ''}`;
+            return `${eventName} — ${formData.refundPercentage}% back if your pre-match team hits a 6 in first ${formData.triggerOversWindow} over${formData.triggerOversWindow > 1 ? 's' : ''}`;
         case 'LEAD_MARGIN_PAYOUT':
             return `${eventName} — Paid as winner if your team leads by ${formData.triggerLeadThreshold}+`;
         case 'LATE_LEAD_REFUND':
@@ -274,7 +276,7 @@ function getSuggestedDescription(formData: PromotionForm) {
 
     switch (formData.promotionType) {
         case 'FIRST_OVER_SIX_CASHBACK':
-            return `If any team hits a six in the first ${formData.triggerOversWindow} over${formData.triggerOversWindow > 1 ? 's' : ''} of ${eventName}, losing bets get ${formData.refundPercentage}% refunded to the ${walletLabel}.`;
+            return `Place a pre-match Match Odds bet on ${eventName}. If your selected team hits a six in the first ${formData.triggerOversWindow} over${formData.triggerOversWindow > 1 ? 's' : ''} but still loses, get ${formData.refundPercentage}% refunded to the ${walletLabel}.`;
         case 'LEAD_MARGIN_PAYOUT':
             return `Back a team in ${eventName}. If it goes ${formData.triggerLeadThreshold}+ ahead but still fails to win, the bet can still be paid like a winner to the ${walletLabel}.`;
         case 'LATE_LEAD_REFUND':
@@ -304,6 +306,12 @@ export default function PromoTeamsPage() {
     const [formData, setFormData] = useState<PromotionForm>(defaultForm);
     const [error, setError] = useState('');
     const [uploading, setUploading] = useState(false);
+    const [success, setSuccess] = useState('');
+    const [earlySixListOpen, setEarlySixListOpen] = useState(false);
+    const [earlySixListLoading, setEarlySixListLoading] = useState(false);
+    const [earlySixRefundLoading, setEarlySixRefundLoading] = useState(false);
+    const [selectedEarlySixPromo, setSelectedEarlySixPromo] = useState<any | null>(null);
+    const [earlySixBets, setEarlySixBets] = useState<any[]>([]);
 
     const [allEvents, setAllEvents] = useState<any[]>([]);
     const [eventsLoading, setEventsLoading] = useState(false);
@@ -346,16 +354,50 @@ export default function PromoTeamsPage() {
         }
     };
 
+    const loadEarlySixBetList = useCallback(async (promotionId: string) => {
+        setEarlySixListLoading(true);
+        try {
+            const response = await getEarlySixBetList(promotionId);
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to load Early Six bet list');
+            }
+            setEarlySixBets(response.data || []);
+        } catch (loadError: any) {
+            setError(loadError.message || 'Failed to load Early Six bet list.');
+            setEarlySixBets([]);
+        } finally {
+            setEarlySixListLoading(false);
+        }
+    }, []);
+
+    const searchEventsOnServer = useCallback(async (query: string) => {
+        if (query.trim().length < 2) {
+            setEventResults([]);
+            setEventsLoading(false);
+            return;
+        }
+        setEventsLoading(true);
+        setEventsError(false);
+        try {
+            const response = await getPromoTeamEvents(query.trim());
+            setEventResults(response.success ? (response.data || []).slice(0, 30) : []);
+        } catch {
+            setEventsError(true);
+            setEventResults([]);
+        } finally {
+            setEventsLoading(false);
+        }
+    }, []);
+
+    // Keep loadEvents for the initial "show all live" on focus (no query)
     const loadEvents = useCallback(async () => {
         if (eventsLoading || allEvents.length > 0) return;
-
         setEventsLoading(true);
         setEventsError(false);
         try {
             const response = await getPromoTeamEvents();
             setAllEvents(response.success ? (response.data || []) : []);
-        } catch (loadError) {
-            console.error(loadError);
+        } catch {
             setEventsError(true);
         } finally {
             setEventsLoading(false);
@@ -368,41 +410,30 @@ export default function PromoTeamsPage() {
 
         if (debounceRef.current) clearTimeout(debounceRef.current);
 
+        if (query.trim().length < 2) {
+            setEventResults([]);
+            return;
+        }
+
         debounceRef.current = setTimeout(() => {
-            if (query.trim().length < 2) {
-                setEventResults([]);
-                return;
-            }
-
-            const search = query.toLowerCase();
-            const results = allEvents.filter((event) => {
-                const haystack = [
-                    event?.event_name,
-                    event?.home_team,
-                    event?.away_team,
-                    event?.competition_name,
-                    event?.sport_name,
-                ]
-                    .filter(Boolean)
-                    .join(' ')
-                    .toLowerCase();
-
-                return haystack.includes(search);
-            }).slice(0, 20);
-
-            setEventResults(results);
-        }, 150);
+            searchEventsOnServer(query);
+        }, 250);
     };
 
     const reloadEvents = async () => {
         setAllEvents([]);
+        setEventResults([]);
         setEventsError(false);
         setEventsLoading(true);
         try {
-            const response = await getPromoTeamEvents();
-            setAllEvents(response.success ? (response.data || []) : []);
-        } catch (loadError) {
-            console.error(loadError);
+            const response = await getPromoTeamEvents(eventSearch.trim().length >= 2 ? eventSearch.trim() : '');
+            const list = response.success ? (response.data || []) : [];
+            if (eventSearch.trim().length >= 2) {
+                setEventResults(list.slice(0, 30));
+            } else {
+                setAllEvents(list);
+            }
+        } catch {
             setEventsError(true);
         } finally {
             setEventsLoading(false);
@@ -645,6 +676,38 @@ export default function PromoTeamsPage() {
         }
     };
 
+    const handleOpenEarlySixList = async (config: any) => {
+        setError('');
+        setSuccess('');
+        setSelectedEarlySixPromo(config);
+        setEarlySixListOpen(true);
+        await loadEarlySixBetList(config._id);
+    };
+
+    const handleRefundEarlySix = async () => {
+        if (!selectedEarlySixPromo) return;
+
+        setError('');
+        setSuccess('');
+        setEarlySixRefundLoading(true);
+        try {
+            const response = await refundEarlySixPromotion(selectedEarlySixPromo._id, 1);
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to refund Early Six bets');
+            }
+
+            setSuccess(`Refunded ${response.refundedBetCount} bet${response.refundedBetCount === 1 ? '' : 's'} for ${formatCurrency(response.totalRefundAmount || 0)}.`);
+            await Promise.all([
+                fetchConfigs(),
+                loadEarlySixBetList(selectedEarlySixPromo._id),
+            ]);
+        } catch (refundError: any) {
+            setError(refundError.message || 'Failed to refund Early Six bets.');
+        } finally {
+            setEarlySixRefundLoading(false);
+        }
+    };
+
     const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         if (!event.target.files?.[0]) return;
 
@@ -674,6 +737,18 @@ export default function PromoTeamsPage() {
 
     return (
         <div className="space-y-6">
+            {error && (
+                <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                    {error}
+                </div>
+            )}
+
+            {success && (
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+                    {success}
+                </div>
+            )}
+
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-2.5">
                     <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
@@ -889,6 +964,14 @@ export default function PromoTeamsPage() {
                                             <div className="text-[10px] text-slate-400 mt-1">
                                                 Total credit: {formatCurrency(config.totalBenefitAmount || config.totalRefundAmount || 0)}
                                             </div>
+                                            {config.promotionType === 'FIRST_OVER_SIX_CASHBACK' && (
+                                                <button
+                                                    onClick={() => handleOpenEarlySixList(config)}
+                                                    className="mt-2 text-[10px] font-semibold text-sky-300 hover:text-sky-200"
+                                                >
+                                                    See Early Six bet list
+                                                </button>
+                                            )}
                                             <div className="text-[10px] text-slate-500 mt-1">
                                                 Created: {formatDateTime(config.createdAt)}
                                             </div>
@@ -979,11 +1062,11 @@ export default function PromoTeamsPage() {
                                                 </div>
                                             ) : eventResults.length === 0 && eventSearch.trim().length >= 2 ? (
                                                 <div className="p-4 text-center text-xs text-slate-500">
-                                                    No matches found for "{eventSearch}".
+                                                    No Sportradar matches found for "{eventSearch}".
                                                 </div>
                                             ) : eventResults.length === 0 ? (
                                                 <div className="p-3 text-center text-xs text-slate-500">
-                                                    Type at least 2 characters to search matches.
+                                                    Type at least 2 characters to search Sportradar matches.
                                                 </div>
                                             ) : (
                                                 eventResults.map((event) => (
@@ -996,15 +1079,22 @@ export default function PromoTeamsPage() {
                                                         <div className="flex items-center justify-between gap-3">
                                                             <div>
                                                                 <div className="text-sm font-semibold text-white">
-                                                                    {event.event_name}
+                                                                    {event.home_team && event.away_team
+                                                                        ? `${event.home_team} vs ${event.away_team}`
+                                                                        : event.event_name}
                                                                 </div>
                                                                 <div className="text-[11px] text-slate-400 mt-0.5">
-                                                                    {event.competition_name || 'Unknown competition'} • {event.sport_name || 'Sport'}
+                                                                    {event.competition_name || 'Unknown competition'}
+                                                                </div>
+                                                                <div className="text-[10px] text-slate-600 font-mono mt-0.5">
+                                                                    {event.event_id}
                                                                 </div>
                                                             </div>
-                                                            <div className="text-[10px] text-slate-500 text-right">
-                                                                <div>{event.in_play ? 'Live' : 'Upcoming'}</div>
-                                                                <div>{formatDateTime(event.open_date)}</div>
+                                                            <div className="text-right flex-shrink-0">
+                                                                <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${event.in_play ? 'bg-red-500/20 text-red-300' : 'bg-slate-700 text-slate-400'}`}>
+                                                                    {event.in_play ? '🔴 LIVE' : 'Upcoming'}
+                                                                </div>
+                                                                <div className="text-[10px] text-slate-500 mt-1">{formatDateTime(event.open_date)}</div>
                                                             </div>
                                                         </div>
                                                     </button>
@@ -1433,6 +1523,116 @@ export default function PromoTeamsPage() {
                                 {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
                                 {editing ? 'Save Changes' : 'Create Promotion'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {earlySixListOpen && selectedEarlySixPromo && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+                    <div className="w-full max-w-5xl rounded-2xl border border-slate-700 bg-slate-800 shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-slate-700 px-5 py-4">
+                            <div>
+                                <h2 className="text-lg font-bold text-white">Early Six Bet List</h2>
+                                <p className="mt-1 text-xs text-slate-400">
+                                    {selectedEarlySixPromo.eventName || 'Selected match'}
+                                    {(selectedEarlySixPromo.triggerConfig?.qualifyingSelections || []).length > 0
+                                        ? ` · Qualified: ${selectedEarlySixPromo.triggerConfig.qualifyingSelections.join(', ')}`
+                                        : ''}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setEarlySixListOpen(false)}
+                                className="text-slate-400 hover:text-white"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 px-5 py-4">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <p className="text-xs text-slate-400">
+                                    Only Match Odds bets are shown below. Only the first qualifying pre-match Match Odds bet per user can be refunded.
+                                </p>
+                                <button
+                                    onClick={handleRefundEarlySix}
+                                    disabled={earlySixRefundLoading || earlySixBets.every((bet) => !bet.refundable)}
+                                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {earlySixRefundLoading ? 'Refunding...' : 'Refund Eligible Bets'}
+                                </button>
+                            </div>
+
+                            {earlySixListLoading ? (
+                                <div className="py-12 text-center text-sm text-slate-400">
+                                    Loading Early Six bets...
+                                </div>
+                            ) : earlySixBets.length === 0 ? (
+                                <div className="py-12 text-center text-sm text-slate-400">
+                                    No Match Odds bets found for this match yet.
+                                </div>
+                            ) : (
+                                <div className="max-h-[60vh] overflow-auto rounded-xl border border-slate-700">
+                                    <table className="min-w-full text-sm">
+                                        <thead className="sticky top-0 bg-slate-900/95">
+                                            <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400">
+                                                <th className="px-4 py-3">User</th>
+                                                <th className="px-4 py-3">Selection</th>
+                                                <th className="px-4 py-3">Stake</th>
+                                                <th className="px-4 py-3">Refund</th>
+                                                <th className="px-4 py-3">Outcome</th>
+                                                <th className="px-4 py-3">Eligibility</th>
+                                                <th className="px-4 py-3">Placed</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {earlySixBets.map((bet) => (
+                                                <tr key={bet.id} className="border-t border-slate-700">
+                                                    <td className="px-4 py-3">
+                                                        <div className="font-semibold text-white">{bet.username}</div>
+                                                        <div className="text-[11px] text-slate-500">
+                                                            #{bet.userId}{bet.email ? ` · ${bet.email}` : ''}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="text-slate-200">{bet.selectionName}</div>
+                                                        <div className="text-[11px] text-slate-500">{bet.marketName}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3 font-mono text-slate-200">{formatCurrency(bet.stake)}</td>
+                                                    <td className="px-4 py-3 font-mono text-emerald-300">{bet.refundAmount > 0 ? formatCurrency(bet.refundAmount) : '—'}</td>
+                                                    <td className="px-4 py-3">
+                                                        <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${
+                                                            bet.status === 'WON'
+                                                                ? 'bg-emerald-500/10 text-emerald-300'
+                                                                : bet.status === 'LOST'
+                                                                    ? 'bg-red-500/10 text-red-300'
+                                                                    : bet.status === 'VOID'
+                                                                        ? 'bg-amber-500/10 text-amber-300'
+                                                                        : 'bg-slate-700 text-slate-300'
+                                                        }`}>
+                                                            {bet.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${
+                                                            bet.refunded
+                                                                ? 'bg-sky-500/10 text-sky-300'
+                                                                : bet.refundable
+                                                                    ? 'bg-emerald-500/10 text-emerald-300'
+                                                                    : bet.countedForEarlySix
+                                                                        ? 'bg-violet-500/10 text-violet-300'
+                                                                        : 'bg-slate-700 text-slate-300'
+                                                        }`}>
+                                                            {bet.eligibilityLabel}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-[11px] text-slate-400">{formatDateTime(bet.createdAt)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -9,7 +9,7 @@ const LAAFFIC_API_SECRET = 'NU2GHjX0';
 const LAAFFIC_APP_ID = 'y0Oqot98';
 const LAAFFIC_SENDER_ID = '';         // optional branded sender name
 
-const OTP_TTL_MINUTES = 5;
+const OTP_TTL_MINUTES = 2;
 const MAX_ATTEMPTS = 5;
 const OTP_COOLDOWN_SECONDS = 60; // prevent spam: only 1 OTP per phone per minute
 

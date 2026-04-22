@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { SecurityTokenGuard } from '../../auth/security-token.guard';
+import { EventsGateway } from '../../events.gateway';
 import { CreateMatchCashbackPromotionDto } from '../dto/create-match-cashback-promotion.dto';
 import { SetPromotionTriggerDto } from '../dto/set-promotion-trigger.dto';
 import { UpdateMatchCashbackPromotionDto } from '../dto/update-match-cashback-promotion.dto';
@@ -8,7 +9,10 @@ import { MatchCashbackPromotionsService } from '../services/match-cashback-promo
 @Controller('admin/promotions')
 @UseGuards(SecurityTokenGuard)
 export class AdminMatchCashbackPromotionsController {
-    constructor(private readonly promotionsService: MatchCashbackPromotionsService) { }
+    constructor(
+        private readonly promotionsService: MatchCashbackPromotionsService,
+        private readonly eventsGateway: EventsGateway,
+    ) { }
 
     @Post()
     async create(@Body() dto: CreateMatchCashbackPromotionDto) {
@@ -33,6 +37,20 @@ export class AdminMatchCashbackPromotionsController {
     @Post(':id/trigger-condition')
     async triggerCondition(@Param('id') id: string, @Body() dto: SetPromotionTriggerDto) {
         return this.promotionsService.setTriggerState(id, dto);
+    }
+
+    @Post('wallet-sync')
+    async walletSync(@Body() body: { userIds?: Array<number | string> }) {
+        const userIds = Array.isArray(body?.userIds) ? body.userIds : [];
+
+        for (const userId of userIds) {
+            this.eventsGateway.emitUserWalletUpdate(userId);
+        }
+
+        return {
+            success: true,
+            emitted: userIds.length,
+        };
     }
 
     @Delete(':id')

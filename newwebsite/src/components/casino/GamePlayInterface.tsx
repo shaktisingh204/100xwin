@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     X, RefreshCw, Heart, Maximize2, Minimize2,
     ChevronLeft, Volume2, VolumeX, Share2, Info,
@@ -34,9 +34,7 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
     const [iframeLoaded, setIframeLoaded] = useState(false);
     const [iframeError, setIframeError] = useState(false);
     const [showInfo, setShowInfo] = useState(false);
-    const [controlsVisible, setControlsVisible] = useState(true);
     const [isMobile, setIsMobile] = useState(false);
-    const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
     /* ── detect mobile ── */
@@ -46,19 +44,6 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
         window.addEventListener('resize', check);
         return () => window.removeEventListener('resize', check);
     }, []);
-
-    /* ── auto-hide controls on mobile after 3s idle ── */
-    const resetHideTimer = useCallback(() => {
-        if (!isMobile) return;
-        setControlsVisible(true);
-        if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-        hideTimerRef.current = setTimeout(() => setControlsVisible(false), 3500);
-    }, [isMobile]);
-
-    useEffect(() => {
-        if (isMobile) resetHideTimer();
-        return () => { if (hideTimerRef.current) clearTimeout(hideTimerRef.current); };
-    }, [isMobile, resetHideTimer]);
 
     /* ── fullscreen API ── */
     const toggleFullscreen = () => {
@@ -101,13 +86,10 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
                 ref={containerRef}
                 className="fixed inset-0 z-[200] bg-black flex flex-col"
                 style={{ touchAction: 'none' }}
-                onClick={resetHideTimer}
             >
                 {/* ── TOP HEADER BAR ── */}
                 <div
-                    className={`absolute top-0 left-0 right-0 z-[201] flex items-center gap-2 px-3 py-2 transition-all duration-300 ${
-                        controlsVisible ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-full'
-                    }`}
+                    className="absolute top-0 left-0 right-0 z-[201] flex items-center gap-2 px-3 py-2"
                     style={{
                         background: 'linear-gradient(180deg, rgba(0,0,0,0.85) 0%, transparent 100%)',
                         paddingTop: 'max(env(safe-area-inset-top, 0px), 8px)',
@@ -116,7 +98,7 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
                     {/* Back */}
                     <button
                         onClick={onClose}
-                        className="flex items-center justify-center w-9 h-9 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-white active:scale-95 transition-transform"
+                        className="flex items-center justify-center w-9 h-9 rounded-xl bg-black/60 backdrop-blur-md border border-white/[0.06] text-white active:scale-95 transition-transform"
                     >
                         <ChevronLeft size={20} />
                     </button>
@@ -124,7 +106,7 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
                     {/* Game info */}
                     <div className="flex-1 min-w-0 px-1">
                         <p className="text-white font-bold text-sm leading-tight truncate">{game.name}</p>
-                        <p className="text-[#E37D32] text-[10px] font-semibold uppercase tracking-wider truncate">
+                        <p className="text-brand-gold text-[10px] font-semibold uppercase tracking-wider truncate">
                             {game.provider}
                         </p>
                     </div>
@@ -136,7 +118,7 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
                             className={`flex items-center justify-center w-9 h-9 rounded-xl backdrop-blur-md border transition-all active:scale-95 ${
                                 isFavorite
                                     ? 'bg-yellow-500/20 border-yellow-500/50 text-yellow-400'
-                                    : 'bg-black/60 border-white/10 text-white'
+                                    : 'bg-black/60 border-white/[0.06] text-white'
                             }`}
                         >
                             <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
@@ -144,14 +126,14 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
 
                         <button
                             onClick={handleRefresh}
-                            className="flex items-center justify-center w-9 h-9 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-white active:scale-95 transition-transform"
+                            className="flex items-center justify-center w-9 h-9 rounded-xl bg-black/60 backdrop-blur-md border border-white/[0.06] text-white active:scale-95 transition-transform"
                         >
                             <RefreshCw size={16} />
                         </button>
 
                         <button
                             onClick={toggleFullscreen}
-                            className="flex items-center justify-center w-9 h-9 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-white active:scale-95 transition-transform"
+                            className="flex items-center justify-center w-9 h-9 rounded-xl bg-black/60 backdrop-blur-md border border-white/[0.06] text-white active:scale-95 transition-transform"
                         >
                             {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                         </button>
@@ -162,24 +144,24 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
                 <div className="flex-1 relative">
                     {/* Error state */}
                     {iframeError && (
-                        <div className="absolute inset-0 bg-[#0d0d0f] z-20 flex flex-col items-center justify-center gap-4 px-6">
-                            <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-3xl">⚠️</div>
+                        <div className="absolute inset-0 bg-bg-deep z-20 flex flex-col items-center justify-center gap-4 px-6">
+                            <div className="w-14 h-14 rounded-2xl bg-danger-alpha-10 border border-danger/20 flex items-center justify-center text-3xl">⚠️</div>
                             <div className="text-center">
                                 <p className="text-white font-bold text-base">Failed to load game</p>
                                 <p className="text-white/40 text-xs mt-1">The game could not be loaded. Try refreshing.</p>
                             </div>
                             <div className="flex gap-3">
-                                <button onClick={handleRefresh} className="px-4 py-2 rounded-xl bg-[#E37D32] text-black text-sm font-bold active:scale-95 transition-transform">Retry</button>
-                                <button onClick={onClose} className="px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-white text-sm font-bold active:scale-95 transition-transform">Close</button>
+                                <button onClick={handleRefresh} className="px-4 py-2 rounded-xl bg-brand-gold text-text-inverse text-sm font-bold active:scale-95 transition-transform">Retry</button>
+                                <button onClick={onClose} className="px-4 py-2 rounded-xl bg-white/[0.08] border border-white/[0.06] text-white text-sm font-bold active:scale-95 transition-transform">Close</button>
                             </div>
                         </div>
                     )}
 
                     {!iframeLoaded && !iframeError && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-[#0d0d0f] z-10">
+                        <div className="absolute inset-0 flex items-center justify-center bg-bg-deep z-10">
                             <div className="flex flex-col items-center gap-3">
                                 <div className="relative w-14 h-14">
-                                    <div className="w-14 h-14 rounded-full border-2 border-[#E37D32]/20 border-t-[#E37D32] animate-spin" />
+                                    <div className="w-14 h-14 rounded-full border-2 border-[#ff6a00]/20 border-t-[#ff6a00] animate-spin" />
                                     <div className="absolute inset-0 flex items-center justify-center text-xl">🎰</div>
                                 </div>
                                 <p className="text-white/50 text-xs font-semibold tracking-widest uppercase animate-pulse">
@@ -199,16 +181,6 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
                         style={{ display: 'block' }}
                     />
                 </div>
-
-                {/* ── BOTTOM TAP-TO-SHOW hint ── */}
-                {!controlsVisible && (
-                    <div
-                        className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/40 backdrop-blur-md text-white/40 text-[10px] font-semibold px-3 py-1.5 rounded-full border border-white/10 z-[201] pointer-events-none"
-                        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}
-                    >
-                        Tap to show controls
-                    </div>
-                )}
             </div>
         );
     }
@@ -222,7 +194,7 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
             className={`${
                 isEmbedded
                     ? 'w-full flex flex-col'
-                    : 'fixed inset-0 z-[100] bg-[#0d0d0f] flex flex-col animate-in fade-in duration-300'
+                    : 'fixed inset-0 z-[100] bg-bg-deep flex flex-col animate-in fade-in duration-300'
             }`}
             style={{ padding: isEmbedded ? '12px 12px 0' : '0' }}
         >
@@ -231,30 +203,30 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
             <div
                 className={`flex items-center gap-3 px-4 py-3 ${
                     isEmbedded
-                        ? 'bg-[#141618] border border-white/5 rounded-t-2xl mb-0'
-                        : 'bg-[#141618] border-b border-white/5'
+                        ? 'bg-bg-zeero border border-white/[0.04] rounded-t-2xl mb-0'
+                        : 'bg-bg-zeero border-b border-white/[0.04]'
                 }`}
             >
                 {/* Back / close */}
                 <button
                     onClick={onClose}
-                    className="flex items-center gap-1.5 text-white/60 hover:text-white transition-colors text-sm font-semibold px-3 py-1.5 rounded-lg hover:bg-white/5 border border-white/5 hover:border-white/10 active:scale-95"
+                    className="flex items-center gap-1.5 text-white/60 hover:text-white transition-colors text-sm font-semibold px-3 py-1.5 rounded-lg hover:bg-white/[0.05] border border-white/[0.04] hover:border-white/[0.06] active:scale-95"
                 >
                     <ChevronLeft size={16} />
                     <span>Back</span>
                 </button>
 
                 {/* Divider */}
-                <div className="h-5 w-px bg-white/10" />
+                <div className="h-5 w-px bg-white/[0.08]" />
 
                 {/* Provider badge */}
                 <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#E37D32]/20 to-[#D4AF37]/10 border border-[#E37D32]/20 flex items-center justify-center text-xs font-black text-[#E37D32]">
+                    <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#ff6a00]/20 to-[#D4AF37]/10 border border-[#ff6a00]/20 flex items-center justify-center text-xs font-black text-brand-gold">
                         {game.provider.charAt(0).toUpperCase()}
                     </div>
                     <div>
                         <p className="text-white font-bold text-sm leading-tight">{game.name}</p>
-                        <p className="text-[#E37D32] text-[10px] font-semibold uppercase tracking-wider">
+                        <p className="text-brand-gold text-[10px] font-semibold uppercase tracking-wider">
                             {game.provider}
                         </p>
                     </div>
@@ -271,8 +243,8 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
                         onClick={() => setShowInfo(v => !v)}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
                             showInfo
-                                ? 'bg-blue-500/10 border-blue-500/40 text-blue-400'
-                                : 'bg-white/3 border-white/8 text-white/50 hover:text-white hover:bg-white/5'
+                                ? 'bg-brand-gold/10 border-brand-gold/40 text-brand-gold'
+                                : 'bg-white/[0.03] border-white/[0.05] text-white/50 hover:text-white hover:bg-white/[0.05]'
                         }`}
                         title="Game Info"
                     >
@@ -283,7 +255,7 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
                     {/* Share */}
                     <button
                         onClick={handleShare}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/3 border border-white/8 text-white/50 hover:text-white hover:bg-white/5 text-xs font-semibold transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.05] text-white/50 hover:text-white hover:bg-white/[0.05] text-xs font-semibold transition-all"
                         title="Share"
                     >
                         <Share2 size={14} />
@@ -296,7 +268,7 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all ${
                             isFavorite
                                 ? 'bg-yellow-500/10 border-yellow-500/40 text-yellow-400'
-                                : 'bg-white/3 border-white/8 text-white/50 hover:text-white hover:bg-white/5'
+                                : 'bg-white/[0.03] border-white/[0.05] text-white/50 hover:text-white hover:bg-white/[0.05]'
                         }`}
                         title={isFavorite ? 'Remove from Favourites' : 'Add to Favourites'}
                     >
@@ -307,7 +279,7 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
                     {/* Refresh */}
                     <button
                         onClick={handleRefresh}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/3 border border-white/8 text-white/50 hover:text-white hover:bg-white/5 text-xs font-semibold transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.05] text-white/50 hover:text-white hover:bg-white/[0.05] text-xs font-semibold transition-all"
                         title="Reload Game"
                     >
                         <RefreshCw size={14} />
@@ -317,7 +289,7 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
                     {/* Fullscreen */}
                     <button
                         onClick={toggleFullscreen}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/3 border border-white/8 text-white/50 hover:text-white hover:bg-white/5 text-xs font-semibold transition-all"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.05] text-white/50 hover:text-white hover:bg-white/[0.05] text-xs font-semibold transition-all"
                         title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
                     >
                         {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
@@ -330,7 +302,7 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
             {/* ── IFRAME CONTAINER ── */}
             <div
                 className={`relative flex-1 bg-black overflow-hidden ${
-                    isEmbedded ? 'rounded-b-2xl border-x border-b border-white/5' : ''
+                    isEmbedded ? 'rounded-b-2xl border-x border-b border-white/[0.04]' : ''
                 } ${isFullscreen ? 'rounded-none border-0' : ''}`}
                 style={
                     !isFullscreen && isEmbedded
@@ -342,9 +314,9 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
             >
                 {/* Loading overlay */}
                 {!iframeLoaded && !iframeError && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0d0d0f] z-10 gap-4">
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-bg-deep z-10 gap-4">
                         <div className="relative w-16 h-16">
-                            <div className="w-16 h-16 rounded-full border-2 border-[#E37D32]/20 border-t-[#E37D32] animate-spin" />
+                            <div className="w-16 h-16 rounded-full border-2 border-[#ff6a00]/20 border-t-[#ff6a00] animate-spin" />
                             <div className="absolute inset-0 flex items-center justify-center text-2xl">🎰</div>
                         </div>
                         <div className="flex flex-col items-center gap-1">
@@ -354,23 +326,23 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
                             </p>
                         </div>
                         {/* Shimmer bar */}
-                        <div className="w-48 h-1 bg-white/5 rounded-full overflow-hidden mt-2">
-                            <div className="h-full bg-gradient-to-r from-[#E37D32] to-[#D4AF37] rounded-full animate-[shimmerBar_1.6s_ease-in-out_infinite]" />
+                        <div className="w-48 h-1 bg-white/[0.04] rounded-full overflow-hidden mt-2">
+                            <div className="h-full bg-gradient-to-r from-[#ff6a00] to-[#D4AF37] rounded-full animate-[shimmerBar_1.6s_ease-in-out_infinite]" />
                         </div>
                     </div>
                 )}
 
                 {/* Error overlay (desktop) */}
                 {iframeError && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0d0d0f] z-10 gap-4 px-6">
-                        <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-3xl">⚠️</div>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-bg-deep z-10 gap-4 px-6">
+                        <div className="w-16 h-16 rounded-2xl bg-danger-alpha-10 border border-danger/20 flex items-center justify-center text-3xl">⚠️</div>
                         <div className="text-center">
                             <p className="text-white font-bold text-base">Failed to load game</p>
                             <p className="text-white/40 text-sm mt-1">The game could not be loaded in the iframe.</p>
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={handleRefresh} className="px-5 py-2.5 rounded-xl bg-[#E37D32] text-black font-bold text-sm hover:brightness-110 transition-all">Retry</button>
-                            <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white font-bold text-sm hover:bg-white/10 transition-all">Close</button>
+                            <button onClick={handleRefresh} className="px-5 py-2.5 rounded-xl bg-brand-gold text-text-inverse font-bold text-sm hover:brightness-110 transition-all">Retry</button>
+                            <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.06] text-white font-bold text-sm hover:bg-white/[0.08] transition-all">Close</button>
                         </div>
                     </div>
                 )}
@@ -390,7 +362,7 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
                 {isFullscreen && (
                     <button
                         onClick={toggleFullscreen}
-                        className="absolute top-4 right-4 z-[1001] bg-black/70 backdrop-blur-md text-white px-4 py-2 rounded-xl flex items-center gap-2 border border-white/10 hover:bg-black/90 transition-all text-sm font-semibold"
+                        className="absolute top-4 right-4 z-[1001] bg-black/70 backdrop-blur-md text-white px-4 py-2 rounded-xl flex items-center gap-2 border border-white/[0.06] hover:bg-black/90 transition-all text-sm font-semibold"
                     >
                         <Minimize2 size={16} />
                         Exit Fullscreen
@@ -399,7 +371,7 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
 
                 {/* Info panel overlay */}
                 {showInfo && !isFullscreen && (
-                    <div className="absolute top-0 right-0 h-full w-72 bg-[#141618]/95 backdrop-blur-xl border-l border-white/5 z-20 flex flex-col p-5 gap-4 animate-in slide-in-from-right duration-200">
+                    <div className="absolute top-0 right-0 h-full w-72 bg-bg-zeero/95 backdrop-blur-xl border-l border-white/[0.04] z-20 flex flex-col p-5 gap-4 animate-in slide-in-from-right duration-200">
                         <div className="flex items-center justify-between">
                             <h3 className="text-white font-bold text-sm">Game Info</h3>
                             <button
@@ -410,15 +382,15 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
                             </button>
                         </div>
                         <div className="space-y-3">
-                            <div className="p-3 bg-white/3 rounded-xl border border-white/5">
+                            <div className="p-3 bg-white/[0.03] rounded-xl border border-white/[0.04]">
                                 <p className="text-white/40 text-[10px] uppercase tracking-widest mb-1">Game</p>
                                 <p className="text-white font-bold text-sm">{game.name}</p>
                             </div>
-                            <div className="p-3 bg-white/3 rounded-xl border border-white/5">
+                            <div className="p-3 bg-white/[0.03] rounded-xl border border-white/[0.04]">
                                 <p className="text-white/40 text-[10px] uppercase tracking-widest mb-1">Provider</p>
-                                <p className="text-[#E37D32] font-bold text-sm">{game.provider}</p>
+                                <p className="text-brand-gold font-bold text-sm">{game.provider}</p>
                             </div>
-                            <div className="p-3 bg-white/3 rounded-xl border border-white/5">
+                            <div className="p-3 bg-white/[0.03] rounded-xl border border-white/[0.04]">
                                 <p className="text-white/40 text-[10px] uppercase tracking-widest mb-1">Game ID</p>
                                 <p className="text-white/70 font-mono text-xs break-all">{game.id}</p>
                             </div>
@@ -430,7 +402,7 @@ const GamePlayInterface: React.FC<GamePlayInterfaceProps> = ({
             {/* ── BOTTOM STATUS BAR (desktop only, non-fullscreen) ── */}
             {!isFullscreen && (
                 <div className={`flex items-center justify-between px-4 py-2 mt-0 ${
-                    isEmbedded ? 'mt-2' : 'border-t border-white/5 bg-[#0d0d0f]'
+                    isEmbedded ? 'mt-2' : 'border-t border-white/[0.04] bg-bg-deep'
                 }`}>
                     <div className="flex items-center gap-2">
                         {/* Live indicator */}

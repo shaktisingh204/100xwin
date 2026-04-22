@@ -163,7 +163,7 @@ export default function MainContent({ selectedSportId, matches: propMatches }: M
     };
 
     return (
-        <main className="flex-1 bg-bg-base pt-[64px] min-h-screen pb-20 xl:mr-[64px] overflow-hidden w-full relative">
+        <main className="flex-1 bg-bg-base pt-[60px] md:pt-[64px] min-h-screen pb-20 xl:mr-[64px] overflow-hidden w-full relative">
 
             {/* Top Area */}
             <div className="p-4 pb-0">
@@ -239,7 +239,7 @@ export default function MainContent({ selectedSportId, matches: propMatches }: M
                                     className="fixed inset-0 z-40"
                                     onClick={() => setIsDropdownOpen(false)}
                                 />
-                                <div className="absolute top-full left-0 mt-2 w-[280px] bg-[#1a1b1e] border border-white/5 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[400px] overflow-y-auto z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                                <div className="absolute top-full left-0 mt-2 w-[280px] bg-bg-modal border border-white/[0.04] rounded-xl shadow-xl overflow-hidden flex flex-col max-h-[400px] overflow-y-auto z-50 animate-in fade-in slide-in-from-top-2 duration-200">
                                     <div className="py-2 flex flex-col">
                                         {/* International / All Option */}
                                         <button
@@ -248,7 +248,7 @@ export default function MainContent({ selectedSportId, matches: propMatches }: M
                                                 setSelectedTournament(null);
                                                 setIsDropdownOpen(false);
                                             }}
-                                            className="px-4 py-2.5 flex items-center justify-between hover:bg-white/5 transition-colors group mx-2 rounded-lg"
+                                            className="px-4 py-2.5 flex items-center justify-between hover:bg-white/[0.05] transition-colors group mx-2 rounded-lg"
                                         >
                                             <div className="flex items-center gap-3">
                                                 <div className="w-6 h-6 flex items-center justify-center">
@@ -257,7 +257,7 @@ export default function MainContent({ selectedSportId, matches: propMatches }: M
                                                 <span className={`text-[13px] font-bold ${!selectedCountry ? 'text-white' : 'text-text-secondary group-hover:text-white'}`}>
                                                     International
                                                 </span>
-                                                <span className="bg-white/5 text-text-muted px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold">
+                                                <span className="bg-white/[0.04] text-text-muted px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold">
                                                     {activeMatches.length}
                                                 </span>
                                             </div>
@@ -273,16 +273,16 @@ export default function MainContent({ selectedSportId, matches: propMatches }: M
                                                     setSelectedTournament(null);
                                                     setIsDropdownOpen(false);
                                                 }}
-                                                className={`px-4 py-2.5 flex items-center justify-between hover:bg-white/5 transition-colors group mx-2 rounded-lg ${selectedCountry === country.code ? 'bg-white/5' : ''}`}
+                                                className={`px-4 py-2.5 flex items-center justify-between hover:bg-white/[0.05] transition-colors group mx-2 rounded-lg ${selectedCountry === country.code ? 'bg-white/[0.04]' : ''}`}
                                             >
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-6 h-6 flex items-center justify-center overflow-hidden rounded-full border border-white/5 bg-bg-base">
+                                                    <div className="w-6 h-6 flex items-center justify-center overflow-hidden rounded-full border border-white/[0.04] bg-bg-base">
                                                         <span className="text-xl leading-none">{getFlagByCode(country.code)}</span>
                                                     </div>
                                                     <span className={`text-[13px] font-bold ${selectedCountry === country.code ? 'text-white' : 'text-text-secondary group-hover:text-white'}`}>
                                                         {country.name === country.code ? (country.name === 'EN' ? 'England' : country.name) : country.name}
                                                     </span>
-                                                    <span className="bg-white/5 text-text-muted px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold">
+                                                    <span className="bg-white/[0.04] text-text-muted px-1.5 py-0.5 rounded-[4px] text-[10px] font-bold">
                                                         {country.count}
                                                     </span>
                                                 </div>
@@ -310,7 +310,7 @@ export default function MainContent({ selectedSportId, matches: propMatches }: M
                         className={`
                             shrink-0 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all snap-start border flex items-center gap-2
                             ${selectedTournament === null
-                                ? 'bg-[#00E701] text-black border-[#00E701] shadow-[0_0_10px_rgba(0,231,1,0.4)]'
+                                ? 'bg-brand-gold text-white border-[#00E701] shadow-[0_0_10px_rgba(0,231,1,0.4)]'
                                 : 'bg-bg-elevated text-text-muted border-divider hover:text-text-primary hover:border-brand-gold/50'}
                         `}
                     >

@@ -8,16 +8,18 @@ import { casinoService, type CasinoGame } from '@/services/casino';
 
 interface GameGridProps {
     title: string;
+    icon?: React.ReactNode;
     category: string;
+    sectionKey?: string; // if set, loads admin-curated games from this section
     provider?: string;
     search?: string;
     layout?: 'grid' | 'row';
     onViewAll?: () => void;
     onLaunch?: (game: { id: string; name: string; provider: string; url: string }) => void;
-    type?: string; // New prop
+    type?: string;
 }
 
-const GameGrid: React.FC<GameGridProps> = ({ title, category, provider, search, layout = 'grid', onViewAll, onLaunch, type }) => {
+const GameGrid: React.FC<GameGridProps> = ({ title, icon, category, sectionKey, provider, search, layout = 'grid', onViewAll, onLaunch, type }) => {
     const { user } = useAuth();
     const [games, setGames] = React.useState<CasinoGame[]>([]);
     const [loading, setLoading] = React.useState(true);
@@ -26,24 +28,29 @@ const GameGrid: React.FC<GameGridProps> = ({ title, category, provider, search, 
     const [totalGames, setTotalGames] = React.useState(0);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-    // ... (rest of useEffects unchanged)
-
     React.useEffect(() => {
         const fetchGames = async () => {
             try {
                 setLoading(true);
+                // If sectionKey is set, first try curated games from admin
+                if (sectionKey) {
+                    const curated = await casinoService.getSectionGames(sectionKey);
+                    if (curated && curated.length > 0) {
+                        setGames(curated as CasinoGame[]);
+                        setTotalPages(1);
+                        setTotalGames(curated.length);
+                        return;
+                    }
+                }
+                // Fall back to category filter
                 const cat = category === 'all' ? undefined : category;
                 const prov = provider === 'all' ? undefined : provider;
-
-                // Pass page and type
                 const data = await casinoService.getGames(prov, cat, search, page, undefined, type);
-
                 if (data && Array.isArray(data.games)) {
                     setGames(data.games as CasinoGame[]);
                     setTotalPages(data.totalPages);
                     setTotalGames(data.totalCount || 0);
                 } else {
-                    // Fallback if structure mismatches (should not happen with updated service)
                     setGames([]);
                 }
             } catch (error) {
@@ -53,89 +60,67 @@ const GameGrid: React.FC<GameGridProps> = ({ title, category, provider, search, 
             }
         };
         fetchGames();
-    }, [category, provider, search, page, type]);
+    }, [category, sectionKey, provider, search, page, type]);
 
     const handleLaunchGame = async (game: CasinoGame) => {
-        if (!user) {
-            alert("Please login to play");
-            return;
-        }
-        
+        if (!user) { alert("Please login to play"); return; }
         const gameData = {
             id: game.gameCode || game.id,
             name: game.gameName || game.name,
             provider: game.providerCode || game.provider,
-            url: '' // handled by play page
+            url: ''
         };
-
         if (onLaunch) {
             onLaunch(gameData);
         } else {
-            // Navigate directly to the play page
             window.location.href = `/casino/play/${gameData.id}?provider=${encodeURIComponent(gameData.provider)}&name=${encodeURIComponent(gameData.name)}`;
         }
     };
 
     const removeGame = (idToRemove: string) => {
-        setGames(prevGames => prevGames.filter(g => (g.id || g.gameCode) !== idToRemove));
+        setGames(prev => prev.filter(g => (g.id || g.gameCode) !== idToRemove));
     };
 
-    const scroll = (direction: 'left' | 'right') => {
+    const scroll = (dir: 'left' | 'right') => {
         if (scrollContainerRef.current) {
-            const { current } = scrollContainerRef;
-            const scrollAmount = direction === 'left' ? -current.offsetWidth : current.offsetWidth;
-            current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+            const amt = dir === 'left' ? -scrollContainerRef.current.offsetWidth * 0.75 : scrollContainerRef.current.offsetWidth * 0.75;
+            scrollContainerRef.current.scrollBy({ left: amt, behavior: 'smooth' });
         }
     };
 
-    if (loading) {
-        return layout === 'row'
-            ? <SkeletonGameRow count={10} />
-            : <SkeletonGameGrid count={18} />;
-    }
-
+    if (loading) return layout === 'row' ? <SkeletonGameRow count={8} /> : <SkeletonGameGrid count={18} />;
     if (games.length === 0) return null;
 
     return (
-        <section className="animate-in fade-in slide-in-from-bottom-4 duration-700 w-full">
-            <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                    <h3 className="text-xl font-bold text-text-primary flex items-center gap-2">
-                        {category === 'popular' && <span className="text-orange-500">🔥</span>}
-                        {category === 'new' && <span className="text-jackpot">⚡</span>}
-                        {title}
-                        <span className="text-xs font-normal text-text-muted bg-bg-elevated px-2 py-0.5 rounded-full ml-2">
-                            {totalGames}
-                        </span>
-                    </h3>
+        <section className="animate-in fade-in duration-500 w-full">
+            {/* Section header — branded icon box style */}
+            <div className="mb-3 flex items-center justify-between px-3">
+                <div className="flex items-center gap-2.5">
+                    {icon && (
+                        <div className="w-8 h-8 rounded-lg bg-white/[0.06] flex items-center justify-center shrink-0">
+                            {icon}
+                        </div>
+                    )}
+                    <div>
+                        <h3 className="text-[15px] font-adx-bold text-white md:text-[16px] leading-none">{title}</h3>
+                        <p className="text-[10px] text-white/40 mt-0.5">{totalGames} games</p>
+                    </div>
                 </div>
-
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
                     {layout === 'row' && (
                         <>
-                            <div className="flex gap-1">
-                                <button
-                                    onClick={() => scroll('left')}
-                                    className="w-8 h-8 rounded-lg bg-bg-elevated border border-divider hover:border-brand-gold flex items-center justify-center text-text-muted hover:text-text-primary transition-colors"
-                                >
-                                    <ChevronLeft size={16} />
-                                </button>
-                                <button
-                                    onClick={() => scroll('right')}
-                                    className="w-8 h-8 rounded-lg bg-bg-elevated border border-divider hover:border-brand-gold flex items-center justify-center text-text-muted hover:text-text-primary transition-colors"
-                                >
-                                    <ChevronRight size={16} />
-                                </button>
-                            </div>
-                            {onViewAll && (
-                                <button
-                                    onClick={onViewAll}
-                                    className="text-sm text-brand-gold hover:text-text-primary flex items-center gap-1 transition-colors"
-                                >
-                                    View All <ArrowRight size={14} />
-                                </button>
-                            )}
+                            <button onClick={() => scroll('left')} className="flex h-8 w-8 items-center justify-center rounded-lg bg-bg-elevated border border-white/[0.04] text-white/50 transition-all hover:bg-white/[0.05] hover:text-white hover:border-white/[0.06]">
+                                <ChevronLeft size={14} />
+                            </button>
+                            <button onClick={() => scroll('right')} className="flex h-8 w-8 items-center justify-center rounded-lg bg-bg-elevated border border-white/[0.04] text-white/50 transition-all hover:bg-white/[0.05] hover:text-white hover:border-white/[0.06]">
+                                <ChevronRight size={14} />
+                            </button>
                         </>
+                    )}
+                    {onViewAll && (
+                        <button onClick={onViewAll} className="flex h-8 items-center gap-1.5 rounded-lg border border-white/[0.04] bg-bg-elevated px-3 text-[11px] font-bold text-white/60 transition-colors hover:bg-white/[0.05] hover:text-white">
+                            All <ArrowRight size={11} />
+                        </button>
                     )}
                 </div>
             </div>
@@ -143,14 +128,14 @@ const GameGrid: React.FC<GameGridProps> = ({ title, category, provider, search, 
             {layout === 'row' ? (
                 <div
                     ref={scrollContainerRef}
-                    className="flex overflow-x-auto gap-3 md:gap-4 pb-4 scrollbar-hide scroll-smooth"
-                    style={{ scrollSnapType: 'x mandatory' }}
+                    className="flex gap-1.5 overflow-x-auto pb-2 pl-3"
+                    style={{ scrollbarWidth: 'none' }}
                 >
                     {games.map((game, idx) => (
                         <GameCard
                             key={game.id || idx}
-                            name={game.gameName || game.name || 'Unknown Game'}
-                            image={game.banner || game.image || 'https://images.unsplash.com/photo-1605218427306-022ba8c15661?q=80&w=600&auto=format&fit=crop'}
+                            name={game.gameName || game.name || 'Unknown'}
+                            image={game.banner || game.image || ''}
                             provider={game.providerCode || game.provider}
                             tag={game.tag}
                             layout="row"
@@ -158,15 +143,16 @@ const GameGrid: React.FC<GameGridProps> = ({ title, category, provider, search, 
                             onError={() => removeGame(game.id || game.gameCode)}
                         />
                     ))}
-
+                    {/* Right-side padding spacer */}
+                    <div className="min-w-3 flex-shrink-0" />
                 </div>
             ) : (
-                <div className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-9 gap-2 md:gap-4">
+                <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8">
                     {games.map((game, idx) => (
                         <GameCard
                             key={game.id || idx}
-                            name={game.gameName || game.name || 'Unknown Game'}
-                            image={game.banner || game.image || 'https://images.unsplash.com/photo-1605218427306-022ba8c15661?q=80&w=600&auto=format&fit=crop'}
+                            name={game.gameName || game.name || 'Unknown'}
+                            image={game.banner || game.image || ''}
                             provider={game.providerCode || game.provider}
                             tag={game.tag}
                             layout="grid"
@@ -177,30 +163,23 @@ const GameGrid: React.FC<GameGridProps> = ({ title, category, provider, search, 
                 </div>
             )}
 
-            {/* Pagination Controls */}
+            {/* Pagination (grid only) */}
             {layout === 'grid' && totalPages > 1 && (
-                <div className="flex justify-center items-center gap-4 mt-8 pb-8">
+                <div className="flex justify-center items-center gap-3 mt-6 pb-4">
                     <button
                         disabled={page === 1}
-                        onClick={() => {
-                            setPage(p => Math.max(1, p - 1));
-                            // Scroll to top of grid
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        className="px-4 py-2 rounded-lg bg-bg-elevated border border-divider hover:border-brand-gold disabled:opacity-50 disabled:cursor-not-allowed text-text-primary transition-colors flex items-center gap-2"
+                        onClick={() => { setPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-bg-elevated border border-white/[0.04] hover:border-brand-gold/40 disabled:opacity-30 disabled:cursor-not-allowed text-text-primary text-sm font-bold transition-all"
                     >
-                        <ChevronLeft size={16} /> Previous
+                        <ChevronLeft size={14} /> Prev
                     </button>
-                    <span className="text-text-muted text-sm font-medium">Page {page} of {totalPages}</span>
+                    <span className="text-text-muted text-xs font-medium px-2">{page} / {totalPages}</span>
                     <button
                         disabled={page === totalPages}
-                        onClick={() => {
-                            setPage(p => Math.min(totalPages, p + 1));
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                        }}
-                        className="px-4 py-2 rounded-lg bg-bg-elevated border border-divider hover:border-brand-gold disabled:opacity-50 disabled:cursor-not-allowed text-text-primary transition-colors flex items-center gap-2"
+                        onClick={() => { setPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-bg-elevated border border-white/[0.04] hover:border-brand-gold/40 disabled:opacity-30 disabled:cursor-not-allowed text-text-primary text-sm font-bold transition-all"
                     >
-                        Next <ChevronRight size={16} />
+                        Next <ChevronRight size={14} />
                     </button>
                 </div>
             )}

@@ -2,19 +2,88 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { UserCircle, LogOut, ChevronDown, Wallet, ChevronLeft, Plus } from 'lucide-react';
+import { UserCircle, LogOut, ChevronDown, Wallet, ChevronLeft, Menu, X } from 'lucide-react';
 import { useModal } from '@/context/ModalContext';
 import { useAuth } from '@/context/AuthContext';
 import { useWallet } from '@/context/WalletContext';
 import type { SubWalletType } from '@/context/WalletContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import NotificationBell from '@/components/NotificationBell';
+import DailyCheckInButton from '@/components/DailyCheckIn/DailyCheckInButton';
+import { useLayout } from '@/context/LayoutContext';
+import api from '@/services/api';
+import { cfImage, cfImageSrcSet } from '@/utils/cfImages';
+
+// ── Dynamic header nav links (configurable via admin → Settings → System Config) ──
+type HeaderNavLink = {
+    id?: string;
+    name: string;
+    path: string;
+    exact?: boolean;
+    isHot?: boolean;
+    external?: boolean;
+};
+
+const DEFAULT_HEADER_NAV_LINKS: HeaderNavLink[] = [
+    { name: 'Home', path: '/', exact: true },
+    { name: 'Casino', path: '/casino' },
+    { name: 'Sports', path: '/sports' },
+    { name: 'Fantasy', path: '/fantasy', isHot: true },
+    { name: 'Live Dealers', path: '/live-dealers', isHot: true },
+    { name: 'Support', path: '/support' },
+];
+
+// ── Dynamic logo ─────────────────────────────────────────────────────────────
+type HeaderLogo = {
+    imageUrl: string;
+    text: string;
+    accentText: string;
+};
+
+const DEFAULT_HEADER_LOGO: HeaderLogo = {
+    imageUrl: '',
+    text: 'Zeero',
+    accentText: 'Ze',
+};
+
+function parseHeaderLogo(raw?: string): HeaderLogo {
+    if (!raw) return DEFAULT_HEADER_LOGO;
+    try {
+        const parsed = JSON.parse(raw);
+        return {
+            imageUrl: typeof parsed?.imageUrl === 'string' ? parsed.imageUrl : '',
+            text: typeof parsed?.text === 'string' && parsed.text ? parsed.text : DEFAULT_HEADER_LOGO.text,
+            accentText: typeof parsed?.accentText === 'string' ? parsed.accentText : '',
+        };
+    } catch {
+        return DEFAULT_HEADER_LOGO;
+    }
+}
+
+function parseHeaderNavLinks(raw?: string): HeaderNavLink[] {
+    if (!raw) return DEFAULT_HEADER_NAV_LINKS;
+    try {
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_HEADER_NAV_LINKS;
+        return parsed
+            .filter((x: any) => x && typeof x.name === 'string' && typeof x.path === 'string' && x.name && x.path)
+            .map((x: any) => ({
+                name: String(x.name),
+                path: String(x.path),
+                exact: Boolean(x.exact),
+                isHot: Boolean(x.isHot),
+                external: Boolean(x.external),
+            }));
+    } catch {
+        return DEFAULT_HEADER_NAV_LINKS;
+    }
+}
 
 export default function Header() {
     const pathname = usePathname();
     const router = useRouter();
     const { openLogin, openRegister, openDeposit } = useModal();
-    const { logout, isAuthenticated } = useAuth();
+    const { logout, isAuthenticated, user } = useAuth();
 
     const {
         selectedWallet,
@@ -31,7 +100,61 @@ export default function Header() {
 
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const { isIconRail, toggleIconRail } = useLayout();
+    const [navLinks, setNavLinks] = useState<HeaderNavLink[]>(DEFAULT_HEADER_NAV_LINKS);
+    const [logo, setLogo] = useState<HeaderLogo>(DEFAULT_HEADER_LOGO);
 
+    // Load dynamic header nav links + logo from admin-configurable SystemConfig
+    useEffect(() => {
+        api.get('/settings/public')
+            .then((res) => {
+                setNavLinks(parseHeaderNavLinks(res.data?.HEADER_NAV_LINKS));
+                setLogo(parseHeaderLogo(res.data?.HEADER_LOGO));
+            })
+            .catch(() => {
+                /* keep defaults on failure */
+            });
+    }, []);
+
+    const renderLogo = () => {
+        if (logo.imageUrl) {
+            return (
+                // Header logo is in the LCP path for many viewports; it's
+                // also preloaded in layout.tsx <head>, so the browser should
+                // already have the bytes in cache by the time this element
+                // hydrates. fetchPriority=high ensures it's still prioritized
+                // when the preload hint is missing (e.g. dev server).
+                // Logo caps at ~160px wide so a 320w/480w srcset is plenty.
+                <img
+                    src={cfImage(logo.imageUrl, { width: 320, fit: 'contain' })}
+                    srcSet={cfImageSrcSet(logo.imageUrl, [160, 320, 480], { fit: 'contain' })}
+                    sizes="(max-width: 768px) 110px, 160px"
+                    alt={logo.text || 'Logo'}
+                    loading="eager"
+                    fetchPriority="high"
+                    decoding="async"
+                    className="h-7 md:h-10 w-auto max-w-[110px] md:max-w-[160px] object-contain"
+                />
+            );
+        }
+        const text = logo.text || 'Zeero';
+        const accent = logo.accentText || '';
+        const hasAccent = accent && text.toLowerCase().startsWith(accent.toLowerCase());
+        return (
+            <div className="text-lg md:text-2xl font-extrabold text-white italic tracking-[-0.04em]">
+                {hasAccent ? (
+                    <>
+                        <span className="text-brand-gold">{text.slice(0, accent.length)}</span>
+                        {text.slice(accent.length)}
+                    </>
+                ) : (
+                    text
+                )}
+            </div>
+        );
+    };
+
+    // Close dropdown on outside click
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -51,7 +174,7 @@ export default function Header() {
     const formatActive = (amount: number) =>
         selectedWallet === 'crypto' ? formatUSD(amount) : formatFiat(amount);
 
-    // ── Sub-wallet config ──
+    // ── Sub-wallet config ──────────────────────────────────────────────────────
     interface SubWalletMeta {
         id: SubWalletType;
         label: string;
@@ -74,112 +197,181 @@ export default function Header() {
     ];
 
     const colorMap = {
-        gold:   { active: 'border-brand-gold/70 shadow-[0_0_10px_rgba(212,175,55,0.15)]', dot: 'bg-brand-gold shadow-[0_0_6px_rgba(212,175,55,0.6)]', hover: 'hover:border-brand-gold/30', bg: 'bg-bg-hover', badge: 'bg-brand-gold text-black' },
-        purple: { active: 'border-purple-500/70 shadow-[0_0_10px_rgba(168,85,247,0.15)]', dot: 'bg-purple-500 shadow-[0_0_6px_rgba(168,85,247,0.6)]', hover: 'hover:border-purple-500/30', bg: 'bg-purple-500/5', badge: 'bg-purple-600 text-white' },
-        blue:   { active: 'border-blue-400/70 shadow-[0_0_10px_rgba(96,165,250,0.15)]', dot: 'bg-blue-400 shadow-[0_0_6px_rgba(96,165,250,0.6)]', hover: 'hover:border-blue-400/30', bg: 'bg-blue-500/5', badge: 'bg-blue-600 text-white' },
-        green:  { active: 'border-emerald-400/70 shadow-[0_0_10px_rgba(52,211,153,0.15)]', dot: 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)]', hover: 'hover:border-emerald-400/30', bg: 'bg-emerald-500/5', badge: 'bg-emerald-600 text-white' },
+        gold:   {
+            active:  'border-brand-gold/70 shadow-glow-gold',
+            dot:     'bg-brand-gold shadow-glow-gold',
+            hover:   'hover:border-brand-gold/30',
+            bg:      'bg-bg-hover',
+            badge:   'bg-brand-gold text-text-inverse',
+        },
+        purple: {
+            active:  'border-accent-purple/70 shadow-[0_0_10px_rgba(168,85,247,0.15)]',
+            dot:     'bg-accent-purple shadow-[0_0_6px_rgba(168,85,247,0.6)]',
+            hover:   'hover:border-accent-purple/30',
+            bg:      'bg-accent-purple-alpha',
+            badge:   'bg-accent-purple text-text-white',
+        },
+        blue:   {
+            active:  'border-info/70 shadow-[0_0_10px_rgba(96,165,250,0.15)]',
+            dot:     'bg-info border-[var(--info-primary)] shadow-[0_0_6px_rgba(96,165,250,0.6)]',
+            hover:   'hover:border-info/30',
+            bg:      'bg-info-soft/30',
+            badge:   'bg-info text-text-white',
+        },
+        green:  {
+            active:  'border-success-vivid/70 shadow-glow-success',
+            dot:     'bg-success-vivid shadow-glow-success',
+            hover:   'hover:border-success-vivid/30',
+            bg:      'bg-success-soft/30',
+            badge:   'bg-success text-text-white',
+        },
     };
 
     const allWallets = [...fiatWallets, ...cryptoWallets];
     const activeMeta = allWallets.find(w => w.id === selectedSubWallet);
+    const pillLabel = activeMeta?.label ?? 'Wallet';
+    const pillBorder = selectedWallet === 'crypto' ? 'border-purple-500/40' : 'border-divider';
+    const pillText   = selectedWallet === 'crypto' ? 'text-purple-300' : 'text-text-primary';
 
-    const navItems = [
-        { name: 'Home', path: '/', exact: true },
-        { name: 'Casino', path: '/casino' },
-        { name: 'Sports', path: '/sports' },
-        { name: 'Live', path: '/live-dealers' },
-        { name: 'Support', path: '/support' },
-    ];
+    // ──────────────────────────────────────────────────────────────────────────
 
     return (
-        <header className="fixed top-0 left-0 right-0 h-[56px] md:h-[60px] bg-[#0c0e12]/90 backdrop-blur-2xl z-50 flex items-center px-3 md:px-5 border-b border-white/[0.04]">
-            {/* Left: Logo + Back */}
-            <div className="flex items-center gap-3 flex-shrink-0">
+        <header className="fixed top-0 left-0 right-0 h-[60px] md:h-[64px] z-50 flex items-center px-2.5 md:px-6 glass-surface shadow-[0_1px_0_rgba(255,255,255,0.04),0_4px_24px_rgba(0,0,0,0.4)]">
+            {/* Left: Logo + Hamburger + Back */}
+            <div className="flex items-center gap-1.5 md:gap-3 flex-shrink-0">
+                {/* Hamburger — desktop only, toggles icon rail */}
+                <button
+                    onClick={toggleIconRail}
+                    aria-label={isIconRail ? 'Expand sidebar' : 'Collapse sidebar'}
+                    className="hidden md:flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.04] text-text-secondary transition-all hover:border-brand-gold/30 hover:bg-brand-gold/8 hover:text-brand-gold"
+                >
+                    <motion.div
+                        key={isIconRail ? 'x' : 'menu'}
+                        initial={{ rotate: -90, opacity: 0 }}
+                        animate={{ rotate: 0, opacity: 1 }}
+                        exit={{ rotate: 90, opacity: 0 }}
+                        transition={{ duration: 0.18 }}
+                    >
+                        {isIconRail ? <X size={16} /> : <Menu size={16} />}
+                    </motion.div>
+                </button>
+
                 <Link href="/" className="relative flex items-center flex-shrink-0">
-                    <div className="text-xl font-extrabold text-white italic tracking-tighter">
-                        <span className="text-brand-gold">Ze</span><span className="text-white/90">ero</span>
-                    </div>
+                    {renderLogo()}
                 </Link>
 
+                {/* Back button — hidden on mobile */}
                 {pathname !== '/' && (
                     <button
                         onClick={() => router.back()}
                         aria-label="Go back"
-                        className="flex items-center gap-1 text-white/30 hover:text-white/70 transition-colors p-1.5 rounded-lg hover:bg-white/[0.04]"
+                        className="hidden md:flex items-center gap-1 text-text-muted hover:text-white transition-colors p-1.5 rounded-lg hover:bg-white/[0.06] border border-white/[0.06] hover:border-white/[0.12]"
                     >
-                        <ChevronLeft size={16} />
+                        <ChevronLeft size={18} />
+                        <span className="text-xs font-bold uppercase tracking-wide">Back</span>
                     </button>
                 )}
             </div>
 
-            {/* Center: Segmented Nav */}
-            <nav className="hidden lg:flex items-center mx-auto">
-                <div className="flex items-center bg-white/[0.03] rounded-2xl p-1 border border-white/[0.04]">
-                    {navItems.map((item) => {
-                        const isActive = item.exact ? pathname === item.path : pathname.startsWith(item.path);
+            {/* Center: Nav */}
+            <nav className="hidden lg:flex items-center gap-1 ml-8">
+                {navLinks
+                    .filter((item) => item.path !== '/fantasy' || !!user)
+                    .map((item, idx) => {
+                    const isExternal = item.external || /^https?:\/\//i.test(item.path);
+                    const isActive = !isExternal && (item.exact ? pathname === item.path : pathname.startsWith(item.path));
+                    const className = `text-[11px] font-semibold uppercase tracking-[0.08em] transition-all relative flex items-center gap-1 px-3 py-1.5 rounded-lg ${
+                        isActive
+                            ? 'text-brand-gold bg-brand-gold/10'
+                            : 'text-white/50 hover:text-white/90 hover:bg-white/[0.05]'
+                    }`;
+                    const content = (
+                        <>
+                            {item.name}
+                            {item.isHot && (
+                                <span className="text-[7px] font-black bg-gradient-to-r from-rose-500 to-orange-500 text-white px-1.5 py-0.5 rounded-full ml-0.5 absolute -top-2 -right-2 shadow-[0_0_8px_rgba(244,63,94,0.4)]">
+                                    HOT
+                                </span>
+                            )}
+                        </>
+                    );
+                    const key = `${item.id || item.name}-${idx}`;
+                    if (isExternal) {
                         return (
-                            <Link
-                                key={item.name}
+                            <a
+                                key={key}
                                 href={item.path}
-                                className={`text-[12px] font-bold uppercase tracking-wider transition-all px-4 py-2 rounded-xl relative ${
-                                    isActive
-                                        ? 'text-white bg-white/[0.08] shadow-sm'
-                                        : 'text-white/30 hover:text-white/60'
-                                }`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={className}
                             >
-                                {item.name}
-                            </Link>
+                                {content}
+                            </a>
                         );
-                    })}
-                </div>
+                    }
+                    return (
+                        <Link key={key} href={item.path} className={className}>
+                            {content}
+                        </Link>
+                    );
+                })}
             </nav>
 
-            {/* Right: Actions */}
-            <div className="flex items-center gap-2 ml-auto">
+            {/* Right */}
+            <div className="flex items-center gap-1.5 md:gap-3 ml-auto">
                 {isAuthenticated ? (
                     <div className="flex items-center gap-2">
 
-                        {/* Wallet Chip */}
+                        {/* ── Wallet balance dropdown ── */}
                         <div className="relative" ref={dropdownRef}>
+                            {/* Trigger pill */}
                             <button
                                 onClick={() => setIsDropdownOpen(prev => !prev)}
-                                className="flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.06] rounded-2xl px-3 py-2 hover:bg-white/[0.06] hover:border-white/[0.1] transition-all"
+                                className={`flex items-center gap-1 md:gap-1.5 bg-white/[0.04] border rounded-lg px-2 md:px-3.5 h-9 md:h-10 hover:border-brand-gold/40 hover:bg-white/[0.06] transition-all ${pillBorder}`}
                             >
-                                <Wallet size={14} className="text-brand-gold" />
-                                <span className="font-bold text-[13px] text-white max-w-[90px] md:max-w-none truncate">
+                                <span className={`font-bold text-[11px] md:text-sm max-w-[72px] md:max-w-none truncate ${pillText}`}>
                                     {formatActive(activeBalance)}
+                                </span>
+                                <span className="hidden md:inline text-[9px] text-text-muted font-semibold uppercase tracking-wide border border-white/[0.06] rounded px-1 py-0.5">
+                                    {pillLabel}
                                 </span>
                                 <ChevronDown
                                     size={12}
-                                    className={`text-white/30 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`}
+                                    className={`text-text-muted transition-transform shrink-0 ${isDropdownOpen ? 'rotate-180' : ''}`}
                                 />
                             </button>
 
                             <AnimatePresence>
                                 {isDropdownOpen && (
                                     <>
+                                        {/* Mobile backdrop */}
                                         <motion.div
-                                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
                                             className="fixed inset-0 bg-black/50 z-[99] md:hidden"
                                             onClick={() => setIsDropdownOpen(false)}
                                         />
+
+                                        {/* Dropdown panel */}
                                         <motion.div
-                                            initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                                            exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                                            transition={{ duration: 0.15 }}
-                                            className="fixed top-[60px] left-1/2 -translate-x-1/2 w-[calc(100vw-24px)] max-w-[360px] md:absolute md:top-full md:left-auto md:right-0 md:translate-x-0 md:mt-2 md:w-80 md:max-w-none bg-[#14161c]/98 backdrop-blur-2xl border border-white/[0.06] rounded-2xl shadow-[0_16px_48px_rgba(0,0,0,0.6)] overflow-hidden z-[100] flex flex-col"
+                                            initial={{ opacity: 0, y: -8 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -8 }}
+                                            transition={{ duration: 0.18 }}
+                                            className="fixed top-[64px] md:top-[68px] left-1/2 -translate-x-1/2 w-[calc(100vw-24px)] max-w-[360px] md:absolute md:top-full md:left-auto md:right-0 md:translate-x-0 md:mt-2 md:w-80 md:max-w-none rounded-2xl md:rounded-xl shadow-[0_20px_60px_rgba(0,0,0,0.5)] overflow-hidden z-[100] flex flex-col border border-brand-gold/20 bg-[#1a1714]/95 backdrop-blur-xl"
                                         >
-                                            <div className="p-3 border-b border-white/[0.04] overflow-y-auto max-h-[60vh] flex-1">
-                                                <div className="text-[10px] text-white/25 mb-3 font-semibold uppercase tracking-wider">
-                                                    Select Wallet
+                                            {/* Wallet list – scrollable */}
+                                            <div className="p-3 border-b border-brand-gold/10 overflow-y-auto max-h-[60vh] flex-1">
+                                                <div className="text-[10px] text-text-muted mb-2.5 font-semibold uppercase tracking-wider">
+                                                    Select Active Wallet
                                                 </div>
 
-                                                {/* FIAT GROUP */}
-                                                <div className="mb-3">
-                                                    <div className="flex items-center gap-1.5 mb-2">
-                                                        <span className="text-[9px] font-bold uppercase tracking-widest text-brand-gold/60">🏦 Fiat</span>
-                                                        <div className="flex-1 h-px bg-white/[0.04]" />
+                                                {/* ─ FIAT GROUP ─ */}
+                                                <div className="mb-2">
+                                                    <div className="flex items-center gap-1.5 mb-1.5">
+                                                        <span className="text-[9px] font-bold uppercase tracking-widest text-brand-gold/80">🏦 Fiat Wallet</span>
+                                                        <div className="flex-1 h-px bg-brand-gold/15" />
                                                     </div>
                                                     <div className="flex flex-col gap-1">
                                                         {fiatWallets.map(w => {
@@ -189,35 +381,35 @@ export default function Header() {
                                                                 <button
                                                                     key={w.id}
                                                                     onClick={() => { setSelectedSubWallet(w.id); setIsDropdownOpen(false); }}
-                                                                    className={`w-full rounded-xl px-3 py-2.5 flex justify-between items-center transition-all border ${
-                                                                        active ? `${c.bg} ${c.active}` : `bg-white/[0.02] border-white/[0.04] ${c.hover}`
+                                                                    className={`w-full ${c.bg} rounded-lg px-3 py-2 flex justify-between items-center transition-all border ${
+                                                                        active ? c.active : `border-white/[0.04] ${c.hover}`
                                                                     }`}
                                                                 >
                                                                     <div className="text-left">
                                                                         <div className="flex items-center gap-1.5 mb-0.5">
                                                                             <span className="text-sm leading-none">{w.emoji}</span>
-                                                                            <span className="text-[11px] font-bold text-white/80">{w.label}</span>
+                                                                            <span className="text-[11px] font-bold text-text-primary">{w.label}</span>
                                                                             {active && (
-                                                                                <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded-full leading-none ${c.badge}`}>
+                                                                                <span className={`text-[8px] font-bold uppercase px-1 py-0.5 rounded leading-none ${c.badge}`}>
                                                                                     ACTIVE
                                                                                 </span>
                                                                             )}
                                                                         </div>
-                                                                        <div className="text-white font-bold text-sm pl-[22px]">{formatFiat(w.balance)}</div>
-                                                                        <div className="text-[9px] text-white/20 pl-[22px]">{w.note}</div>
+                                                                        <div className="text-text-primary font-bold text-sm pl-[22px]">{formatFiat(w.balance)}</div>
+                                                                        <div className="text-[9px] text-text-muted pl-[22px]">{w.note}</div>
                                                                     </div>
-                                                                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ml-2 ${active ? c.dot : 'bg-white/[0.06]'}`} />
+                                                                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ml-2 ${active ? c.dot : 'bg-white/[0.08]'}`} />
                                                                 </button>
                                                             );
                                                         })}
                                                     </div>
                                                 </div>
 
-                                                {/* CRYPTO GROUP */}
+                                                {/* ─ CRYPTO GROUP ─ */}
                                                 <div>
-                                                    <div className="flex items-center gap-1.5 mb-2">
-                                                        <span className="text-[9px] font-bold uppercase tracking-widest text-purple-400/60">💎 Crypto</span>
-                                                        <div className="flex-1 h-px bg-white/[0.04]" />
+                                                    <div className="flex items-center gap-1.5 mb-1.5">
+                                                        <span className="text-[9px] font-bold uppercase tracking-widest text-accent-purple/80">💎 Crypto Wallet</span>
+                                                        <div className="flex-1 h-px bg-purple-500/20" />
                                                     </div>
                                                     <div className="flex flex-col gap-1">
                                                         {cryptoWallets.map(w => {
@@ -227,24 +419,24 @@ export default function Header() {
                                                                 <button
                                                                     key={w.id}
                                                                     onClick={() => { setSelectedSubWallet(w.id); setIsDropdownOpen(false); }}
-                                                                    className={`w-full rounded-xl px-3 py-2.5 flex justify-between items-center transition-all border ${
-                                                                        active ? `${c.bg} ${c.active}` : `bg-white/[0.02] border-white/[0.04] ${c.hover}`
+                                                                    className={`w-full ${c.bg} rounded-lg px-3 py-2 flex justify-between items-center transition-all border ${
+                                                                        active ? c.active : `border-purple-500/10 ${c.hover}`
                                                                     }`}
                                                                 >
                                                                     <div className="text-left">
                                                                         <div className="flex items-center gap-1.5 mb-0.5">
                                                                             <span className="text-sm leading-none">{w.emoji}</span>
-                                                                            <span className="text-[11px] font-bold text-white/80">{w.label}</span>
+                                                                            <span className="text-[11px] font-bold text-text-primary">{w.label}</span>
                                                                             {active && (
-                                                                                <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded-full leading-none ${c.badge}`}>
+                                                                                <span className={`text-[8px] font-bold uppercase px-1 py-0.5 rounded leading-none ${c.badge}`}>
                                                                                     ACTIVE
                                                                                 </span>
                                                                             )}
                                                                         </div>
                                                                         <div className="text-white font-bold text-sm pl-[22px]">{formatUSD(w.balance)}</div>
-                                                                        <div className="text-[9px] text-white/20 pl-[22px]">{w.note}</div>
+                                                                        <div className="text-[9px] text-text-muted pl-[22px]">{w.note}</div>
                                                                     </div>
-                                                                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ml-2 ${active ? c.dot : 'bg-white/[0.06]'}`} />
+                                                                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ml-2 ${active ? c.dot : 'bg-white/[0.08]'}`} />
                                                                 </button>
                                                             );
                                                         })}
@@ -252,22 +444,22 @@ export default function Header() {
                                                 </div>
                                             </div>
 
-                                            {/* Footer */}
-                                            <div className="p-2 flex-shrink-0 border-t border-white/[0.04]" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
+                                            {/* Footer links – static */}
+                                            <div className="p-2 flex-shrink-0 border-t border-brand-gold/10 bg-brand-gold/[0.03]" style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom, 0px))' }}>
                                                 <Link
                                                     href="/profile"
                                                     onClick={() => setIsDropdownOpen(false)}
-                                                    className="flex items-center gap-3 w-full p-2.5 rounded-xl hover:bg-white/[0.04] text-white/40 hover:text-white/80 transition-colors"
+                                                    className="flex items-center gap-3 w-full p-3 rounded hover:bg-bg-hover text-text-secondary hover:text-text-primary transition-colors"
                                                 >
-                                                    <UserCircle size={18} className="text-brand-gold" />
-                                                    <span className="font-bold text-[12px] uppercase tracking-wide">Profile</span>
+                                                    <UserCircle size={20} className="text-brand-gold" />
+                                                    <span className="font-bold text-sm">MY PROFILE</span>
                                                 </Link>
                                                 <button
                                                     onClick={logout}
-                                                    className="flex items-center gap-3 w-full p-2.5 rounded-xl hover:bg-red-500/5 text-white/30 hover:text-red-400 transition-colors"
+                                                    className="flex items-center gap-3 w-full p-3 rounded hover:bg-bg-hover text-danger hover:text-danger transition-colors"
                                                 >
-                                                    <LogOut size={18} />
-                                                    <span className="font-bold text-[12px] uppercase tracking-wide">Logout</span>
+                                                    <LogOut size={20} />
+                                                    <span className="font-bold text-sm">LOGOUT</span>
                                                 </button>
                                             </div>
                                         </motion.div>
@@ -276,31 +468,45 @@ export default function Header() {
                             </AnimatePresence>
                         </div>
 
-                        {/* Deposit CTA */}
-                        <button
-                            onClick={openDeposit}
-                            className="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-black py-2 px-4 rounded-2xl text-[11px] uppercase tracking-wider transition-all shadow-[0_0_16px_rgba(59,193,23,0.2)] hover:shadow-[0_0_24px_rgba(59,193,23,0.3)] flex items-center gap-1.5 active:scale-[0.97]"
-                        >
-                            <Plus size={14} strokeWidth={3} />
-                            <span className="hidden sm:inline">Deposit</span>
-                        </button>
+                        {/* Mobile deposit + offer icon */}
+                        <div className="md:hidden flex items-center gap-1">
+                            <button
+                                onClick={openDeposit}
+                                className="bg-gradient-to-r from-brand-gold to-brand-gold-hover text-white font-bold h-9 px-3 rounded-lg text-[11px] uppercase transition-all hover:brightness-110 flex items-center gap-1"
+                            >
+                                <Wallet size={12} />
+                                <span>Deposit</span>
+                            </button>
+                            <DailyCheckInButton compact />
+                        </div>
 
                         {/* Notification Bell */}
                         <NotificationBell />
+
+                        {/* Desktop deposit + offer icon */}
+                        <div className="hidden md:flex items-center gap-2">
+                            <DailyCheckInButton compact />
+                            <button
+                                onClick={openDeposit}
+                                className="bg-gradient-to-r from-brand-gold to-brand-gold-hover text-white font-bold h-10 px-5 rounded-lg text-sm uppercase transition-all hover:shadow-glow-gold hover:brightness-110"
+                            >
+                                1 CLICK DEPOSIT
+                            </button>
+                        </div>
                     </div>
                 ) : (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 md:gap-2">
                         <button
                             onClick={openLogin}
-                            className="px-4 py-2 rounded-2xl bg-white/[0.04] border border-white/[0.06] text-white/60 text-[11px] font-bold uppercase hover:bg-white/[0.08] hover:text-white transition-all"
+                            className="h-9 md:h-10 px-3.5 md:px-5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/80 text-[11px] md:text-xs font-semibold uppercase tracking-wide hover:bg-white/[0.08] hover:border-white/[0.15] hover:text-white transition-all"
                         >
                             Log In
                         </button>
                         <button
                             onClick={openRegister}
-                            className="px-4 py-2 rounded-2xl bg-gradient-to-r from-brand-gold to-brand-gold-hover text-black text-[11px] font-black uppercase hover:brightness-110 transition-all shadow-[0_0_12px_rgba(227,125,50,0.2)]"
+                            className="h-9 md:h-10 px-3.5 md:px-5 rounded-lg bg-gradient-to-r from-brand-gold to-brand-gold-hover text-white text-[11px] md:text-xs font-bold uppercase tracking-wide hover:shadow-glow-gold hover:brightness-110 transition-all"
                         >
-                            Sign Up
+                            Register
                         </button>
                     </div>
                 )}

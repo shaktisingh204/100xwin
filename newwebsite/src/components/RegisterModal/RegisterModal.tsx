@@ -1,19 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import { X, Check, Trophy, Smartphone, Mail, Eye, EyeOff, AlertCircle, Lock, Gift, Sparkles, ChevronDown, Search, Globe, ShieldCheck, Loader2 } from "lucide-react";
+import { User, X, Check, Trophy, Smartphone, Mail, Eye, EyeOff, AlertCircle, Lock, Gift, Sparkles, ChevronDown, Search, Globe, ShieldCheck, Loader2 } from "lucide-react";
 import api from "@/services/api";
 import toast from "react-hot-toast";
 import { useAuth } from "@/context/AuthContext";
 import CountryCodeSelector, { Country, COUNTRIES } from "@/components/shared/CountryCodeSelector";
 import { getCurrencySymbol } from "@/utils/currency";
-
-// Country ISO → currency code (for bonus preview during registration)
-const COUNTRY_CURRENCY: Record<string, string> = {
-    IN: 'INR', US: 'USD', GB: 'GBP', EU: 'EUR', AU: 'AUD',
-    CA: 'CAD', SG: 'SGD', AE: 'AED', BD: 'BDT', PK: 'PKR',
-    NP: 'NPR', LK: 'LKR', MY: 'MYR', PH: 'PHP',
-};
+import { getStoredUtm, clearStoredUtm } from "@/lib/utm";
 
 interface RegisterModalProps {
     onClose?: () => void;
@@ -93,21 +87,9 @@ const ALL_COUNTRIES = Object.entries(COUNTRY_CURRENCY_MAP)
     .map(([iso, v]) => ({ iso, ...v }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-
-// Dial codes sorted longest-first so "+1-242" matches before "+1"
-const SORTED_DIAL_CODES_REG = [...COUNTRIES].sort((a, b) => b.code.length - a.code.length);
-
-function detectCountryFromPhone(digits: string) {
-    if (!digits) return null;
-    for (const c of SORTED_DIAL_CODES_REG) {
-        const bare = c.code.replace(/-/g, '');
-        if ((`+${digits}`).startsWith(bare)) return c;
-    }
-    return null;
-}
-
 const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) => {
     const [formData, setFormData] = useState({
+        username: '',
         email: '',
         phoneNumber: '',
         password: '',
@@ -130,17 +112,62 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
     const [showCountryDropdown, setShowCountryDropdown] = useState(false);
     const [countrySearch, setCountrySearch] = useState('');
 
-    // OTP step (phone registration only)
+    // OTP step (phone AND email registration)
     type RegStep = 'form' | 'verify_otp';
     const [regStep, setRegStep] = useState<RegStep>('form');
     const [otpCode, setOtpCode] = useState('');
     const [otpLoading, setOtpLoading] = useState(false);
+    const [resendCooldown, setResendCooldown] = useState(0);
+    const [resendLoading, setResendLoading] = useState(false);
+    const [otpExpiresIn, setOtpExpiresIn] = useState(0);
 
     // Welcome bonus state
     const [signupBonuses, setSignupBonuses] = useState<any[]>([]);
     const [selectedBonusCode, setSelectedBonusCode] = useState<string | null>(null); // null = no bonus
 
     const { login } = useAuth();
+
+    // Resend cooldown timer
+    React.useEffect(() => {
+        if (resendCooldown <= 0) return;
+        const t = setTimeout(() => setResendCooldown(c => c - 1), 1000);
+        return () => clearTimeout(t);
+    }, [resendCooldown]);
+
+    // OTP expiry countdown timer
+    React.useEffect(() => {
+        if (otpExpiresIn <= 0) return;
+        const t = setTimeout(() => setOtpExpiresIn(c => c - 1), 1000);
+        return () => clearTimeout(t);
+    }, [otpExpiresIn]);
+
+    const handleResendOtp = async () => {
+        setError('');
+        setResendLoading(true);
+        try {
+            if (isPhone) {
+                const fullPhone = `${selectedCountry.code.replace(/-/g, '')}${formData.phoneNumber.trim()}`;
+                await api.post('/auth/send-otp', {
+                    phoneNumber: fullPhone.startsWith('+') ? fullPhone : `+${fullPhone}`,
+                    purpose: 'REGISTER',
+                });
+            } else {
+                await api.post('/auth/send-email-otp', {
+                    email: formData.email.trim(),
+                    purpose: 'REGISTER',
+                });
+            }
+            setResendCooldown(60);
+            setOtpExpiresIn(isPhone ? 120 : 600);
+            setOtpCode('');
+            toast.success('OTP resent successfully!');
+        } catch (err: any) {
+            const msg = err.response?.data?.message;
+            setError(typeof msg === 'string' ? msg : 'Failed to resend OTP. Please try again.');
+        } finally {
+            setResendLoading(false);
+        }
+    };
 
     // Pre-fill referral code from localStorage — keep SEPARATE from promoCode
     React.useEffect(() => {
@@ -202,6 +229,13 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
             }
         }
 
+        const usernameVal = formData.username.trim();
+        if (usernameVal) {
+            if (!/^[a-zA-Z0-9_]{3,15}$/.test(usernameVal)) {
+                newErrors.username = 'Username must be 3-15 chars (letters, numbers, underscores)';
+            }
+        }
+
         if (!formData.password) {
             newErrors.password = 'Password is required';
         } else if (formData.password.length < 8) {
@@ -228,17 +262,26 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
             return;
         }
 
-        // ── Phone registration: send OTP first ─────────────────────────────
-        if (isPhone && regStep === 'form') {
-            const fullPhone = `${selectedCountry.code.replace(/-/g, '')}${formData.phoneNumber.trim()}`;
+        // ── Send OTP first (both phone and email) ─────────────────────────
+        if (regStep === 'form') {
             setLoading(true);
             try {
-                await api.post('/auth/send-otp', {
-                    phoneNumber: fullPhone.startsWith('+') ? fullPhone : `+${fullPhone}`,
-                    purpose: 'REGISTER',
-                });
+                if (isPhone) {
+                    const fullPhone = `${selectedCountry.code.replace(/-/g, '')}${formData.phoneNumber.trim()}`;
+                    await api.post('/auth/send-otp', {
+                        phoneNumber: fullPhone.startsWith('+') ? fullPhone : `+${fullPhone}`,
+                        purpose: 'REGISTER',
+                    });
+                } else {
+                    await api.post('/auth/send-email-otp', {
+                        email: formData.email.trim(),
+                        purpose: 'REGISTER',
+                    });
+                }
                 setRegStep('verify_otp');
                 setOtpCode('');
+                setResendCooldown(60);
+                setOtpExpiresIn(isPhone ? 120 : 600); // phone: 2min, email: 10min
             } catch (err: any) {
                 const msg = err.response?.data?.message;
                 setError(typeof msg === 'string' ? msg : 'Failed to send OTP. Please try again.');
@@ -247,90 +290,41 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
             }
             return;
         }
-
-        setLoading(true);
-        try {
-            const payload = {
-                ...(isPhone
-                    ? { phoneNumber: formData.phoneNumber.trim() }
-                    : { email: formData.email.trim() }),
-                password: formData.password,
-                currency: formData.currency || 'USD',
-                country: registrationCountry,
-                // username is auto-generated by the backend — do NOT send it
-                // Promo code — for bonus redemption
-                ...(formData.promoCode.trim() ? { promoCode: formData.promoCode.trim().toUpperCase() } : {}),
-                // Referral code — for invite tracking (kept separate from promoCode)
-                ...(referralCode ? { referralCode } : {}),
-            };
-
-            const res = await api.post('/auth/signup', payload);
-            login(res.data.access_token, res.data.user);
-
-            // After signup: redeem instant NO_DEPOSIT bonus if selected
-            if (selectedBonusCode) {
-                const selectedBonus = signupBonuses.find((b: any) => b.code === selectedBonusCode);
-                if (selectedBonus) {
-                    if (!selectedBonus.forFirstDepositOnly) {
-                        // Instant NO_DEPOSIT bonus — redeem immediately
-                        try {
-                            await api.post('/bonus/redeem-signup', { bonusCode: selectedBonusCode }, {
-                                headers: { Authorization: `Bearer ${res.data.access_token}` },
-                            });
-                            toast.success(`🎉 Bonus Activated! ${selectedBonus.title}`);
-                        } catch {
-                            // Bonus redemption failed silently — don't block registration
-                        }
-                    } else {
-                        // Deposit bonus — save to MongoDB (persists across devices/sessions)
-                        try {
-                            await api.post('/bonus/pending', { bonusCode: selectedBonusCode }, {
-                                headers: { Authorization: `Bearer ${res.data.access_token}` },
-                            });
-                            toast.success(`🎁 Bonus saved! ${selectedBonus.title} will be applied on your first deposit.`, { duration: 5000 });
-                        } catch {
-                            // Silent — bonus will still be auto-prompted in DepositModal
-                        }
-                    }
-                }
-            }
-
-            // Clear referral code from storage after successful signup
-            if (referralCode) localStorage.removeItem('referralCode');
-            toast.success('Registration successful! Welcome to Zeero.');
-            if (onClose) onClose();
-        } catch (err: any) {
-            const msg = err.response?.data?.message;
-            let finalMsg = 'Registration failed. Please try again.';
-            if (Array.isArray(msg)) {
-                finalMsg = msg.join(', ');
-            } else if (typeof msg === 'string') {
-                finalMsg = msg;
-            }
-            setError(finalMsg);
-        } finally {
-            setLoading(false);
-        }
     };
 
     // ── Verify OTP then finalize registration ─────────────────────────────────
     const handleVerifyOtpAndRegister = async () => {
         setError('');
         if (otpCode.length !== 6) { setError('Enter the 6-digit OTP.'); return; }
-        const fullPhone = `${selectedCountry.code.replace(/-/g, '')}${formData.phoneNumber.trim()}`;
-        const phoneNumber = fullPhone.startsWith('+') ? fullPhone : `+${fullPhone}`;
         setOtpLoading(true);
         try {
-            // 1. Verify OTP
-            await api.post('/auth/verify-otp', { phoneNumber, code: otpCode, purpose: 'REGISTER' });
+            // 1. Verify OTP (phone or email)
+            if (isPhone) {
+                const fullPhone = `${selectedCountry.code.replace(/-/g, '')}${formData.phoneNumber.trim()}`;
+                const phoneNumber = fullPhone.startsWith('+') ? fullPhone : `+${fullPhone}`;
+                await api.post('/auth/verify-otp', { phoneNumber, code: otpCode, purpose: 'REGISTER' });
+            } else {
+                await api.post('/auth/verify-email-otp', { email: formData.email.trim(), code: otpCode, purpose: 'REGISTER' });
+            }
             // 2. Proceed with signup
+            const utmData = getStoredUtm();
+            const fullPhone = isPhone ? `${selectedCountry.code.replace(/-/g, '')}${formData.phoneNumber.trim()}` : '';
+            const phoneNumber = fullPhone.startsWith('+') ? fullPhone : `+${fullPhone}`;
             const payload = {
-                phoneNumber,
+                ...(isPhone ? { phoneNumber } : { email: formData.email.trim() }),
                 password: formData.password,
+                ...(formData.username.trim() ? { username: formData.username.trim() } : {}),
                 currency: formData.currency || 'USD',
                 country: registrationCountry,
                 ...(formData.promoCode.trim() ? { promoCode: formData.promoCode.trim().toUpperCase() } : {}),
                 ...(referralCode ? { referralCode } : {}),
+                ...(utmData?.utm_source ? { utm_source: utmData.utm_source } : {}),
+                ...(utmData?.utm_medium ? { utm_medium: utmData.utm_medium } : {}),
+                ...(utmData?.utm_campaign ? { utm_campaign: utmData.utm_campaign } : {}),
+                ...(utmData?.utm_content ? { utm_content: utmData.utm_content } : {}),
+                ...(utmData?.utm_term ? { utm_term: utmData.utm_term } : {}),
+                ...(utmData?.referrerUrl ? { referrerUrl: utmData.referrerUrl } : {}),
+                ...(utmData?.landingPage ? { landingPage: utmData.landingPage } : {}),
             };
             const res = await api.post('/auth/signup', payload);
             login(res.data.access_token, res.data.user);
@@ -346,8 +340,13 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                 }
             }
             if (referralCode) localStorage.removeItem('referralCode');
+            clearStoredUtm();
             toast.success('Registration successful! Welcome to Zeero.');
             if (onClose) onClose();
+            // Show deposit prompt after successful signup
+            setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('show-signup-deposit-prompt'));
+            }, 500);
         } catch (err: any) {
             const msg = err.response?.data?.message;
             setError(typeof msg === 'string' ? msg : 'Verification failed. Please try again.');
@@ -357,8 +356,13 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/80 backdrop-blur-sm p-0 md:p-4 animate-in fade-in duration-200">
-            <div className="relative w-full md:max-w-[860px] max-h-[92vh] overflow-y-auto bg-auth-base rounded-t-2xl md:rounded-2xl shadow-2xl flex flex-col md:flex-row border border-divider">
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+            {/*
+              Mobile: bottom sheet — fills width, max 90vh, flex-col with sticky footer
+              Desktop: centered card — max 860px wide, two-column layout
+            */}
+            <div className="relative w-full md:max-w-[860px] md:max-h-[92vh] bg-auth-base rounded-t-2xl md:rounded-2xl shadow-xl flex flex-col md:flex-row border border-divider overflow-hidden"
+                style={{ maxHeight: '92dvh' }}>
 
                 {/* Close Button */}
                 <button
@@ -368,8 +372,8 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                     <X size={18} />
                 </button>
 
-                {/* Left Column: Banner */}
-                <div className="hidden md:flex flex-col w-[38%] bg-bg-elevated relative items-center justify-center p-8 text-center border-r border-divider">
+                {/* Left Column: Banner — desktop only */}
+                <div className="hidden md:flex flex-col w-[38%] bg-bg-elevated relative items-center justify-center p-8 text-center border-r border-divider flex-shrink-0">
                     <div className="relative z-10 flex flex-col items-center gap-4">
                         <div className="w-32 h-32 rounded-full bg-bg-base flex items-center justify-center border border-divider">
                             <Trophy size={64} className="text-brand-gold opacity-60" />
@@ -387,37 +391,53 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                     <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/20 pointer-events-none rounded-l-2xl" />
                 </div>
 
-                {/* Right Column: Form */}
-                <div className="flex-1 bg-auth-base p-8 md:p-10 flex flex-col">
+                {/* Right Column: Form — full width on mobile, flex-1 on desktop */}
+                {/* CRITICAL: flex-col with overflow-hidden so we can scroll inside */}
+                <div className="flex-1 flex flex-col min-h-0 bg-auth-base overflow-hidden">
 
-                    {/* Mobile logo */}
-                    <div className="md:hidden text-center mb-4">
-                        <span className="text-2xl font-extrabold italic">
-                            <span className="text-brand-gold">Ze</span>ero
-                        </span>
+                    {/* ── Non-scrolling header ── */}
+                    <div className="flex-shrink-0 px-6 pt-6 pb-0 md:px-10 md:pt-10">
+                        {/* Mobile drag handle */}
+                        <div className="md:hidden w-10 h-1 bg-white/[0.16] rounded-full mx-auto mb-4" />
+
+                        {/* Mobile logo */}
+                        <div className="md:hidden text-center mb-4">
+                            <span className="text-3xl font-black italic tracking-tight">
+                                <span className="text-brand-gold">Ze</span><span className="text-white">ero</span>
+                            </span>
+                            <p className="text-xs text-white/35 mt-1 font-medium tracking-wide">SPORTS · CASINO · ORIGINALS</p>
+                        </div>
+
+                        <h3 className="font-poppins text-text-primary text-xl font-extrabold uppercase tracking-wide mb-0.5">
+                            Create Account
+                        </h3>
+                        <p className="text-sm text-text-muted mb-4">
+                            Already have an account?{' '}
+                            <button onClick={onLoginClick} className="text-brand-gold font-bold hover:underline">
+                                Log In
+                            </button>
+                        </p>
                     </div>
 
-                    <h3 className="font-poppins text-text-primary text-2xl font-extrabold uppercase tracking-wide mb-1">
-                        Create Account
-                    </h3>
-                    <p className="text-sm text-text-muted mb-6">
-                        Already have an account?{' '}
-                        <button onClick={onLoginClick} className="text-brand-gold font-bold hover:underline">
-                            Log In
-                        </button>
-                    </p>
+                    {/* ── Scrollable body ── */}
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 px-6 pb-2 md:px-10">
 
                     {/* Form fields — hidden during OTP step */}
                     {regStep === 'verify_otp' ? (
-                        <div className="flex flex-col gap-5">
+                        <div className="flex flex-col gap-5 pb-4">
                             {/* OTP Screen */}
                             <div className="text-center">
                                 <div className="w-16 h-16 rounded-full bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center mx-auto mb-3">
                                     <ShieldCheck size={30} className="text-indigo-400" />
                                 </div>
-                                <h4 className="text-text-primary font-bold text-lg">Verify Your Number</h4>
+                                <h4 className="text-text-primary font-bold text-lg">{isPhone ? 'Verify Your Number' : 'Verify Your Email'}</h4>
                                 <p className="text-text-muted text-sm mt-1">
-                                    Enter the 6-digit OTP sent to <strong className="text-text-primary">+{selectedCountry.code.replace(/-/g, '').replace('+', '')}{formData.phoneNumber}</strong>
+                                    Enter the 6-digit OTP sent to{' '}
+                                    {isPhone ? (
+                                        <strong className="text-text-primary">+{selectedCountry.code.replace(/-/g, '').replace('+', '')}{formData.phoneNumber}</strong>
+                                    ) : (
+                                        <strong className="text-text-primary">{formData.email}</strong>
+                                    )}
                                 </p>
                             </div>
                             <div>
@@ -430,25 +450,11 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                     onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}
                                     className={`w-full h-[60px] bg-bg-elevated border-2 rounded-xl px-4 text-text-primary text-[28px] font-bold tracking-[0.5em] text-center outline-none transition-all focus:ring-[1.5px] placeholder:text-text-muted placeholder:text-2xl placeholder:tracking-[0.3em] ${error ? 'border-red-500' : 'border-divider focus:border-indigo-500 focus:ring-indigo-500/40'}`}
                                 />
-                                {error && <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1"><AlertCircle size={11} />{error}</p>}
+                                {error && <p className="text-danger text-xs mt-1.5 ml-1 flex items-center gap-1"><AlertCircle size={11} />{error}</p>}
                             </div>
-                            <button
-                                onClick={handleVerifyOtpAndRegister}
-                                disabled={otpLoading || otpCode.length !== 6}
-                                className="w-full bg-auth-action hover:bg-brand-gold-hover disabled:opacity-50 disabled:cursor-not-allowed text-text-inverse h-[52px] rounded-xl font-extrabold uppercase tracking-wider text-sm transition-all shadow-lg shadow-glow-gold hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2"
-                            >
-                                {otpLoading ? <><Loader2 size={16} className="animate-spin" />Verifying & Creating Account...</> : 'Verify & Create Account'}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => { setRegStep('form'); setOtpCode(''); setError(''); }}
-                                className="text-text-muted text-sm hover:text-brand-gold transition-colors text-center"
-                            >
-                                ← Go back / Resend OTP
-                            </button>
                         </div>
                     ) : (
-                    <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-4 pb-4">
 
                         {/* Country Selector (required) — FIRST */}
                         <div>
@@ -471,13 +477,13 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                             <span className="text-xs text-text-muted font-mono">{COUNTRY_CURRENCY_MAP[registrationCountry]?.currency}</span>
                                         </>
                                     ) : (
-                                        <span className="flex-1 text-text-muted text-sm">Select your country <span className="text-red-400">*</span></span>
+                                        <span className="flex-1 text-text-muted text-sm">Select your country <span className="text-danger">*</span></span>
                                     )}
                                     <ChevronDown size={14} className={`text-text-muted transition-transform shrink-0 ${showCountryDropdown ? 'rotate-180' : ''}`} />
                                 </button>
 
                                 {showCountryDropdown && (
-                                    <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 bg-bg-elevated border border-divider rounded-xl shadow-2xl overflow-hidden">
+                                    <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 bg-bg-elevated border border-divider rounded-xl shadow-xl overflow-hidden">
                                         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-divider">
                                             <Search size={14} className="text-text-muted shrink-0" />
                                             <input
@@ -510,7 +516,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                 )}
                             </div>
                             {fieldErrors.registrationCountry && (
-                                <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1">
+                                <p className="text-danger text-xs mt-1.5 ml-1 flex items-center gap-1">
                                     <AlertCircle size={11} /> {fieldErrors.registrationCountry}
                                 </p>
                             )}
@@ -580,13 +586,39 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                 </div>
                             )}
                             {fieldErrors.phoneNumber && isPhone && (
-                                <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1">
+                                <p className="text-danger text-xs mt-1.5 ml-1 flex items-center gap-1">
                                     <AlertCircle size={11} /> {fieldErrors.phoneNumber}
                                 </p>
                             )}
                             {fieldErrors.email && !isPhone && (
-                                <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1">
+                                <p className="text-danger text-xs mt-1.5 ml-1 flex items-center gap-1">
                                     <AlertCircle size={11} /> {fieldErrors.email}
+                                </p>
+                            )}
+                        </div>
+
+                        {/* Username Field */}
+                        <div>
+                            <div className="relative">
+                                <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                                <input
+                                    type="text"
+                                    placeholder="Username (Optional)"
+                                    autoComplete="username"
+                                    className={`w-full h-[50px] bg-bg-elevated border rounded-xl pl-11 pr-4 text-text-primary outline-none transition-all focus:ring-[1.5px] placeholder:text-text-muted font-medium ${fieldErrors.username
+                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30'
+                                        : 'border-divider focus:border-brand-gold focus:ring-brand-gold/40'
+                                        }`}
+                                    value={formData.username}
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') });
+                                        setFieldErrors(prev => ({ ...prev, username: '' }));
+                                    }}
+                                />
+                            </div>
+                            {fieldErrors.username && (
+                                <p className="text-danger text-xs mt-1.5 ml-1 flex items-center gap-1">
+                                    <AlertCircle size={11} /> {fieldErrors.username}
                                 </p>
                             )}
                         </div>
@@ -618,7 +650,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                 </button>
                             </div>
                             {fieldErrors.password && (
-                                <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1">
+                                <p className="text-danger text-xs mt-1.5 ml-1 flex items-center gap-1">
                                     <AlertCircle size={11} /> {fieldErrors.password}
                                 </p>
                             )}
@@ -651,7 +683,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                 </button>
                             </div>
                             {fieldErrors.confirmPassword && (
-                                <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1">
+                                <p className="text-danger text-xs mt-1.5 ml-1 flex items-center gap-1">
                                     <AlertCircle size={11} /> {fieldErrors.confirmPassword}
                                 </p>
                             )}
@@ -691,17 +723,26 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                                         <div className="flex items-center gap-2 flex-wrap">
                                                             <span className="text-sm font-bold text-text-primary">{bonus.title}</span>
                                                             <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${bonus.forFirstDepositOnly
-                                                                ? 'bg-blue-500/15 text-blue-400'
-                                                                : 'bg-emerald-500/15 text-emerald-400'
+                                                                ? 'bg-brand-gold/15 text-brand-gold'
+                                                                : 'bg-success-alpha-16 text-success-bright'
                                                                 }`}>
                                                                 {bonus.forFirstDepositOnly ? 'On Deposit' : 'Instant'}
                                                             </span>
                                                         </div>
-                                                        <div className="text-xs text-text-muted mt-0.5 truncate">
+                                                        <div className="text-xs text-text-muted mt-0.5 whitespace-break-spaces leading-relaxed">
                                                             {(() => {
-                                                                const bonusSymbol = getCurrencySymbol(COUNTRY_CURRENCY[selectedCountry?.iso || 'IN'] || 'INR');
+                                                                const bonusSymbol = getCurrencySymbol(COUNTRY_CURRENCY_MAP[registrationCountry || 'IN']?.currency || 'INR');
+                                                                const fiatMinimum = bonus.minDepositFiat ?? bonus.minDeposit ?? 0;
+                                                                const cryptoMinimum = bonus.minDepositCrypto ?? bonus.minDeposit ?? 0;
+                                                                const minimumLabel = bonus.currency === 'CRYPTO'
+                                                                    ? (cryptoMinimum > 0 ? ` (min $${cryptoMinimum})` : '')
+                                                                    : bonus.currency === 'BOTH'
+                                                                        ? ((fiatMinimum > 0 || cryptoMinimum > 0)
+                                                                            ? ` (min ${fiatMinimum > 0 ? `${bonusSymbol}${fiatMinimum} fiat` : 'no fiat min'} / ${cryptoMinimum > 0 ? `$${cryptoMinimum} crypto` : 'no crypto min'})`
+                                                                            : '')
+                                                                        : (fiatMinimum > 0 ? ` (min ${bonusSymbol}${fiatMinimum})` : '');
                                                                 return bonus.percentage > 0
-                                                                    ? `${bonus.percentage}% match${bonus.maxBonus > 0 ? ` up to ${bonusSymbol}${bonus.maxBonus}` : ''}${bonus.minDeposit > 0 ? ` (min ${bonusSymbol}${bonus.minDeposit})` : ''}`
+                                                                    ? `${bonus.percentage}% match${bonus.maxBonus > 0 ? ` up to ${bonusSymbol}${bonus.maxBonus}` : ''}${minimumLabel}`
                                                                     : `${bonusSymbol}${bonus.amount} bonus`;
                                                             })()} &bull; {bonus.wageringRequirement}x wagering
                                                         </div>
@@ -734,14 +775,14 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
 
                         {/* Referral Code Indicator — shown only when a ref code was applied from URL */}
                         {referralCode && (
-                            <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2 text-xs">
+                            <div className="flex items-center gap-2 bg-success-alpha-10 border border-success-primary/20 rounded-xl px-3 py-2 text-xs">
                                 <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
                                 <span className="text-green-400 font-medium">Referral code applied:</span>
                                 <span className="text-white font-mono font-bold tracking-widest">{referralCode}</span>
                                 <button
                                     type="button"
                                     onClick={() => { setReferralCode(''); localStorage.removeItem('referralCode'); }}
-                                    className="ml-auto text-green-400/60 hover:text-red-400 transition-colors text-[10px]"
+                                    className="ml-auto text-green-400/60 hover:text-danger transition-colors text-[10px]"
                                     title="Remove referral"
                                 >
                                     ✕
@@ -783,48 +824,68 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
 
                         {/* Error Message */}
                         {error && (
-                            <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 animate-in slide-in-from-top-1 duration-200">
-                                <AlertCircle size={15} className="text-red-400 shrink-0 mt-0.5" />
-                                <p className="text-red-400 text-[13px] font-medium leading-snug">{error}</p>
+                            <div className="flex items-start gap-2.5 bg-danger-alpha-10 border border-red-500/30 rounded-xl px-4 py-3 animate-in slide-in-from-top-1 duration-200">
+                                <AlertCircle size={15} className="text-danger shrink-0 mt-0.5" />
+                                <p className="text-danger text-[13px] font-medium leading-snug">{error}</p>
                             </div>
                         )}
-
-                        {/* Submit Button */}
-                        <button
-                            onClick={handleSubmit}
-                            disabled={loading || !termsAccepted}
-                            className="w-full bg-auth-action hover:bg-brand-gold-hover disabled:opacity-50 disabled:cursor-not-allowed text-text-inverse h-[52px] rounded-xl font-extrabold uppercase tracking-wider text-sm transition-all shadow-lg shadow-glow-gold hover:-translate-y-0.5 active:translate-y-0"
-                        >
-                            {loading ? (
-                                <span className="flex items-center justify-center gap-2">
-                                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    {isPhone ? 'Sending OTP...' : 'Creating account...'}
-                                </span>
-                            ) : isPhone ? 'Continue with OTP →' : 'Create Account'}
-                        </button>
-
-                        {/* OR divider */}
-                        <div className="relative my-1 text-center">
-                            <div className="absolute top-1/2 w-full h-[1px] bg-divider" />
-                            <span className="relative bg-auth-base px-3 text-[11px] font-bold text-text-muted uppercase">or</span>
-                        </div>
-
-                        {/* Google Button */}
-                        <button
-                            type="button"
-                            className="w-full h-[48px] bg-bg-elevated border border-divider hover:border-text-muted rounded-xl flex items-center justify-center gap-3 transition-all group"
-                        >
-                            <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center p-0.5">
-                                <img src="https://www.google.com/favicon.ico" alt="G" className="w-full h-full" />
-                            </div>
-                            <span className="text-text-primary font-bold text-sm group-hover:text-white transition-colors">
-                                Continue with Google
-                            </span>
-                        </button>
-
                         </div>
                     )} {/* end OTP conditional */}
-                </div>
+                    </div>{/* end scrollable body */}
+
+                    {/* ── Sticky footer — submit button always visible ── */}
+                    <div className="flex-shrink-0 px-6 pt-3 pb-6 md:px-10 md:pb-6 border-t border-divider/50 bg-auth-base">
+                        {regStep === 'verify_otp' ? (
+                            <>
+                                <button
+                                    onClick={handleVerifyOtpAndRegister}
+                                    disabled={otpLoading || otpCode.length !== 6}
+                                    className="w-full bg-auth-action hover:bg-brand-gold-hover disabled:opacity-50 disabled:cursor-not-allowed text-text-inverse h-[52px] rounded-xl font-extrabold uppercase tracking-wider text-sm transition-all shadow-lg shadow-glow-gold hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2"
+                                >
+                                    {otpLoading ? <><Loader2 size={16} className="animate-spin" />Verifying &amp; Creating...</> : 'Verify & Create Account'}
+                                </button>
+                                <div className="flex items-center justify-center gap-4 mt-3 pb-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setRegStep('form'); setOtpCode(''); setError(''); setResendCooldown(0); }}
+                                        className="text-text-muted text-sm hover:text-brand-gold transition-colors"
+                                    >
+                                        ← Edit {isPhone ? 'Number' : 'Email'}
+                                    </button>
+                                    <span className="text-text-muted/30">|</span>
+                                    <button
+                                        type="button"
+                                        onClick={handleResendOtp}
+                                        disabled={resendCooldown > 0 || resendLoading}
+                                        className={`text-sm transition-colors ${resendCooldown > 0 || resendLoading ? 'text-text-muted/40 cursor-not-allowed' : 'text-text-muted hover:text-brand-gold'}`}
+                                    >
+                                        {resendLoading ? 'Sending...' : resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP'}
+                                    </button>
+                                </div>
+                                {otpExpiresIn > 0 ? (
+                                    <p className={`text-center text-[11px] mt-1 ${otpExpiresIn <= 30 ? 'text-danger' : 'text-text-muted/50'}`}>
+                                        OTP expires in {Math.floor(otpExpiresIn / 60)}:{String(otpExpiresIn % 60).padStart(2, '0')}
+                                    </p>
+                                ) : regStep === 'verify_otp' && (
+                                    <p className="text-center text-[11px] mt-1 text-danger font-medium">
+                                        OTP expired — please resend
+                                    </p>
+                                )}
+                            </>
+                        ) : (
+                            <button
+                                onClick={handleSubmit}
+                                disabled={loading || !termsAccepted}
+                                className="w-full bg-auth-action hover:bg-brand-gold-hover disabled:opacity-50 disabled:cursor-not-allowed text-text-inverse h-[52px] rounded-xl font-extrabold uppercase tracking-wider text-sm transition-all shadow-lg shadow-glow-gold hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2"
+                            >
+                                {loading ? (
+                                    <><Loader2 size={16} className="animate-spin" />Sending OTP...</>
+                                ) : 'Continue with OTP →'}
+                            </button>
+                        )}
+                    </div>
+
+                </div>{/* end right column */}
             </div>
         </div>
     );

@@ -16,6 +16,13 @@ import { BonusService } from '../bonus/bonus.service';
 const TOTAL_TILES = 25;
 const DEFAULT_HOUSE_EDGE = 0.01;
 
+type MinesWalletField = 'balance' | 'cryptoBalance' | 'casinoBonus';
+type MinesAllocation = {
+  walletField: MinesWalletField;
+  walletLabel: string;
+  amount: number;
+};
+
 function generateMinePositions(serverSeed: string, clientSeed: string, nonce: number, mineCount: number): number[] {
   const tiles = Array.from({ length: TOTAL_TILES }, (_, i) => i);
   const key = `${serverSeed}:${clientSeed}:${nonce}`;
@@ -46,6 +53,90 @@ export class MinesService {
     private readonly ggrService: GGRService,
     private readonly bonusService: BonusService,
   ) {}
+
+  private roundCurrency(value: number) {
+    return parseFloat(Number(value || 0).toFixed(2));
+  }
+
+  private getPrimaryWalletField(walletType: 'fiat' | 'crypto' | string): MinesWalletField {
+    return walletType === 'crypto' ? 'cryptoBalance' : 'balance';
+  }
+
+  private getWalletFieldLabel(walletField: MinesWalletField) {
+    if (walletField === 'casinoBonus') return 'Casino Bonus Wallet';
+    return walletField === 'cryptoBalance' ? 'Crypto Wallet' : 'Main Wallet';
+  }
+
+  private mapWalletFieldToPaymentMethod(walletField: MinesWalletField) {
+    if (walletField === 'casinoBonus') return 'BONUS_WALLET';
+    return walletField === 'cryptoBalance' ? 'CRYPTO_WALLET' : 'MAIN_WALLET';
+  }
+
+  private buildAllocations(
+    walletType: 'fiat' | 'crypto' | string,
+    bonusAmount: number,
+    betAmount: number,
+    amount: number,
+  ): MinesAllocation[] {
+    const normalizedAmount = this.roundCurrency(amount);
+    if (normalizedAmount <= 0) return [];
+
+    const primaryWalletField = this.getPrimaryWalletField(walletType);
+    if (walletType === 'crypto') {
+      const allocations: MinesAllocation[] = [{
+        walletField: 'cryptoBalance',
+        walletLabel: this.getWalletFieldLabel('cryptoBalance'),
+        amount: normalizedAmount,
+      }];
+      return allocations;
+    }
+
+    const normalizedBetAmount = this.roundCurrency(betAmount);
+    const normalizedBonusAmount = this.roundCurrency(
+      Math.min(normalizedBetAmount, Math.max(0, bonusAmount)),
+    );
+    const mainStakeAmount = this.roundCurrency(
+      Math.max(0, normalizedBetAmount - normalizedBonusAmount),
+    );
+
+    if (normalizedBonusAmount <= 0 || normalizedBetAmount <= 0) {
+      const allocations: MinesAllocation[] = [{
+        walletField: primaryWalletField,
+        walletLabel: this.getWalletFieldLabel(primaryWalletField),
+        amount: normalizedAmount,
+      }];
+      return allocations;
+    }
+
+    if (mainStakeAmount <= 0) {
+      const allocations: MinesAllocation[] = [{
+        walletField: 'casinoBonus',
+        walletLabel: this.getWalletFieldLabel('casinoBonus'),
+        amount: normalizedAmount,
+      }];
+      return allocations;
+    }
+
+    const bonusPayout = this.roundCurrency(
+      (normalizedAmount * normalizedBonusAmount) / normalizedBetAmount,
+    );
+    const mainPayout = this.roundCurrency(normalizedAmount - bonusPayout);
+
+    const allocations: MinesAllocation[] = [
+      {
+        walletField: 'casinoBonus',
+        walletLabel: this.getWalletFieldLabel('casinoBonus'),
+        amount: bonusPayout,
+      },
+      {
+        walletField: primaryWalletField,
+        walletLabel: this.getWalletFieldLabel(primaryWalletField),
+        amount: mainPayout,
+      },
+    ];
+
+    return allocations.filter((allocation) => allocation.amount > 0);
+  }
 
   async startGame(userId: number, dto: StartMinesDto) {
     const { betAmount, mineCount, clientSeed = 'zeero', walletType = 'fiat', useBonus = false } = dto;
@@ -104,8 +195,51 @@ export class MinesService {
       currency: walletType === 'crypto' ? 'USD' : user.currency || 'INR',
       biasWeight: ggrResult.biasWeight,
     });
+    const stakeAllocations = this.buildAllocations(
+      walletType,
+      bonusUsed,
+      betAmount,
+      betAmount,
+    );
+    const stakePrimaryAllocation = stakeAllocations[0];
+    const placePaymentMethod =
+      stakeAllocations.length === 1 && stakePrimaryAllocation
+        ? this.mapWalletFieldToPaymentMethod(stakePrimaryAllocation.walletField)
+        : 'MULTI_WALLET';
 
-    await this.bonusService.recordWagering(userId, betAmount, 'CASINO', bonusUsed > 0 ? 'fiatbonus' : 'main').catch(() => {
+    await this.prisma.transaction.create({
+      data: {
+        userId,
+        amount: betAmount,
+        type: 'BET_PLACE',
+        status: 'COMPLETED',
+        paymentMethod: placePaymentMethod,
+        paymentDetails: {
+          source: 'MINES',
+          gameId: String(game._id),
+          walletField:
+            stakeAllocations.length === 1 && stakePrimaryAllocation
+              ? stakePrimaryAllocation.walletField
+              : null,
+          walletLabel:
+            stakeAllocations.length === 1 && stakePrimaryAllocation
+              ? stakePrimaryAllocation.walletLabel
+              : stakeAllocations.map((allocation) => allocation.walletLabel).join(' + '),
+          allocations: stakeAllocations,
+        },
+        remarks: `Mines bet: ${mineCount} mines`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    await this.bonusService.recordWagering(
+      userId,
+      betAmount,
+      'CASINO',
+      bonusUsed > 0 ? 'fiatbonus' : 'main',
+      bonusUsed,
+    ).catch(() => {
       this.bonusService.emitWalletRefresh(userId);
     });
 
@@ -139,6 +273,22 @@ export class MinesService {
       game.revealedTiles = [...game.revealedTiles, tileIndex];
       game.payout = 0;
       await game.save();
+
+      await this.prisma.transaction.create({
+        data: {
+          userId,
+          amount: game.betAmount,
+          type: 'BET_LOSS',
+          status: 'COMPLETED',
+          paymentDetails: {
+            source: 'MINES',
+            gameId: String(game._id),
+          },
+          remarks: `Mines loss: hit mine on tile ${tileIndex}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
       return {
         hit: true, gameId: String(game._id), status: 'LOST',
         minePositions: game.minePositions,
@@ -181,12 +331,51 @@ export class MinesService {
     await game.save();
 
     // Credit payout (Prisma — stays in PostgreSQL)
+    const payoutAllocations = this.buildAllocations(
+      game.walletType,
+      game.bonusAmount || 0,
+      game.betAmount,
+      payout,
+    );
+    const payoutPrimaryAllocation = payoutAllocations[0];
+    const payoutPaymentMethod =
+      payoutAllocations.length === 1 && payoutPrimaryAllocation
+        ? this.mapWalletFieldToPaymentMethod(payoutPrimaryAllocation.walletField)
+        : 'MULTI_WALLET';
+
     await this.prisma.$transaction(async (tx) => {
-      if (game.walletType === 'crypto') {
-        await tx.user.update({ where: { id: userId }, data: { cryptoBalance: { increment: payout } } });
-      } else {
-        await tx.user.update({ where: { id: userId }, data: { balance: { increment: payout } } });
+      const updateData: Record<string, any> = {};
+      for (const allocation of payoutAllocations) {
+        updateData[allocation.walletField] = { increment: allocation.amount };
       }
+
+      await tx.user.update({ where: { id: userId }, data: updateData });
+
+      await tx.transaction.create({
+        data: {
+          userId,
+          amount: payout,
+          type: 'BET_CASHOUT',
+          status: 'COMPLETED',
+          paymentMethod: payoutPaymentMethod,
+          paymentDetails: {
+            source: 'MINES',
+            gameId: String(game._id),
+            walletField:
+              payoutAllocations.length === 1 && payoutPrimaryAllocation
+                ? payoutPrimaryAllocation.walletField
+                : null,
+            walletLabel:
+              payoutAllocations.length === 1 && payoutPrimaryAllocation
+                ? payoutPrimaryAllocation.walletLabel
+                : payoutAllocations.map((allocation) => allocation.walletLabel).join(' + '),
+            allocations: payoutAllocations,
+          },
+          remarks: `Mines cashout after ${game.revealedTiles.length} safe tiles`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      });
     });
 
     this.bonusService.emitWalletRefresh(userId);

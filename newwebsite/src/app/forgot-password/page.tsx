@@ -128,7 +128,7 @@ export default function ForgotPasswordPage() {
                     <ArrowLeft size={16} /> Back to Home
                 </Link>
 
-                <div className="bg-auth-base border border-divider rounded-2xl p-8 shadow-2xl">
+                <div className="bg-auth-base border border-divider rounded-2xl p-8 shadow-xl">
                     {/* Logo */}
                     <div className="text-center mb-6">
                         <span className="text-3xl font-extrabold italic">
@@ -177,7 +177,7 @@ export default function ForgotPasswordPage() {
                                         className={`w-full h-[52px] bg-bg-elevated border rounded-xl pl-11 pr-4 text-text-primary text-[15px] font-medium outline-none transition-all focus:ring-[1.5px] placeholder:text-text-muted ${emailError ? "border-red-500 focus:ring-red-500/30" : "border-divider focus:border-brand-gold focus:ring-brand-gold/40"}`}
                                     />
                                 </div>
-                                {emailError && <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1"><AlertCircle size={11} />{emailError}</p>}
+                                {emailError && <p className="text-danger text-xs mt-1.5 ml-1 flex items-center gap-1"><AlertCircle size={11} />{emailError}</p>}
                             </div>
                             <button type="submit" disabled={emailLoading} className="w-full bg-auth-action text-text-inverse h-[52px] rounded-xl font-extrabold text-base uppercase tracking-wide transition-all hover:bg-brand-gold-hover hover:-translate-y-0.5 shadow-lg shadow-glow-gold active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-2">
                                 {emailLoading ? <><Loader2 size={18} className="animate-spin" />Sending...</> : "Send Reset Link"}
@@ -232,7 +232,7 @@ export default function ForgotPasswordPage() {
                                                 className={`flex-1 h-[52px] bg-bg-elevated border rounded-xl px-4 text-text-primary text-[15px] font-medium outline-none transition-all focus:ring-[1.5px] placeholder:text-text-muted ${phoneError ? "border-red-500 focus:ring-red-500/30" : "border-divider focus:border-brand-gold focus:ring-brand-gold/40"}`}
                                             />
                                         </div>
-                                        {phoneError && <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1"><AlertCircle size={11} />{phoneError}</p>}
+                                        {phoneError && <p className="text-danger text-xs mt-1.5 ml-1 flex items-center gap-1"><AlertCircle size={11} />{phoneError}</p>}
                                     </div>
                                     <button type="submit" disabled={phoneLoading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white h-[52px] rounded-xl font-extrabold text-base uppercase tracking-wide transition-all hover:-translate-y-0.5 shadow-lg disabled:opacity-50 flex items-center justify-center gap-2">
                                         {phoneLoading ? <><Loader2 size={18} className="animate-spin" />Sending OTP...</> : "Send OTP"}
@@ -260,7 +260,7 @@ export default function ForgotPasswordPage() {
                                                 className={`w-full h-[52px] bg-bg-elevated border rounded-xl pl-11 pr-4 text-text-primary text-[20px] font-bold tracking-[0.4em] outline-none transition-all focus:ring-[1.5px] placeholder:text-text-muted placeholder:text-base placeholder:tracking-normal ${phoneError ? "border-red-500 focus:ring-red-500/30" : "border-divider focus:border-indigo-500 focus:ring-indigo-500/40"}`}
                                             />
                                         </div>
-                                        {phoneError && <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1"><AlertCircle size={11} />{phoneError}</p>}
+                                        {phoneError && <p className="text-danger text-xs mt-1.5 ml-1 flex items-center gap-1"><AlertCircle size={11} />{phoneError}</p>}
                                     </div>
                                     <button type="submit" disabled={phoneLoading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white h-[52px] rounded-xl font-extrabold text-base uppercase tracking-wide transition-all hover:-translate-y-0.5 shadow-lg disabled:opacity-50 flex items-center justify-center gap-2">
                                         {phoneLoading ? <><Loader2 size={18} className="animate-spin" />Verifying...</> : "Verify OTP"}
@@ -302,7 +302,7 @@ export default function ForgotPasswordPage() {
                                                 className={`w-full h-[52px] bg-bg-elevated border rounded-xl pl-11 pr-4 text-text-primary text-[15px] font-medium outline-none transition-all focus:ring-[1.5px] placeholder:text-text-muted ${phoneError ? "border-red-500 focus:ring-red-500/30" : "border-divider focus:border-indigo-500 focus:ring-indigo-500/40"}`}
                                             />
                                         </div>
-                                        {phoneError && <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1"><AlertCircle size={11} />{phoneError}</p>}
+                                        {phoneError && <p className="text-danger text-xs mt-1.5 ml-1 flex items-center gap-1"><AlertCircle size={11} />{phoneError}</p>}
                                     </div>
                                     <button type="submit" disabled={phoneLoading} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white h-[52px] rounded-xl font-extrabold text-base uppercase tracking-wide transition-all hover:-translate-y-0.5 shadow-lg disabled:opacity-50 flex items-center justify-center gap-2">
                                         {phoneLoading ? <><Loader2 size={18} className="animate-spin" />Resetting...</> : "Reset Password"}

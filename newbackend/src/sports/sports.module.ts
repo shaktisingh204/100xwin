@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { SportsService } from './sports.service';
 import { SportsController } from './sports.controller';
 import { HttpModule } from '@nestjs/axios';
@@ -18,12 +18,20 @@ import { Navigation, NavigationSchema } from './schemas/navigation.schema';
 import { TopEvent, TopEventSchema } from './schemas/top-event.schema';
 import { HomeEvent, HomeEventSchema } from './schemas/home-event.schema';
 import { TeamIcon, TeamIconSchema } from './schemas/team-icon.schema';
+// ─── Betfair native schemas (new collections) ────────────────────────────────
+import { BetfairSport, BetfairSportSchema } from './schemas/betfair-sport.schema';
+import { BetfairEvent, BetfairEventSchema } from './schemas/betfair-event.schema';
+import { BetfairMarket, BetfairMarketSchema } from './schemas/betfair-market.schema';
+import { BetfairFancy, BetfairFancySchema } from './schemas/betfair-fancy.schema';
+import { BetfairBookmaker, BetfairBookmakerSchema } from './schemas/betfair-bookmaker.schema';
+import { SportLeague, SportLeagueSchema } from './schemas/sport-league.schema';
 
 import { SportsSocketService } from './sports.socket.service';
-import { TurnkeySyncService } from './turnkey-sync.service';
+import { SportradarService } from './sportradar.service';
+import { PrismaService } from '../prisma.service';
+import { SportsGateway } from './sports.gateway';
 
 import { UsersModule } from '../users/users.module';
-
 @Module({
     imports: [
         HttpModule,
@@ -44,10 +52,17 @@ import { UsersModule } from '../users/users.module';
             { name: TopEvent.name, schema: TopEventSchema },
             { name: HomeEvent.name, schema: HomeEventSchema },
             { name: TeamIcon.name, schema: TeamIconSchema },
+            // ─── Betfair native collections ───────────────────────────────
+            { name: BetfairSport.name,      schema: BetfairSportSchema      },
+            { name: BetfairEvent.name,      schema: BetfairEventSchema      },
+            { name: BetfairMarket.name,     schema: BetfairMarketSchema     },
+            { name: BetfairFancy.name,      schema: BetfairFancySchema      },
+            { name: BetfairBookmaker.name,  schema: BetfairBookmakerSchema  },
+            { name: SportLeague.name,       schema: SportLeagueSchema       },
         ])
     ],
     controllers: [SportsController],
-    providers: [SportsService, SportsSocketService, TurnkeySyncService],
-    exports: [SportsService, SportsSocketService, TurnkeySyncService]
+    providers: [SportsService, SportsSocketService, PrismaService, SportradarService, SportsGateway],
+    exports: [SportsService, SportsSocketService, SportradarService, SportsGateway]
 })
 export class SportsModule { }

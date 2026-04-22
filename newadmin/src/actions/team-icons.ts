@@ -49,7 +49,7 @@ export async function uploadTeamIcon(formData: FormData) {
                 icon_url: uploadResult.url,
                 sport_id: sportId,
             },
-            { upsert: true, new: true },
+            { upsert: true, returnDocument: 'after' },
         );
 
         revalidatePath('/dashboard/sports/team-icons');
@@ -72,11 +72,17 @@ export async function deleteTeamIcon(id: string) {
     }
 }
 
-// ─── Get unique team names from live/upcoming events in Redis ─────────────────
+// ─── Get unique team names from live/upcoming Sportradar events in Redis ─────
 
 import Redis from 'ioredis';
 
-const SPORT_IDS = [4, 1, 2, 66, 10, 40, 8, 15, 6, 18, 22];
+// Sportradar Redis caches populated by the backend SportradarService.
+// Reads from the merged inplay + upcoming feeds so every currently-visible
+// team on the website is available for icon assignment.
+const SR_CACHE_KEYS = [
+    'sportradar:inplay:all',
+    'sportradar:upcoming:all',
+];
 
 let _redis: Redis | null = null;
 function getRedis() {
@@ -84,6 +90,8 @@ function getRedis() {
         _redis = new Redis({
             host: process.env.REDIS_HOST || 'localhost',
             port: Number(process.env.REDIS_PORT) || 6379,
+            password: process.env.REDIS_PASSWORD || undefined,
+            db: Number(process.env.REDIS_DB) || 0,
             enableOfflineQueue: false,
             connectTimeout: 3000,
             lazyConnect: true,
@@ -93,6 +101,16 @@ function getRedis() {
     return _redis;
 }
 
+function parseTeamsFromEventName(eventName: string): string[] {
+    // Sportradar uses "Team A vs. Team B"; also handle legacy " v " and " @ ".
+    const separators = [/ vs\.? /i, / v /i, / @ /i, / - /];
+    for (const sep of separators) {
+        const parts = eventName.split(sep);
+        if (parts.length >= 2) return parts.map((p) => p.trim()).filter(Boolean);
+    }
+    return [eventName.trim()].filter(Boolean);
+}
+
 export async function getUniqueTeamNames() {
     try {
         const client = getRedis();
@@ -100,29 +118,39 @@ export async function getUniqueTeamNames() {
 
         const teamSet = new Set<string>();
 
-        await Promise.all(SPORT_IDS.map(async (eid) => {
+        await Promise.all(SR_CACHE_KEYS.map(async (key) => {
             try {
-                const raw = await client.get(`allevents:${eid}`);
+                const raw = await client.get(key);
                 if (!raw) return;
                 const events: any[] = JSON.parse(raw);
                 for (const e of events) {
-                    // Redis events store the event name as "Team A v Team B"
-                    const eventName = String(e?.ename ?? e?.event_name ?? '').trim();
+                    const eventName = String(e?.eventName ?? e?.ename ?? e?.event_name ?? '').trim();
                     if (!eventName) continue;
-
-                    const parts = eventName.split(' v ');
-                    if (parts.length >= 2) {
-                        const home = parts[0].trim();
-                        const away = parts[1].trim();
-                        if (home) teamSet.add(home);
-                        if (away) teamSet.add(away);
-                    } else {
-                        // Single-team event name (e.g. horse racing)
-                        teamSet.add(eventName);
+                    for (const team of parseTeamsFromEventName(eventName)) {
+                        if (team) teamSet.add(team);
                     }
                 }
-            } catch { /* skip sport */ }
+            } catch { /* skip this cache key */ }
         }));
+
+        // Fallback: scan per-sport event caches if the merged "all" keys are empty
+        if (teamSet.size === 0) {
+            try {
+                const sportIdKeys = await client.keys('sportradar:events:sr:sport:*');
+                await Promise.all(sportIdKeys.slice(0, 20).map(async (k) => {
+                    const raw = await client.get(k);
+                    if (!raw) return;
+                    const events: any[] = JSON.parse(raw);
+                    for (const e of events) {
+                        const eventName = String(e?.eventName ?? '').trim();
+                        if (!eventName) continue;
+                        for (const team of parseTeamsFromEventName(eventName)) {
+                            if (team) teamSet.add(team);
+                        }
+                    }
+                }));
+            } catch { /* ignore */ }
+        }
 
         return { success: true, data: Array.from(teamSet).sort() };
     } catch (error: any) {

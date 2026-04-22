@@ -140,19 +140,28 @@ function MobileCategoryBarInner() {
     }, [pathname]);
 
     if (categories.length === 0 && !loading) return null;
-    // On sports pages, SportsMainContent renders its own BC.GAME style sport picker
+    // On sports pages, SportsMainContent renders its own sport picker
     if (pathname.includes('/sports')) return null;
+    // On casino pages, CasinoMobileView renders its own inline category pills
+    if (pathname.includes('/casino')) return null;
+    // On live-dealers, LiveCasinoMobileView renders its own layout
+    if (pathname.includes('/live-dealers')) return null;
 
     return (
-        <div className="md:hidden w-full bg-[#0c0e12]/90 backdrop-blur-xl border-b border-white/[0.03] overflow-x-auto scrollbar-none sticky top-[56px] z-40">
-            <div className="flex items-center gap-2 px-3 py-2.5 min-w-max">
+        <div className="md:hidden w-full bg-bg-modal border-b border-white/[0.04] overflow-x-auto scrollbar-none sticky top-[64px] z-40">
+            <div className="flex items-center gap-2 p-3 min-w-max">
                 {loading ? (
-                    [1, 2, 3, 4].map(i => <div key={i} className="h-8 w-20 bg-white/[0.03] rounded-xl animate-pulse" />)
+                    // Skeletons
+                    [1, 2, 3, 4].map(i => <div key={i} className="h-8 w-24 bg-white/[0.04] rounded-full animate-pulse" />)
                 ) : (
                     categories.map((cat) => {
+                        // Active State Logic
                         let isActive = false;
                         if (pathname.includes('/sports')) {
-                            // future: check query param
+                            // Check query param usually, but simplistic for now
+                            // If we can read the query param for sports:
+                            //  const sId = searchParams.get('sport');
+                            //  isActive = sId === cat.id;
                         } else {
                             isActive = currentCategory === cat.id || pathname === cat.path;
                         }
@@ -162,10 +171,10 @@ function MobileCategoryBarInner() {
                                 key={cat.id}
                                 href={cat.path}
                                 className={`
-                                    flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[11px] font-bold whitespace-nowrap border transition-all
+                                    flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-all
                                     ${isActive
-                                        ? 'bg-brand-gold/15 text-brand-gold border-brand-gold/20 shadow-[0_2px_8px_rgba(227,125,50,0.1)]'
-                                        : 'bg-white/[0.03] text-white/35 border-white/[0.04] hover:bg-white/[0.06] hover:text-white/60'
+                                        ? 'bg-brand-gold text-text-inverse border-brand-gold'
+                                        : 'bg-bg-elevated text-text-secondary border-white/[0.04] hover:bg-white/[0.05] hover:text-white'
                                     }
                                 `}
                             >

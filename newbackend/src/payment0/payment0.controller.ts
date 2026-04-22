@@ -7,6 +7,11 @@ import { PrismaService } from '../prisma.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { BonusService } from '../bonus/bonus.service';
 import { UsersService } from '../users/users.service';
+import { ReferralService } from '../referral/referral.service';
+import { EmailService } from '../email/email.service';
+import { assertMinDeposit } from '../payment/payment-limits.util';
+import { buildPaymentToken } from '../payment/payment-token.util';
+import { sanitizeReturnUrl } from '../payment/return-url.util';
 
 @Controller('payment0')
 export class Payment0Controller {
@@ -18,6 +23,8 @@ export class Payment0Controller {
         private configService: ConfigService,
         private readonly bonusService: BonusService,
         private readonly usersService: UsersService,
+        private readonly referralService: ReferralService,
+        private readonly emailService: EmailService,
     ) { }
 
     @UseGuards(JwtAuthGuard)
@@ -33,6 +40,11 @@ export class Payment0Controller {
             } = body;
 
             this.logger.log(`[UPI0] Creating deposit — orderNo: ${orderNo}, amount: ${amount}`);
+
+            const minErr = await assertMinDeposit(this.prisma, parseFloat(amount), { gatewayKey: 'MIN_DEPOSIT_UPI0' });
+            if (minErr) {
+                return res.status(HttpStatus.BAD_REQUEST).json({ success: false, message: minErr });
+            }
 
             const phpGatewayBaseUrl = this.configService.get<string>('PAYMENT0_BASE_URL');
             if (!phpGatewayBaseUrl) {
@@ -72,13 +84,17 @@ export class Payment0Controller {
                 }
             }
 
-            const payload = {
+            // Sanitize returnUrl against the host allowlist (prevents open-redirect
+            // abuse via gateway handoff) and omit userId from the client-visible
+            // token. Token is HMAC-signed so tampering is detectable if it ever
+            // round-trips back to us; the backend itself never uses this token to
+            // decide credits — crediting is driven by the PENDING txn via orderNo.
+            const safeReturnUrl = await sanitizeReturnUrl(returnUrl, this.prisma);
+            const token = buildPaymentToken({
                 orderNo,
                 amount,
-                userId,
-                returnUrl
-            };
-            const token = Buffer.from(JSON.stringify(payload)).toString('base64');
+                returnUrl: safeReturnUrl,
+            });
             const redirectUrl = `${phpGatewayBaseUrl}/index.php?token=${encodeURIComponent(token)}`;
 
             return res.status(HttpStatus.OK).json({
@@ -107,8 +123,18 @@ export class Payment0Controller {
                 return res.status(HttpStatus.BAD_REQUEST).send('fail');
             }
 
-            const expectedAmount = parseFloat(amount || '0');
-            const isValid = await this.payment0Service.verifyPaymentWithRazorpay(gatewayTxn, expectedAmount);
+            // Look up the PENDING transaction to get the trusted stored amount
+            const txn = orderNo
+                ? await this.prisma.transaction.findUnique({ where: { utr: orderNo } })
+                : null;
+            if (!txn || txn.status !== 'PENDING') {
+                this.logger.warn(`[UPI0] Deposit callback — no PENDING txn for orderNo: ${orderNo}`);
+                return res.status(HttpStatus.BAD_REQUEST).send('fail');
+            }
+
+            // SECURITY: verify with Razorpay using the STORED amount, not the
+            // callback body's amount which could be tampered.
+            const isValid = await this.payment0Service.verifyPaymentWithRazorpay(gatewayTxn, txn.amount);
 
             if (!isValid) {
                 this.logger.warn(`[UPI0] Deposit callback — Razorpay API verification failed!`);
@@ -116,11 +142,12 @@ export class Payment0Controller {
             }
 
             this.logger.log(
-                `[UPI0] Deposit callback verified — orderNo: ${orderNo}, status: ${status}, amount: ${amount}`
+                `[UPI0] Deposit callback verified — orderNo: ${orderNo}, status: ${status}, storedAmount: ${txn.amount}`
             );
 
             if (status === 'success') {
-                await this.creditDeposit(orderNo, parseFloat(amount || '0'));
+                // SECURITY: always credit the stored PENDING txn amount
+                await this.creditDeposit(orderNo, txn.amount);
             }
 
             return res.status(HttpStatus.OK).send('ok');
@@ -221,14 +248,36 @@ export class Payment0Controller {
             if (!txn) { this.logger.warn(`[UPI0] No transaction for orderNo: ${orderNo}`); return; }
             if (txn.status !== 'PENDING') { this.logger.warn(`[UPI0] Already ${txn.status} — skip`); return; }
 
-            const credit = gatewayAmount > 0 ? gatewayAmount : txn.amount;
+            // SECURITY: pin credit to the stored PENDING txn amount; never accept
+            // the webhook body's amount field which could be replayed/tampered.
+            if (
+                gatewayAmount > 0 &&
+                Math.abs(gatewayAmount - txn.amount) > 0.01
+            ) {
+                this.logger.warn(
+                    `[UPI0] Amount mismatch — stored ₹${txn.amount}, gateway reported ₹${gatewayAmount}. Refusing credit.`,
+                );
+                return;
+            }
+            const credit = txn.amount;
             const previousDeposits = await this.prisma.transaction.count({
                 where: { userId: txn.userId, type: 'DEPOSIT', status: 'APPROVED' },
             });
-            await this.prisma.$transaction([
-                this.prisma.user.update({ where: { id: txn.userId }, data: { balance: { increment: credit } } }),
-                this.prisma.transaction.update({ where: { id: txn.id }, data: { status: 'APPROVED', amount: credit } }),
-            ]);
+            // Atomic PENDING→APPROVED transition — prevents late-webhook races
+            // against cancellation and blocks double-credit from replayed webhooks.
+            const creditApplied = await this.prisma.$transaction(async (tx) => {
+                const updated = await tx.transaction.updateMany({
+                    where: { id: txn.id, status: 'PENDING' },
+                    data: { status: 'APPROVED', amount: credit },
+                });
+                if (updated.count === 0) return false;
+                await tx.user.update({ where: { id: txn.userId }, data: { balance: { increment: credit } } });
+                return true;
+            });
+            if (!creditApplied) {
+                this.logger.warn(`[UPI0] creditDeposit skipped — not PENDING (orderNo: ${orderNo})`);
+                return;
+            }
             this.logger.log(`[UPI0] Deposit APPROVED — userId: ${txn.userId}, amount: ${credit}`);
 
             try {
@@ -237,17 +286,54 @@ export class Payment0Controller {
                 this.logger.error(`[UPI0] Wagering update failed (non-fatal): ${e.message}`);
             }
 
+            let depositWageringApplied = false;
             const bonusCode = (txn.paymentDetails as any)?.bonusCode;
             if (bonusCode) {
                 try {
-                    await this.bonusService.redeemBonus(txn.userId, bonusCode, credit, {
+                    const bonusResult = await this.bonusService.redeemBonus(txn.userId, bonusCode, credit, {
                         depositCurrency: 'INR',
                         approvedDepositCountBeforeThisDeposit: previousDeposits,
                     });
-                    this.logger.log(`[UPI0] Bonus redeemed — userId: ${txn.userId}, code: ${bonusCode}`);
+                    if (bonusResult) {
+                        depositWageringApplied = true;
+                        this.logger.log(`[UPI0] Bonus redeemed — userId: ${txn.userId}, code: ${bonusCode}`);
+                    } else {
+                        this.logger.warn(`[UPI0] Bonus code "${bonusCode}" not applied (validation failed) — userId: ${txn.userId}`);
+                    }
                 } catch (e) {
                     this.logger.error(`[UPI0] Bonus redemption failed (non-fatal): ${e.message}`);
                 }
+            }
+
+            // ── Default 1× deposit wagering lock if no bonus handled it ───────
+            if (!depositWageringApplied) {
+                try {
+                    await this.bonusService.applyDepositWagering(txn.userId, credit, 1);
+                } catch (e) {
+                    this.logger.error(`[UPI0] Deposit wagering lock failed (non-fatal): ${e.message}`);
+                }
+            }
+
+            // ── Referral rewards ──────────────────────────────────────────────
+            try {
+                if (previousDeposits === 0) {
+                    await this.referralService.checkAndAward(txn.userId, 'DEPOSIT_FIRST', credit, `dep_${txn.id}_first`);
+                }
+                await this.referralService.checkAndAward(txn.userId, 'DEPOSIT_RECURRING', credit, `dep_${txn.id}_rec`);
+            } catch (e) {
+                this.logger.error(
+                    `[UPI0] Referral reward failed (non-fatal): ${e.message}`,
+                );
+            }
+
+            // ── Deposit confirmation email ───────────────────────────────────
+            try {
+                const user = await this.prisma.user.findUnique({ where: { id: txn.userId }, select: { email: true, username: true } });
+                if (user?.email) {
+                    this.emailService.sendDepositSuccess(user.email, user.username || user.email, credit.toFixed(2), 'INR').catch(() => {});
+                }
+            } catch (e) {
+                this.logger.error(`[UPI0] Deposit email failed (non-fatal): ${e.message}`);
             }
         } catch (e) {
             this.logger.error(`[UPI0] creditDeposit error: ${e.message}`);

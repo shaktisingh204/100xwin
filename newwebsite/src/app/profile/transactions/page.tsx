@@ -3,8 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
-import { getCurrencySymbol } from '@/utils/currency';
 import WalletOverview from '@/components/profile/WalletOverview';
+import { formatCurrencyParts, formatTransactionAmount, isCryptoTransaction } from '@/utils/transactionCurrency';
 import {
     ArrowDownLeft,
     ArrowUpRight,
@@ -17,6 +17,7 @@ import {
     Sparkles,
     ShieldPlus,
     ShieldMinus,
+    Trophy,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -34,37 +35,46 @@ interface Transaction {
     createdAt: string;
 }
 
-type FilterType = 'ALL' | 'DEPOSIT' | 'WITHDRAWAL' | 'BONUS';
-type FilterStatus = 'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED';
+type FilterType = 'ALL' | 'DEPOSIT' | 'WITHDRAWAL' | 'BONUS' | 'FANTASY';
+type FilterStatus = 'ALL' | 'PENDING' | 'PROCESSED' | 'APPROVED' | 'COMPLETED';
 
 const statusCls: Record<string, string> = {
-    APPROVED: 'bg-emerald-500/10 text-emerald-400',
-    COMPLETED: 'bg-emerald-500/10 text-emerald-400',
-    REJECTED: 'bg-red-500/10 text-red-400',
-    PENDING: 'bg-amber-500/10 text-amber-400',
+    APPROVED: 'bg-success-alpha-10 text-success-bright',
+    COMPLETED: 'bg-success-alpha-10 text-success-bright',
+    PROCESSED: 'bg-info-alpha-10 text-brand-gold',
+    PROCESSING: 'bg-info-alpha-10 text-brand-gold',
+    REJECTED: 'bg-danger-alpha-10 text-danger',
+    PENDING: 'bg-warning-alpha-08 text-warning-bright',
 };
 
 const DEPOSIT_TYPES = new Set(['DEPOSIT', 'ADMIN_DEPOSIT']);
 const WITHDRAWAL_TYPES = new Set(['WITHDRAWAL', 'ADMIN_WITHDRAWAL']);
-const BONUS_TYPES = new Set(['BONUS', 'BONUS_CONVERT', 'BONUS_TYPE_SWITCH', 'REFUND']);
-const HIDDEN_TRANSACTION_TYPES = new Set(['BET', 'BET_PLACE']);
+const BONUS_TYPES = new Set(['BONUS', 'BONUS_CONVERT', 'BONUS_TYPE_SWITCH', 'BONUS_DEBIT', 'REFUND', 'REFERRAL_BONUS']);
+const FANTASY_TYPES = new Set(['FANTASY_ENTRY', 'FANTASY_WINNING']);
+const HIDDEN_TRANSACTION_TYPES = new Set(['BET', 'BET_PLACE', 'BONUS_CONVERT_REVERSED']);
 const CREDIT_TYPES = new Set([
     'DEPOSIT',
     'ADMIN_DEPOSIT',
     'BONUS',
     'BONUS_CONVERT',
     'BONUS_TYPE_SWITCH',
+    'BONUS_DEBIT',
     'REFUND',
+    'REFERRAL_BONUS',
     'BET_WIN',
     'BET_REFUND',
     'BET_CASHOUT',
+    'FANTASY_WINNING',
 ]);
 const DEBIT_TYPES = new Set([
     'WITHDRAWAL',
     'ADMIN_WITHDRAWAL',
+    'BONUS_DEBIT',
     'BET_LOSS',
+    'BET_VOID_DEBIT',
     'BET',
     'BET_PLACE',
+    'FANTASY_ENTRY',
 ]);
 
 function isLegacyCashout(txn: Transaction) {
@@ -85,104 +95,164 @@ function getAllocationLabels(txn: Transaction): string[] {
 }
 
 function getTypeMeta(txn: Transaction) {
+    const source = String(txn.paymentDetails?.source || '').toUpperCase();
+    const sourcePrefix =
+        source === 'DICE' ? 'Dice '
+            : source === 'MINES' ? 'Mines '
+                : source === 'AVIATOR' ? 'Aviator '
+                    : source === 'LIMBO' ? 'Limbo '
+                : '';
+
     if (txn.type === 'BET_CASHOUT' || isLegacyCashout(txn)) {
         return {
-            label: 'Bet Cashout',
-            className: 'text-sky-400',
-            iconBg: 'bg-sky-500/10',
-            icon: <ArrowLeftRight className="w-4.5 h-4.5 text-sky-400" />,
+            label:
+                source === 'MINES' ? 'Mines Cashout'
+                    : source === 'AVIATOR' ? 'Aviator Cashout'
+                        : source === 'LIMBO' ? 'Limbo Cashout'
+                            : 'Bet Cashout',
+            className: 'text-brand-gold',
+            iconBg: 'bg-brand-gold/10',
+            icon: <ArrowLeftRight className="w-4.5 h-4.5 text-brand-gold" />,
         };
     }
 
     if (txn.type === 'BET_WIN') {
         return {
-            label: 'Bet Win',
-            className: 'text-emerald-400',
-            iconBg: 'bg-emerald-500/10',
-            icon: <Sparkles className="w-4.5 h-4.5 text-emerald-400" />,
+            label: `${sourcePrefix}Win`,
+            className: 'text-success-bright',
+            iconBg: 'bg-success-alpha-10',
+            icon: <Sparkles className="w-4.5 h-4.5 text-success-bright" />,
         };
     }
 
     if (txn.type === 'BET_LOSS') {
         return {
-            label: 'Bet Loss',
-            className: 'text-red-400',
-            iconBg: 'bg-red-500/10',
-            icon: <ShieldMinus className="w-4.5 h-4.5 text-red-400" />,
+            label: `${sourcePrefix}Loss`,
+            className: 'text-danger',
+            iconBg: 'bg-danger-alpha-10',
+            icon: <ShieldMinus className="w-4.5 h-4.5 text-danger" />,
+        };
+    }
+
+    if (txn.type === 'BET_VOID_DEBIT') {
+        return {
+            label: 'Void Adjustment',
+            className: 'text-danger',
+            iconBg: 'bg-danger-alpha-10',
+            icon: <ShieldMinus className="w-4.5 h-4.5 text-danger" />,
         };
     }
 
     if (txn.type === 'BET_REFUND') {
         return {
-            label: 'Bet Refund',
-            className: 'text-blue-400',
-            iconBg: 'bg-blue-500/10',
-            icon: <ShieldPlus className="w-4.5 h-4.5 text-blue-400" />,
+            label: String(txn.paymentDetails?.tag || '').toUpperCase() === 'EARLY_SIX_REFUND' ? 'Early Six Refund' : 'Bet Refund',
+            className: 'text-brand-gold',
+            iconBg: 'bg-brand-gold/10',
+            icon: <ShieldPlus className="w-4.5 h-4.5 text-brand-gold" />,
         };
     }
 
     if (DEPOSIT_TYPES.has(txn.type)) {
         return {
             label: txn.type === 'ADMIN_DEPOSIT' ? 'Manual Credit' : 'Deposit',
-            className: 'text-emerald-400',
-            iconBg: 'bg-emerald-500/10',
-            icon: <ArrowDownLeft className="w-4.5 h-4.5 text-emerald-400" />,
+            className: 'text-success-bright',
+            iconBg: 'bg-success-alpha-10',
+            icon: <ArrowDownLeft className="w-4.5 h-4.5 text-success-bright" />,
         };
     }
 
     if (WITHDRAWAL_TYPES.has(txn.type)) {
         return {
             label: txn.type === 'ADMIN_WITHDRAWAL' ? 'Manual Debit' : 'Withdrawal',
-            className: 'text-red-400',
-            iconBg: 'bg-red-500/10',
-            icon: <ArrowUpRight className="w-4.5 h-4.5 text-red-400" />,
+            className: 'text-danger',
+            iconBg: 'bg-danger-alpha-10',
+            icon: <ArrowUpRight className="w-4.5 h-4.5 text-danger" />,
         };
     }
 
     if (txn.type === 'BONUS_CONVERT') {
         return {
             label: 'Bonus Converted',
-            className: 'text-sky-400',
-            iconBg: 'bg-sky-500/10',
-            icon: <Sparkles className="w-4.5 h-4.5 text-sky-400" />,
+            className: 'text-brand-gold',
+            iconBg: 'bg-brand-gold/10',
+            icon: <Sparkles className="w-4.5 h-4.5 text-brand-gold" />,
+        };
+    }
+
+    if (txn.type === 'BONUS_DEBIT') {
+        return {
+            label: 'Bonus Deduction',
+            className: 'text-danger',
+            iconBg: 'bg-danger-alpha-10',
+            icon: <ShieldMinus className="w-4.5 h-4.5 text-danger" />,
         };
     }
 
     if (txn.type === 'BONUS_TYPE_SWITCH') {
         return {
             label: 'Bonus Type Switch',
-            className: 'text-violet-400',
+            className: 'text-accent-purple',
             iconBg: 'bg-violet-500/10',
-            icon: <RefreshCw className="w-4.5 h-4.5 text-violet-400" />,
+            icon: <RefreshCw className="w-4.5 h-4.5 text-accent-purple" />,
         };
     }
 
     if (txn.type === 'REFUND') {
+        const isEarlySixRefund =
+            String(txn.paymentDetails?.tag || '').toUpperCase() === 'EARLY_SIX_REFUND' ||
+            String(txn.paymentDetails?.source || '').toUpperCase() === 'FIRST_OVER_SIX_CASHBACK';
         const isBonusWallet =
             String(txn.paymentDetails?.walletType || '').toLowerCase() === 'bonus_wallet' ||
             String(txn.paymentMethod || '').toUpperCase() === 'BONUS_WALLET';
 
         return {
-            label: isBonusWallet ? 'Cashback Bonus' : 'Refund',
-            className: 'text-blue-400',
-            iconBg: 'bg-blue-500/10',
-            icon: <ShieldPlus className="w-4.5 h-4.5 text-blue-400" />,
+            label: isEarlySixRefund ? 'Early Six Refund' : isBonusWallet ? 'Cashback Bonus' : 'Refund',
+            className: 'text-brand-gold',
+            iconBg: 'bg-brand-gold/10',
+            icon: <ShieldPlus className="w-4.5 h-4.5 text-brand-gold" />,
         };
     }
 
     if (txn.type === 'BONUS') {
         return {
             label: 'Bonus',
-            className: 'text-amber-400',
-            iconBg: 'bg-amber-500/10',
-            icon: <Gift className="w-4.5 h-4.5 text-amber-400" />,
+            className: 'text-warning-bright',
+            iconBg: 'bg-warning-alpha-08',
+            icon: <Gift className="w-4.5 h-4.5 text-warning-bright" />,
+        };
+    }
+
+    if (txn.type === 'REFERRAL_BONUS') {
+        return {
+            label: 'Referral Bonus',
+            className: 'text-warning-bright',
+            iconBg: 'bg-warning-alpha-08',
+            icon: <Gift className="w-4.5 h-4.5 text-warning-bright" />,
+        };
+    }
+
+    if (txn.type === 'FANTASY_ENTRY') {
+        return {
+            label: 'Fantasy Entry',
+            className: 'text-danger',
+            iconBg: 'bg-danger-alpha-10',
+            icon: <Trophy className="w-4.5 h-4.5 text-danger" />,
+        };
+    }
+
+    if (txn.type === 'FANTASY_WINNING') {
+        return {
+            label: 'Fantasy Winning',
+            className: 'text-success-bright',
+            iconBg: 'bg-success-alpha-10',
+            icon: <Trophy className="w-4.5 h-4.5 text-success-bright" />,
         };
     }
 
     return {
         label: txn.type.replace(/_/g, ' '),
         className: 'text-white',
-        iconBg: 'bg-white/5',
+        iconBg: 'bg-white/[0.04]',
         icon: <ShieldMinus className="w-4.5 h-4.5 text-white/60" />,
     };
 }
@@ -198,7 +268,7 @@ function TxIcon({ txn }: { txn: Transaction }) {
 
 function StatusBadge({ status }: { status: string }) {
     return (
-        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${statusCls[status] || 'bg-white/5 text-white/40'}`}>
+        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${statusCls[status] || 'bg-white/[0.04] text-white/40'}`}>
             {status}
         </span>
     );
@@ -213,10 +283,9 @@ const fmtDate = (d: string) =>
         minute: '2-digit',
     });
 
-const fmtAmt = (txn: Transaction, fiatSymbol = '₹') => {
+const fmtAmt = (txn: Transaction, fiatCurrency = 'INR') => {
     const sign = DEBIT_TYPES.has(txn.type) ? '−' : CREDIT_TYPES.has(txn.type) ? '+' : '+';
-    const amount = txn.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    return `${sign}${fiatSymbol}${amount}`;
+    return `${sign}${formatTransactionAmount(txn.amount, txn, fiatCurrency)}`;
 };
 
 function resolveMethod(txn: Transaction): string {
@@ -255,7 +324,8 @@ function getMethodLabel(txn: Transaction) {
         return walletLabel || 'Main Wallet';
     }
     if (method === 'MULTI_WALLET') {
-        return getAllocationLabels(txn).join(' + ');
+        const labels = getAllocationLabels(txn);
+        return labels.length > 0 ? labels.join(' + ') : 'Multi Wallet';
     }
     if (method === 'BONUS_WALLET') {
         return walletLabel || 'Bonus Wallet';
@@ -280,6 +350,10 @@ function getMethodLabel(txn: Transaction) {
         return coin;
     }
     if (method === 'MANUAL') {
+        const accountTag = typeof pd?.accountTag === 'string' ? pd.accountTag : '';
+        if (accountTag) return accountTag;
+        const upiId = pd?.upiId || pd?.acctNo || pd?.receive_account;
+        if (upiId) return `Manual UPI · ${upiId}`;
         return 'Manual';
     }
     if (method === 'BONUS') {
@@ -306,6 +380,7 @@ function getDetailLine(txn: Transaction): string | null {
     }
     if (txn.type === 'BET_WIN') return walletLabel ? `Credited to ${walletLabel}` : 'Bet settled as a win';
     if (txn.type === 'BET_REFUND') return walletLabel ? `Returned to ${walletLabel}` : 'Stake returned to your wallet';
+    if (txn.type === 'BET_VOID_DEBIT') return walletLabel ? `Deducted from ${walletLabel}` : 'Previous settlement reversed';
     if (txn.type === 'BONUS_CONVERT') {
         if (walletLabel && destinationWallet) {
             return `${walletLabel} moved to ${destinationWallet}`;
@@ -317,9 +392,10 @@ function getDetailLine(txn: Transaction): string | null {
 }
 
 function getRefNo(txn: Transaction): string | null {
+    const pd = txn.paymentDetails;
+    if (pd?.bankUtr) return String(pd.bankUtr);
     if (txn.transactionId) return txn.transactionId;
     if (txn.utr) return txn.utr;
-    const pd = txn.paymentDetails;
     if (pd?.orderNo) return String(pd.orderNo);
     if (pd?.transferId) return String(pd.transferId);
     if (pd?.referenceId) return String(pd.referenceId);
@@ -333,18 +409,22 @@ function getMetaBadge(txn: Transaction): string | null {
     if (txn.type === 'BET_CASHOUT' || isLegacyCashout(txn)) return 'Early settlement';
     if (txn.type === 'BET_WIN') return 'Settled as win';
     if (txn.type === 'BET_LOSS') return 'Settled as loss';
+    if (txn.type === 'BET_VOID_DEBIT') return 'Settlement reversed';
     if (txn.type === 'BET_REFUND') return 'Stake refunded';
     if (txn.type === 'BONUS') return 'Bonus Credit';
+    if (txn.type === 'REFERRAL_BONUS') return 'Referral Reward';
     if (txn.type === 'BONUS_CONVERT') return 'Converted to Main Wallet';
     if (txn.type === 'BONUS_TYPE_SWITCH') return 'Switched Bonus Type';
     if (txn.type === 'REFUND') return 'Cashback / Refund';
+    if (txn.type === 'FANTASY_ENTRY') return 'Fantasy Contest';
+    if (txn.type === 'FANTASY_WINNING') return 'Fantasy Prize';
     return null;
 }
 
 
 export default function TransactionsPage() {
     const { user, token } = useAuth();
-    const fiatSymbol = getCurrencySymbol(user?.currency || 'INR');
+    const fiatCurrency = user?.currency || 'INR';
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [typeFilter, setTypeFilter] = useState<FilterType>('ALL');
@@ -373,13 +453,10 @@ export default function TransactionsPage() {
         if (typeFilter === 'DEPOSIT' && (!DEPOSIT_TYPES.has(txn.type) || isLegacyCashout(txn))) return false;
         if (typeFilter === 'WITHDRAWAL' && !WITHDRAWAL_TYPES.has(txn.type)) return false;
         if (typeFilter === 'BONUS' && !BONUS_TYPES.has(txn.type)) return false;
+        if (typeFilter === 'FANTASY' && !FANTASY_TYPES.has(txn.type)) return false;
 
         if (statusFilter !== 'ALL') {
-            if (statusFilter === 'APPROVED') {
-                if (!['APPROVED', 'COMPLETED'].includes(txn.status)) return false;
-            } else if (txn.status !== statusFilter) {
-                return false;
-            }
+            if (txn.status !== statusFilter) return false;
         }
 
         if (search) {
@@ -398,12 +475,32 @@ export default function TransactionsPage() {
         return true;
     });
 
-    const totalDeposited = transactions
-        .filter((txn) => DEPOSIT_TYPES.has(txn.type) && !isLegacyCashout(txn) && ['APPROVED', 'COMPLETED'].includes(txn.status))
-        .reduce((sum, txn) => sum + txn.amount, 0);
-    const totalWithdrawn = transactions
-        .filter((txn) => WITHDRAWAL_TYPES.has(txn.type) && ['APPROVED', 'COMPLETED'].includes(txn.status))
-        .reduce((sum, txn) => sum + txn.amount, 0);
+    const totalDeposited = transactions.reduce(
+        (totals, txn) => {
+            if (DEPOSIT_TYPES.has(txn.type) && !isLegacyCashout(txn) && ['APPROVED', 'COMPLETED'].includes(txn.status)) {
+                if (isCryptoTransaction(txn)) {
+                    totals.crypto += txn.amount;
+                } else {
+                    totals.fiat += txn.amount;
+                }
+            }
+            return totals;
+        },
+        { fiat: 0, crypto: 0 },
+    );
+    const totalWithdrawn = transactions.reduce(
+        (totals, txn) => {
+            if (WITHDRAWAL_TYPES.has(txn.type) && ['APPROVED', 'COMPLETED'].includes(txn.status)) {
+                if (isCryptoTransaction(txn)) {
+                    totals.crypto += txn.amount;
+                } else {
+                    totals.fiat += txn.amount;
+                }
+            }
+            return totals;
+        },
+        { fiat: 0, crypto: 0 },
+    );
     const pending = transactions.filter((txn) => txn.status === 'PENDING').length;
 
     return (
@@ -414,7 +511,7 @@ export default function TransactionsPage() {
                 </Link>
                 <div className="flex items-center justify-between">
                     <h1 className="text-lg font-bold text-white flex items-center gap-2">
-                        <ArrowLeftRight size={18} className="text-orange-400" />
+                        <ArrowLeftRight size={18} className="text-warning" />
                         Financial Transactions
                     </h1>
                     <button
@@ -433,58 +530,56 @@ export default function TransactionsPage() {
                 {[
                     {
                         label: 'Total Deposited',
-                        value: `${fiatSymbol}${totalDeposited.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-                        color: 'text-emerald-400',
-                        bg: 'bg-emerald-500/6',
+                        value: formatCurrencyParts(totalDeposited, fiatCurrency),
+                        color: 'text-success-bright',
+                        bg: 'bg-success-alpha-10',
                     },
                     {
                         label: 'Total Withdrawn',
-                        value: `${fiatSymbol}${totalWithdrawn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-                        color: 'text-red-400',
+                        value: formatCurrencyParts(totalWithdrawn, fiatCurrency),
+                        color: 'text-danger',
                         bg: 'bg-red-500/6',
                     },
                     {
                         label: 'Pending',
                         value: pending,
-                        color: 'text-amber-400',
+                        color: 'text-warning-bright',
                         bg: 'bg-amber-500/6',
                     },
                 ].map((card) => (
-                    <div key={card.label} className={`${card.bg} border border-white/5 rounded-xl p-3 text-center`}>
+                    <div key={card.label} className={`${card.bg} border border-white/[0.04] rounded-xl p-3 text-center`}>
                         <div className={`text-base font-black ${card.color}`}>{card.value}</div>
                         <div className="text-[9px] text-white/25 uppercase tracking-wider mt-0.5">{card.label}</div>
                     </div>
                 ))}
             </div>
 
-            <div className="bg-[#1a1d21] rounded-xl border border-white/[0.06] p-3 flex flex-col sm:flex-row gap-3">
-                <div className="flex gap-1.5 bg-white/3 p-0.5 rounded-lg">
-                    {(['ALL', 'DEPOSIT', 'WITHDRAWAL', 'BONUS'] as FilterType[]).map((filterValue) => (
+            <div className="bg-bg-modal rounded-xl border border-white/[0.06] p-3 flex flex-col sm:flex-row gap-3 overflow-hidden">
+                <div className="flex gap-1.5 bg-white/[0.03] p-0.5 rounded-lg overflow-x-auto scrollbar-hide shrink-0">
+                    {(['ALL', 'DEPOSIT', 'WITHDRAWAL', 'BONUS', 'FANTASY'] as FilterType[]).map((filterValue) => (
                         <button
                             key={filterValue}
                             onClick={() => setTypeFilter(filterValue)}
-                            className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${typeFilter === filterValue
+                            className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap shrink-0 ${typeFilter === filterValue
                                 ? 'bg-orange-500 text-white shadow-[0_0_8px_rgba(249,115,22,0.4)]'
                                 : 'text-white/30 hover:text-white'}`}
                         >
-                            {filterValue === 'ALL'
-                                ? 'All'
-                                : filterValue === 'DEPOSIT'
-                                    ? 'Deposits'
-                                    : filterValue === 'WITHDRAWAL'
-                                        ? 'Withdrawals'
-                                        : 'Bonuses'}
+                            {filterValue === 'ALL' ? 'All'
+                                : filterValue === 'DEPOSIT' ? 'Deposits'
+                                : filterValue === 'WITHDRAWAL' ? 'Withdrawals'
+                                : filterValue === 'FANTASY' ? 'Fantasy'
+                                : 'Bonuses'}
                         </button>
                     ))}
                 </div>
 
-                <div className="flex gap-1.5 bg-white/3 p-0.5 rounded-lg">
-                    {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as FilterStatus[]).map((status) => (
+                <div className="flex gap-1.5 bg-white/[0.03] p-0.5 rounded-lg overflow-x-auto scrollbar-hide shrink-0">
+                    {(['ALL', 'PENDING', 'PROCESSED', 'APPROVED', 'COMPLETED'] as FilterStatus[]).map((status) => (
                         <button
                             key={status}
                             onClick={() => setStatusFilter(status)}
-                            className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all ${statusFilter === status
-                                ? 'bg-white/10 text-white'
+                            className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all whitespace-nowrap shrink-0 ${statusFilter === status
+                                ? 'bg-white/[0.08] text-white'
                                 : 'text-white/25 hover:text-white'}`}
                         >
                             {status === 'ALL' ? 'All' : status.charAt(0) + status.slice(1).toLowerCase()}
@@ -499,15 +594,15 @@ export default function TransactionsPage() {
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search by UTR, promo, method…"
-                        className="w-full bg-white/3 border border-white/5 rounded-lg pl-7 pr-3 py-1.5 text-xs text-white placeholder-white/15 focus:outline-none focus:border-orange-500/30 transition-all"
+                        className="w-full bg-white/[0.03] border border-white/[0.04] rounded-lg pl-7 pr-3 py-1.5 text-xs text-white placeholder-white/15 focus:outline-none focus:border-orange-500/30 transition-all"
                     />
                 </div>
             </div>
 
-            <div className="bg-[#1a1d21] rounded-xl border border-white/[0.06] overflow-hidden">
+            <div className="bg-bg-modal rounded-xl border border-white/[0.06] overflow-hidden">
                 <div className="px-4 py-3 border-b border-white/[0.05] flex items-center justify-between">
                     <h2 className="text-xs font-bold text-white flex items-center gap-1.5">
-                        <ReceiptText size={13} className="text-orange-400" /> Transaction History
+                        <ReceiptText size={13} className="text-warning" /> Transaction History
                     </h2>
                     <span className="text-[10px] text-white/25">{filtered.length} of {transactions.length}</span>
                 </div>
@@ -515,7 +610,7 @@ export default function TransactionsPage() {
                 <div className="hidden md:block overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
-                            <tr className="bg-[#141619] text-white/30 text-[10px] uppercase tracking-wider">
+                            <tr className="bg-bg-zeero text-white/30 text-[10px] uppercase tracking-wider">
                                 <th className="px-4 py-2.5 text-left font-semibold">Date</th>
                                 <th className="px-4 py-2.5 text-left font-semibold">Type</th>
                                 <th className="px-4 py-2.5 text-left font-semibold">Method</th>
@@ -560,15 +655,15 @@ export default function TransactionsPage() {
                                                 <div className="text-[10px] text-white/45 mt-1">{detailLine}</div>
                                             )}
                                             {metaBadge && (
-                                                <div className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[9px] font-bold text-amber-300">
+                                                <div className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-full bg-warning-alpha-08 border border-amber-500/20 text-[9px] font-bold text-warning-bright">
                                                     <Gift size={9} />
                                                     {metaBadge}
                                                 </div>
                                             )}
-                                            {txn.remarks && <div className="text-[9px] text-amber-400/60 mt-0.5 italic">{txn.remarks}</div>}
+                                            {txn.remarks && <div className="text-[9px] text-warning-bright/60 mt-0.5 italic">{txn.remarks}</div>}
                                         </td>
                                         <td className={`px-4 py-3 text-right font-bold text-sm ${meta.className}`}>
-                                            {fmtAmt(txn, fiatSymbol)}
+                                            {fmtAmt(txn, fiatCurrency)}
                                         </td>
                                         <td className="px-4 py-3 text-center">
                                             <StatusBadge status={txn.status} />
@@ -598,7 +693,7 @@ export default function TransactionsPage() {
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between gap-2">
                                         <span className={`text-xs font-bold ${meta.className}`}>{meta.label}</span>
-                                        <span className={`text-sm font-black ${meta.className}`}>{fmtAmt(txn, fiatSymbol)}</span>
+                                        <span className={`text-sm font-black ${meta.className}`}>{fmtAmt(txn, fiatCurrency)}</span>
                                     </div>
                                     <div className="flex items-center gap-2 mt-0.5">
                                         <span className="text-[10px] text-white/25">{fmtDate(txn.createdAt)}</span>
@@ -614,13 +709,13 @@ export default function TransactionsPage() {
                                         <div className="text-[10px] text-white/45 mt-1">{detailLine}</div>
                                     )}
                                     {metaBadge && (
-                                        <div className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[9px] font-bold text-amber-300">
+                                        <div className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded-full bg-warning-alpha-08 border border-amber-500/20 text-[9px] font-bold text-warning-bright">
                                             <Gift size={9} />
                                             {metaBadge}
                                         </div>
                                     )}
                                     {txn.remarks && (
-                                        <div className="text-[9px] text-amber-400/60 mt-0.5 italic">{txn.remarks}</div>
+                                        <div className="text-[9px] text-warning-bright/60 mt-0.5 italic">{txn.remarks}</div>
                                     )}
                                 </div>
                             </div>

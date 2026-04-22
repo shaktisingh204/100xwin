@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Trophy, Calendar, ShieldCheck, ArrowRight, Radio } from 'lucide-react';
+import { Trophy, Calendar, ShieldCheck, ArrowRight, Radio, Zap, CheckCircle2 } from 'lucide-react';
 
 export interface PromoTeamDeal {
     _id: string;
@@ -41,7 +41,7 @@ interface Props {
 }
 
 export default function PromoTeamCard({ deal }: Props) {
-    const sportUrl = `/sports/match/${deal.eventId}`;
+    const detailUrl = `/promotions/sports-deal/${deal._id}`;
     const isTriggerPromo = deal.promotionType === 'FIRST_OVER_SIX_CASHBACK';
     const isPayoutPromo = deal.benefitType === 'PAYOUT_AS_WIN';
 
@@ -50,7 +50,7 @@ export default function PromoTeamCard({ deal }: Props) {
 
     const title = deal.cardTitle ||
         (deal.promotionType === 'FIRST_OVER_SIX_CASHBACK'
-            ? `Get ${deal.refundPercentage}% Back if a 6 lands early — ${deal.eventName}`
+            ? `${deal.refundPercentage}% back if your pre-match team hits a 6 in first ${(deal.triggerConfig?.oversWindow || 1)} over`
             : deal.promotionType === 'LEAD_MARGIN_PAYOUT'
                 ? `Paid as winner if your team leads big — ${deal.eventName}`
                 : deal.promotionType === 'LATE_LEAD_REFUND'
@@ -59,28 +59,12 @@ export default function PromoTeamCard({ deal }: Props) {
                         ? `Paid as winner if your team leads at the break — ${deal.eventName}`
                         : `Get ${deal.refundPercentage}% Back on Any Loss — ${deal.eventName}`);
 
-    const description = deal.cardDescription ||
-        (deal.promotionType === 'FIRST_OVER_SIX_CASHBACK'
-            ? `If any team hits a 6 in the first ${(deal.triggerConfig?.oversWindow || 1)} over, losing bets on ${deal.eventName} still get refunded.`
-            : deal.promotionType === 'LEAD_MARGIN_PAYOUT'
-                ? `If your selected team goes ${(deal.triggerConfig?.leadThreshold || 2)}+ ahead but still fails to win, the bet can still be paid like a winner.`
-                : deal.promotionType === 'LATE_LEAD_REFUND'
-                    ? `If your selected team is still leading at ${(deal.triggerConfig?.minuteThreshold || 80)}' but does not win, the losing bet can be refunded.`
-                    : deal.promotionType === 'PERIOD_LEAD_PAYOUT'
-                        ? `If your selected team leads at ${(deal.triggerConfig?.periodLabel || 'HALF_TIME').toLowerCase().replace(/_/g, ' ')} but does not win, the bet can still be paid like a winner.`
-                        : `Bet on ${deal.eventName} and get ${deal.refundPercentage}% of your stake refunded if you lose. Offer applies to all teams.`);
-
     const badge = deal.cardBadge || (
-        deal.promotionType === 'FIRST_OVER_SIX_CASHBACK'
-            ? 'TRIGGER PROMO'
-            : deal.promotionType === 'LEAD_MARGIN_PAYOUT'
-                ? 'EARLY PAYOUT'
-                : deal.promotionType === 'LATE_LEAD_REFUND'
-                    ? 'BAD BEAT'
-                    : deal.promotionType === 'PERIOD_LEAD_PAYOUT'
-                        ? 'PERIOD PAYOUT'
-                        : 'SPORTS PROMO'
-    );
+        deal.promotionType === 'FIRST_OVER_SIX_CASHBACK' ? 'TRIGGER PROMO'
+            : deal.promotionType === 'LEAD_MARGIN_PAYOUT' ? 'EARLY PAYOUT'
+                : deal.promotionType === 'LATE_LEAD_REFUND' ? 'BAD BEAT'
+                    : deal.promotionType === 'PERIOD_LEAD_PAYOUT' ? 'PERIOD PAYOUT'
+                        : 'SPORTS PROMO');
 
     const matchDate = deal.matchDate
         ? new Date(deal.matchDate).toLocaleString('en-IN', {
@@ -89,18 +73,14 @@ export default function PromoTeamCard({ deal }: Props) {
         })
         : null;
 
-    const walletLabel = deal.walletTarget === 'bonus_wallet'
-        ? 'Bonus wallet'
-        : deal.walletTarget === 'main_wallet'
-            ? 'Main wallet'
-            : deal.walletTarget === 'crypto'
-                ? 'Crypto wallet'
-                : 'Main wallet';
+    const walletLabel = deal.walletTarget === 'bonus_wallet' ? 'Bonus wallet'
+        : deal.walletTarget === 'crypto' ? 'Crypto wallet'
+            : 'Main wallet';
 
     const triggerLabel = isTriggerPromo
         ? deal.triggerConfig?.isTriggered
-            ? 'Trigger hit'
-            : `Waiting for a 6 in first ${(deal.triggerConfig?.oversWindow || 1)} over${(deal.triggerConfig?.oversWindow || 1) > 1 ? 's' : ''}`
+            ? `Triggered for ${(deal.triggerConfig?.qualifyingSelections || []).join(', ')}`
+            : `Waiting for selected pre-match team to hit a 6 in first ${(deal.triggerConfig?.oversWindow || 1)} over${(deal.triggerConfig?.oversWindow || 1) > 1 ? 's' : ''}`
         : deal.promotionType === 'LEAD_MARGIN_PAYOUT'
             ? deal.triggerConfig?.isTriggered
                 ? `Triggered for ${(deal.triggerConfig?.qualifyingSelections || []).join(', ')}`
@@ -113,125 +93,115 @@ export default function PromoTeamCard({ deal }: Props) {
                     ? deal.triggerConfig?.isTriggered
                         ? `Triggered for ${(deal.triggerConfig?.qualifyingSelections || []).join(', ')}`
                         : `Waiting for ${(deal.triggerConfig?.periodLabel || 'HALF_TIME').toLowerCase().replace(/_/g, ' ')} lead`
-        : null;
+                    : null;
 
     return (
-        <div className="group relative rounded-2xl overflow-hidden border border-white/10 bg-bg-elevated cursor-pointer hover:border-white/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl">
-            {/* Card Banner */}
-            <div className="h-40 relative overflow-hidden" style={{ background: gradient }}>
+        <Link
+            href={detailUrl}
+            className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[#1a1d22] transition-all duration-200 hover:border-emerald-500/25 hover:shadow-[0_8px_32px_rgba(0,0,0,0.3)] active:scale-[0.99]"
+        >
+            {/* Banner */}
+            <div className="relative h-[150px] overflow-hidden" style={{ background: gradient }}>
                 {deal.cardBgImage && (
-                    <img
-                        src={deal.cardBgImage}
-                        alt=""
-                        className="absolute inset-0 w-full h-full object-cover opacity-30 group-hover:opacity-40 transition-opacity"
-                    />
+                    <img src={deal.cardBgImage} alt=""
+                        className="absolute inset-0 w-full h-full object-cover opacity-25 group-hover:opacity-35 transition-opacity duration-300" />
                 )}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#1a1d22] via-black/20 to-transparent" />
 
-                {/* Overlay gradient for text readability */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-
-                <div className="absolute inset-0 p-4 flex flex-col justify-between">
-                    {/* Top row */}
-                    <div className="flex items-start justify-between">
-                        <span className="text-[10px] bg-white/20 backdrop-blur-sm text-white px-2 py-0.5 rounded font-bold uppercase tracking-wider">
-                            {badge}
-                        </span>
-                        <div className="text-right">
-                            <div className="text-3xl font-black text-white leading-none">
-                                {deal.refundPercentage}%
-                            </div>
-                            <div className="text-[10px] text-white/70 font-semibold">{isPayoutPromo ? 'winner credit' : 'refund'}</div>
+                {/* Top row: badge + percentage */}
+                <div className="absolute top-3 left-3 right-3 flex items-start justify-between">
+                    <span className="px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider border border-white/[0.08]">
+                        {badge}
+                    </span>
+                    <div className="text-right">
+                        <div className="text-3xl font-black text-white leading-none drop-shadow-lg">
+                            {deal.refundPercentage}%
                         </div>
+                        <div className="text-[10px] text-white/60 font-semibold">{isPayoutPromo ? 'winner credit' : 'refund'}</div>
                     </div>
+                </div>
 
-                    {/* Bottom — title */}
-                    <div>
-                        <h3 className="text-sm font-black text-white leading-tight drop-shadow-sm">
-                            {title}
-                        </h3>
-                    </div>
+                {/* Bottom title on banner */}
+                <div className="absolute bottom-3 left-3 right-3">
+                    <h3 className="text-[13px] font-bold text-white leading-snug drop-shadow-sm line-clamp-2">
+                        {title}
+                    </h3>
                 </div>
             </div>
 
-            {/* Card Body */}
-            <div className="p-4 space-y-3">
-                {/* Match info */}
+            {/* Body */}
+            <div className="flex flex-col flex-1 p-4 gap-3">
+                {/* Match + date */}
                 <div className="space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-xs text-text-secondary">
-                        <Trophy size={11} className="text-amber-400 flex-shrink-0" />
+                    <div className="flex items-center gap-1.5 text-xs text-white/70">
+                        <Trophy size={11} className="text-warning-bright flex-shrink-0" />
                         <span className="truncate font-medium">{deal.eventName}</span>
                     </div>
                     {matchDate && (
-                        <div className="flex items-center gap-1.5 text-xs text-text-muted">
+                        <div className="flex items-center gap-1.5 text-xs text-white/40">
                             <Calendar size={11} className="flex-shrink-0" />
                             <span>{matchDate}</span>
                         </div>
                     )}
                 </div>
 
-                {/* Teams chips — all equal, no highlight */}
+                {/* Teams */}
                 {deal.teams && deal.teams.length > 0 && (
-                    <div className="flex gap-1.5 flex-wrap">
+                    <div className="flex gap-2 items-center">
                         {deal.teams.map((team, i) => (
-                            <span key={i}
-                                className="text-[11px] px-2 py-0.5 rounded font-bold bg-white/5 text-text-muted border border-white/10">
-                                {team}
-                            </span>
+                            <React.Fragment key={i}>
+                                {i > 0 && <span className="text-[10px] text-white/30 font-bold">vs</span>}
+                                <div className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded-lg px-2.5 py-2 text-center">
+                                    <span className="text-[11px] font-bold text-white/70">{team}</span>
+                                </div>
+                            </React.Fragment>
                         ))}
                     </div>
                 )}
 
-                {/* Description */}
-                <p className="text-xs text-text-secondary leading-relaxed line-clamp-2">
-                    {description}
-                </p>
-
-                {deal.conditionSummary && (
-                    <div className="bg-amber-500/8 border border-amber-500/20 rounded-lg px-3 py-2 flex items-center gap-2">
-                        <Trophy size={13} className="text-amber-400 flex-shrink-0" />
-                        <div className="text-[11px] text-amber-100/90">
-                            {deal.conditionSummary}
-                        </div>
-                    </div>
-                )}
-
+                {/* Trigger status */}
                 {triggerLabel && (
-                    <div className={`rounded-lg px-3 py-2 flex items-center gap-2 border ${deal.triggerConfig?.isTriggered ? 'bg-emerald-500/8 border-emerald-500/20' : 'bg-sky-500/8 border-sky-500/20'}`}>
-                        <Radio size={13} className={`${deal.triggerConfig?.isTriggered ? 'text-emerald-400' : 'text-sky-400'} flex-shrink-0`} />
-                        <div className={`text-[11px] ${deal.triggerConfig?.isTriggered ? 'text-emerald-100/90' : 'text-sky-100/90'}`}>
+                    <div className={`rounded-lg px-3 py-2 flex items-center gap-2 border ${deal.triggerConfig?.isTriggered
+                        ? 'bg-success-alpha-10 border-success-primary/20'
+                        : 'bg-sky-500/[0.06] border-sky-500/15'
+                        }`}>
+                        {deal.triggerConfig?.isTriggered
+                            ? <CheckCircle2 size={12} className="text-success-bright flex-shrink-0" />
+                            : <Radio size={12} className="text-sky-400 flex-shrink-0 animate-pulse" />
+                        }
+                        <span className={`text-[11px] leading-tight ${deal.triggerConfig?.isTriggered ? 'text-success-bright/90' : 'text-sky-300/80'}`}>
                             {triggerLabel}
-                        </div>
+                        </span>
                     </div>
                 )}
 
-                {/* Refund info pill */}
-                <div className="bg-emerald-500/8 border border-emerald-500/20 rounded-lg px-3 py-2 flex items-center gap-2">
-                    <ShieldCheck size={13} className="text-emerald-400 flex-shrink-0" />
-                    <div className="text-xs">
-                        <span className="text-emerald-400 font-bold">
+                {/* Refund info */}
+                <div className="bg-success-alpha-10 border border-success-primary/15 rounded-lg px-3 py-2 flex items-center gap-2">
+                    <ShieldCheck size={12} className="text-success-bright flex-shrink-0" />
+                    <div className="text-[11px]">
+                        <span className="text-success-bright font-bold">
                             {isPayoutPromo ? `${deal.refundPercentage}% winner payout ` : `${deal.refundPercentage}% stake back `}
                         </span>
-                        <span className="text-text-muted">
-                            {isPayoutPromo
-                                ? 'when trigger hits and the bet still loses -> '
-                                : isTriggerPromo
-                                    ? 'when trigger hits and bet loses -> '
-                                    : 'on any losing bet -> '}
+                        <span className="text-white/40">
+                            {isPayoutPromo ? 'when trigger hits -> ' : isTriggerPromo ? 'when trigger hits -> ' : 'on any loss -> '}
                         </span>
-                        <span className={`font-semibold ${deal.walletTarget === 'bonus_wallet' ? 'text-violet-400' : deal.walletTarget === 'crypto' ? 'text-amber-400' : 'text-sky-400'}`}>
+                        <span className={`font-semibold ${deal.walletTarget === 'bonus_wallet' ? 'text-accent-purple' : deal.walletTarget === 'crypto' ? 'text-warning-bright' : 'text-brand-gold'}`}>
                             {walletLabel}
                         </span>
                     </div>
                 </div>
 
-                {/* CTA Button */}
-                <Link href={sportUrl}
-                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-bold text-sm text-white transition-all duration-200 group/btn"
-                    style={{ background: gradient }}>
-                    <span>Bet Now</span>
-                    <ArrowRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
-                </Link>
+                {/* Bottom row */}
+                <div className="flex items-center justify-between mt-auto pt-2 border-t border-white/[0.04]">
+                    <div className="flex items-center gap-1.5">
+                        <Zap size={11} className="text-emerald-400" />
+                        <span className="text-[11px] font-semibold text-emerald-400/80">Sports Promo</span>
+                    </div>
+                    <span className="flex items-center gap-1 text-[11px] font-bold text-brand-gold group-hover:gap-2 transition-all">
+                        View Details <ArrowRight size={12} />
+                    </span>
+                </div>
             </div>
-        </div>
+        </Link>
     );
 }

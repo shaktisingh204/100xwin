@@ -41,27 +41,27 @@ function SignupContent() {
 
     // Splash while we figure out auth state
     return (
-        <div className="min-h-screen bg-[#0e0e12] flex flex-col items-center justify-center gap-6 text-center px-6">
+        <div className="min-h-screen bg-bg-deep flex flex-col items-center justify-center gap-6 text-center px-6">
             {/* Decorative glow */}
-            <div className="absolute w-96 h-96 bg-[#E37D32]/8 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute w-96 h-96 bg-brand-gold/8 rounded-full blur-3xl pointer-events-none" />
 
             <div className="relative z-10 flex flex-col items-center gap-4">
-                <div className="w-20 h-20 rounded-2xl bg-[#E37D32]/10 border border-[#E37D32]/20 flex items-center justify-center">
-                    <Gift size={36} className="text-[#E37D32]" />
+                <div className="w-20 h-20 rounded-2xl bg-brand-gold/10 border border-[#ff6a00]/20 flex items-center justify-center">
+                    <Gift size={36} className="text-[#ff6a00]" />
                 </div>
 
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#E37D32]/10 border border-[#E37D32]/20 text-[#E37D32] text-xs font-bold uppercase tracking-wider">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-gold/10 border border-[#ff6a00]/20 text-[#ff6a00] text-xs font-bold uppercase tracking-wider">
                     🎁 Referral Invite
                 </div>
 
                 <h1 className="text-2xl font-bold text-white">You've been invited!</h1>
-                <p className="text-gray-400 text-sm max-w-xs leading-relaxed">
+                <p className="text-text-muted text-sm max-w-xs leading-relaxed">
                     {refCode
-                        ? <>Your referral code <span className="text-[#E37D32] font-mono font-bold">{refCode}</span> has been saved. Opening sign up for you...</>
+                        ? <>Your referral code <span className="text-[#ff6a00] font-mono font-bold">{refCode}</span> has been saved. Opening sign up for you...</>
                         : 'Opening sign up for you...'}
                 </p>
 
-                <Loader2 className="w-6 h-6 text-[#E37D32] animate-spin mt-2" />
+                <Loader2 className="w-6 h-6 text-[#ff6a00] animate-spin mt-2" />
             </div>
         </div>
     );
@@ -71,8 +71,8 @@ export default function AuthSignupPage() {
     return (
         <Suspense
             fallback={
-                <div className="min-h-screen bg-[#0e0e12] flex items-center justify-center">
-                    <Loader2 className="w-8 h-8 text-[#E37D32] animate-spin" />
+                <div className="min-h-screen bg-bg-deep flex items-center justify-center">
+                    <Loader2 className="w-8 h-8 text-[#ff6a00] animate-spin" />
                 </div>
             }
         >

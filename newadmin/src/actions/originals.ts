@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import {
   OriginalsConfig,
   MinesGame,
+  PlinkoGame,
   OriginalsGGRSnapshot,
   OriginalsSession,
   OriginalsEngagementEvent,
@@ -12,7 +13,7 @@ import {
   AviatorBet,
 } from "@/models/MongoModels";
 
-const GAME_KEYS = ["mines", "crash", "dice", "limbo"];
+const GAME_KEYS = ["mines", "crash", "dice", "limbo", "plinko", "keno", "hilo", "roulette", "wheel", "coinflip", "towers", "color", "lotto", "jackpot"];
 const GLOBAL_ACCESS_KEY = "__global_access__";
 const LEGACY_ALLOWED_PHONE_SUFFIXES = ["9460290991"];
 
@@ -21,6 +22,16 @@ const DEFAULTS: Record<string, any> = {
   crash:  { isActive: true,  minBet: 10, maxBet: 50000,  targetGgrPercent: 4.0,  displayRtpPercent: 96.0, gameName: "Zeero Crash",   gameDescription: "Watch the multiplier climb. Cash out in time.",  fakePlayerMin: 180, fakePlayerMax: 280 },
   dice:   { isActive: true,  minBet: 10, maxBet: 50000,  targetGgrPercent: 3.0,  displayRtpPercent: 97.0, gameName: "Zeero Dice",    gameDescription: "Roll the dice, beat the house.",                 fakePlayerMin: 120, fakePlayerMax: 220 },
   limbo:  { isActive: true,  minBet: 10, maxBet: 50000,  targetGgrPercent: 3.5,  displayRtpPercent: 96.5, gameName: "Zeero Limbo",   gameDescription: "Pick your multiplier and beat the bust point.",  fakePlayerMin: 140, fakePlayerMax: 240 },
+  plinko: { isActive: true,  minBet: 10, maxBet: 25000,  targetGgrPercent: 3.0,  displayRtpPercent: 97.0, gameName: "Zeero Plinko",  gameDescription: "Drop the ball and chase riskier multiplier slots.", fakePlayerMin: 90,  fakePlayerMax: 160 },
+  keno:   { isActive: false, minBet: 10, maxBet: 25000,  targetGgrPercent: 4.5,  displayRtpPercent: 95.5, gameName: "Zeero Keno",    gameDescription: "Pick your lucky numbers and hit the board.",       fakePlayerMin: 70,  fakePlayerMax: 140 },
+  hilo:   { isActive: false, minBet: 10, maxBet: 20000,  targetGgrPercent: 4.0,  displayRtpPercent: 96.0, gameName: "Zeero Hi-Lo",   gameDescription: "Guess whether the next card goes higher or lower.", fakePlayerMin: 60,  fakePlayerMax: 110 },
+  roulette:{ isActive: false, minBet: 10, maxBet: 50000, targetGgrPercent: 5.3,  displayRtpPercent: 94.7, gameName: "Zeero Roulette", gameDescription: "Cover your numbers and let the wheel decide.",      fakePlayerMin: 80,  fakePlayerMax: 150 },
+  wheel:  { isActive: false, minBet: 10, maxBet: 25000,  targetGgrPercent: 4.8,  displayRtpPercent: 95.2, gameName: "Zeero Wheel",   gameDescription: "Spin a fast bonus wheel for instant multipliers.", fakePlayerMin: 50,  fakePlayerMax: 120 },
+  coinflip:{ isActive: false, minBet: 10, maxBet: 20000, targetGgrPercent: 2.9,  displayRtpPercent: 97.1, gameName: "Zeero Coinflip", gameDescription: "Call heads or tails and settle each round instantly.", fakePlayerMin: 65, fakePlayerMax: 135 },
+  towers: { isActive: false, minBet: 10, maxBet: 20000,  targetGgrPercent: 3.6,  displayRtpPercent: 96.4, gameName: "Zeero Towers",  gameDescription: "Climb one floor at a time and cash out before you fall.", fakePlayerMin: 55, fakePlayerMax: 125 },
+  color:  { isActive: false, minBet: 10, maxBet: 15000,  targetGgrPercent: 4.2,  displayRtpPercent: 95.8, gameName: "Zeero Color",   gameDescription: "Pick a color lane and ride short, fast multiplier rounds.", fakePlayerMin: 75, fakePlayerMax: 155 },
+  lotto:  { isActive: false, minBet: 10, maxBet: 15000,  targetGgrPercent: 5.1,  displayRtpPercent: 94.9, gameName: "Zeero Lotto",   gameDescription: "Choose your ticket line and chase oversized payout grids.", fakePlayerMin: 45, fakePlayerMax: 95 },
+  jackpot:{ isActive: false, minBet: 10, maxBet: 25000,  targetGgrPercent: 5.5,  displayRtpPercent: 94.5, gameName: "Zeero Jackpot", gameDescription: "Snap into boosted prize pots with a high-volatility hit chase.", fakePlayerMin: 35, fakePlayerMax: 85 },
 };
 
 async function ensureConfig(gameKey: string) {
@@ -28,6 +39,14 @@ async function ensureConfig(gameKey: string) {
   const existing = await OriginalsConfig.findOne({ gameKey });
   if (existing) return existing;
   return OriginalsConfig.create({ gameKey, ...(DEFAULTS[gameKey] ?? DEFAULTS.mines) });
+}
+
+function getHistoryModel(game: string) {
+  return game === "plinko" ? PlinkoGame : MinesGame;
+}
+
+function isWinningStatus(game: string, status: string) {
+  return game === "plinko" ? status === "WON" : status === "CASHEDOUT";
 }
 
 function normalizeAllowedUserIds(userIds: unknown): number[] {
@@ -137,13 +156,32 @@ export async function updateOriginalsConfig(game: string, payload: any) {
     const data = await OriginalsConfig.findOneAndUpdate(
       { gameKey: game },
       { $setOnInsert: { gameKey: game }, $set: clean },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     ).lean();
     return { success: true, data };
   } catch (e: any) {
     return { success: false, error: e.message };
   }
 }
+
+export async function quickToggleGame(game: string, isActive: boolean) {
+  try {
+    await connectMongo();
+    const defaults = DEFAULTS[game] ?? DEFAULTS.mines;
+    const data = await OriginalsConfig.findOneAndUpdate(
+      { gameKey: game },
+      {
+        $setOnInsert: { gameKey: game, ...defaults },
+        $set: { isActive },
+      },
+      { upsert: true, returnDocument: 'after' }
+    ).lean();
+    return { success: true, data };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
 
 // ── Access Control ───────────────────────────────────────────────────────────
 
@@ -194,7 +232,7 @@ export async function updateOriginalsAccessControl(payload: { accessMode?: "ALL"
         $setOnInsert: insertDefaults,
         $set: clean,
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     ).lean();
 
     const allowedUserIds = normalizeAllowedUserIds((data as any)?.allowedUserIds ?? []);
@@ -315,15 +353,15 @@ export async function getOriginalsSessions(game?: string) {
 export async function getOriginalsHistory(game: string, page = 1, limit = 50, userId?: number) {
   try {
     await connectMongo();
-    // Only mines has MinesGame collection — extend for other games later
     const filter: any = { status: { $ne: "ACTIVE" } };
     if (userId) filter.userId = userId;
+    const HistoryModel = getHistoryModel(game);
 
     const [games, total] = await Promise.all([
-      MinesGame.find(filter).sort({ createdAt: -1 }).skip((page-1)*limit).limit(limit).lean(),
-      MinesGame.countDocuments(filter),
+      HistoryModel.find(filter).sort({ createdAt: -1 }).skip((page-1)*limit).limit(limit).lean(),
+      HistoryModel.countDocuments(filter),
     ]);
-    const won          = games.filter((g) => g.status === "CASHEDOUT").length;
+    const won          = games.filter((g) => isWinningStatus(game, g.status)).length;
     const lost         = games.filter((g) => g.status === "LOST").length;
     const totalWagered = games.reduce((s, g) => s + g.betAmount, 0);
     const totalPaidOut = games.reduce((s, g) => s + g.payout, 0);
@@ -331,7 +369,7 @@ export async function getOriginalsHistory(game: string, page = 1, limit = 50, us
     return {
       success: true,
       data: {
-        games: games.map((g) => ({ ...g, gameId: String((g as any)._id) })),
+        games: games.map((g) => ({ ...g, gameId: String((g as any)._id), gameKey: game })),
         total, page, limit, pages: Math.ceil(total / limit),
         summary: { won, lost, totalWagered, totalPaidOut, house: totalWagered - totalPaidOut },
       },
@@ -423,7 +461,7 @@ export async function setPerUserGGR(game: string, userId: number, targetGgr: num
     const data = await OriginalsConfig.findOneAndUpdate(
       { gameKey: game },
       { $set: { [`perUserGgrOverrides.${userId}`]: targetGgr } },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     ).lean();
     return { success: true, data };
   } catch (e: any) {
@@ -437,7 +475,7 @@ export async function removePerUserGGR(game: string, userId: number) {
     const data = await OriginalsConfig.findOneAndUpdate(
       { gameKey: game },
       { $unset: { [`perUserGgrOverrides.${userId}`]: "" } },
-      { new: true }
+      { returnDocument: 'after' }
     ).lean();
     return { success: true, data };
   } catch (e: any) {
@@ -450,9 +488,16 @@ export async function removePerUserGGR(game: string, userId: number) {
 export async function getUserOriginalsStats(userId: number) {
   try {
     await connectMongo();
-    const games = await MinesGame.find({ userId, status: { $ne: "ACTIVE" } }).sort({ createdAt: -1 }).lean();
+    const [minesGames, plinkoGames] = await Promise.all([
+      MinesGame.find({ userId, status: { $ne: "ACTIVE" } }).lean(),
+      PlinkoGame.find({ userId, status: { $ne: "ACTIVE" } }).lean(),
+    ]);
+    const games = [
+      ...minesGames.map((g) => ({ ...g, gameKey: "mines" })),
+      ...plinkoGames.map((g) => ({ ...g, gameKey: "plinko" })),
+    ].sort((a, b) => new Date((b as any).createdAt).getTime() - new Date((a as any).createdAt).getTime());
     const totalGames   = games.length;
-    const totalWins    = games.filter((g) => g.status === "CASHEDOUT").length;
+    const totalWins    = games.filter((g) => isWinningStatus((g as any).gameKey, g.status)).length;
     const totalLosses  = games.filter((g) => g.status === "LOST").length;
     const totalWagered = games.reduce((s, g) => s + g.betAmount, 0);
     const totalPaidOut = games.reduce((s, g) => s + g.payout, 0);

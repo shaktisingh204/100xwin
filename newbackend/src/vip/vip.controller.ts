@@ -3,7 +3,7 @@ import {
     UseGuards, Req, ParseIntPipe, DefaultValuePipe
 } from '@nestjs/common';
 import { VipService } from './vip.service';
-import { CreateVipApplicationDto, ReviewVipApplicationDto } from './dto/vip.dto';
+import { CreateVipApplicationDto, ReviewVipApplicationDto, UpdateVipTierDto } from './dto/vip.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -15,14 +15,9 @@ export class VipController {
     constructor(private readonly vipService: VipService) { }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  USER ENDPOINTS  (any authenticated user)
+    //  USER ENDPOINTS
     // ═══════════════════════════════════════════════════════════════════════
 
-    /**
-     * POST /api/vip/apply
-     * User submits a VIP application or re-applies after rejection.
-     * Rate limited by the fact that we store IP + userId unique check.
-     */
     @Post('apply')
     async apply(@Req() req, @Body() dto: CreateVipApplicationDto) {
         const ipAddress =
@@ -30,26 +25,23 @@ export class VipController {
             req.socket?.remoteAddress ||
             'unknown';
         const userAgent = req.headers['user-agent'] ?? '';
-
         return this.vipService.applyForVip(req.user.userId, dto, { ipAddress, userAgent });
     }
 
-    /**
-     * GET /api/vip/my-application
-     * Returns the authenticating user's current application (or null).
-     */
     @Get('my-application')
     async myApplication(@Req() req) {
         return this.vipService.getMyApplication(req.user.userId);
     }
 
+    @Get('my-status')
+    async myVipStatus(@Req() req) {
+        return this.vipService.getMyVipStatus(req.user.userId);
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
-    //  ADMIN ENDPOINTS  (TECH_MASTER | SUPER_ADMIN | MANAGER)
+    //  ADMIN ENDPOINTS
     // ═══════════════════════════════════════════════════════════════════════
 
-    /**
-     * GET /api/vip/admin/applications?status=PENDING&page=1&limit=20
-     */
     @Get('admin/applications')
     @UseGuards(RolesGuard)
     @Roles(Role.TECH_MASTER, Role.SUPER_ADMIN, Role.MANAGER)
@@ -61,10 +53,6 @@ export class VipController {
         return this.vipService.listApplications(status, page, Math.min(limit, 100));
     }
 
-    /**
-     * GET /api/vip/admin/stats
-     * Quick counts per status for admin dashboard widget.
-     */
     @Get('admin/stats')
     @UseGuards(RolesGuard)
     @Roles(Role.TECH_MASTER, Role.SUPER_ADMIN, Role.MANAGER)
@@ -72,9 +60,6 @@ export class VipController {
         return this.vipService.getStats();
     }
 
-    /**
-     * GET /api/vip/admin/applications/:id
-     */
     @Get('admin/applications/:id')
     @UseGuards(RolesGuard)
     @Roles(Role.TECH_MASTER, Role.SUPER_ADMIN, Role.MANAGER)
@@ -82,10 +67,6 @@ export class VipController {
         return this.vipService.getApplication(id);
     }
 
-    /**
-     * PATCH /api/vip/admin/applications/:id/review
-     * Body: { status: 'APPROVED'|'REJECTED'|'UNDER_REVIEW', reviewNotes?: string }
-     */
     @Patch('admin/applications/:id/review')
     @UseGuards(RolesGuard)
     @Roles(Role.TECH_MASTER, Role.SUPER_ADMIN, Role.MANAGER)
@@ -95,5 +76,35 @@ export class VipController {
         @Body() dto: ReviewVipApplicationDto,
     ) {
         return this.vipService.reviewApplication(id, req.user.userId, dto);
+    }
+
+    @Get('admin/members')
+    @UseGuards(RolesGuard)
+    @Roles(Role.TECH_MASTER, Role.SUPER_ADMIN, Role.MANAGER)
+    async listMembers(
+        @Query('page', new DefaultValuePipe(1), ParseIntPipe) page?: number,
+        @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+        @Query('tier') tier?: string,
+        @Query('search') search?: string,
+    ) {
+        return this.vipService.listVipMembers(page, Math.min(limit, 100), tier, search);
+    }
+
+    @Patch('admin/users/:id/tier')
+    @UseGuards(RolesGuard)
+    @Roles(Role.TECH_MASTER, Role.SUPER_ADMIN, Role.MANAGER)
+    async updateTier(
+        @Param('id', ParseIntPipe) id: number,
+        @Req() req,
+        @Body() dto: UpdateVipTierDto,
+    ) {
+        return this.vipService.updateUserTier(id, dto, req.user.userId);
+    }
+
+    @Get('admin/tier-settings')
+    @UseGuards(RolesGuard)
+    @Roles(Role.TECH_MASTER, Role.SUPER_ADMIN, Role.MANAGER)
+    async getTierSettings() {
+        return this.vipService.getVipTierSettings();
     }
 }

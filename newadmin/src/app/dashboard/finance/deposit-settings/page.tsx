@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { getSystemConfig, updateSystemConfig } from '@/actions/settings';
+import { getSystemConfig, updateSystemConfig, uploadPublicImage } from '@/actions/settings';
 import {
     Save, Wallet, ArrowDownRight, ArrowUpRight, CheckCircle,
-    ChevronDown, ChevronUp, Search, RefreshCw, Loader2, Shield,
+    ChevronDown, ChevronUp, Search, RefreshCw, Loader2, Shield, QrCode, AlertTriangle, Info,
 } from 'lucide-react';
 
 // ─── Inline countries list (ISO codes + flags + currency) ─────────────────────
@@ -252,12 +252,236 @@ function CountryDropdown({
     );
 }
 
+type AdminNowPaymentsRawCurrency = {
+    code: string;
+    name: string;
+    cg_id?: string | null;
+    network?: string | null;
+    logo_url?: string | null;
+    enable?: boolean;
+};
+
+type AdminCurrencyOverrideNetwork = {
+    id: string;
+    code?: string;
+    network: string;
+    logoUrl?: string | null;
+    enabled?: boolean;
+    isAvailableForPayment?: boolean;
+};
+
+type AdminCurrencyOverride = {
+    code?: string;
+    label?: string;
+    logoUrl?: string | null;
+    networks?: AdminCurrencyOverrideNetwork[];
+};
+
+type AdminCurrencyOverrides = Record<string, AdminCurrencyOverride>;
+
+type AdminNowPaymentsCoin = {
+    groupKey: string;
+    code: string;
+    label: string;
+    syncedLabel: string;
+    logoUrl: string | null;
+    syncedLogoUrl: string | null;
+    syncedNetworks: Array<{ id: string; code: string; network: string }>;
+    overrideNetworks: AdminCurrencyOverrideNetwork[];
+};
+
+type ManualUpiAccount = {
+    id: string;
+    upiId: string;
+    qrImageUrl: string;
+};
+
+type SystemConfigValues = Record<string, string>;
+
+const parseJsonSafely = <T,>(value: string | undefined, fallback: T): T => {
+    if (!value) return fallback;
+    try {
+        return JSON.parse(value) as T;
+    } catch {
+        return fallback;
+    }
+};
+
+const normalizeCurrencyOverridesForComparison = (overrides: AdminCurrencyOverrides): AdminCurrencyOverrides =>
+    Object.fromEntries(
+        Object.entries(overrides)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([groupKey, override]) => [
+                groupKey,
+                {
+                    ...override,
+                    code: override.code?.trim() || undefined,
+                    label: override.label?.trim() || undefined,
+                    logoUrl: override.logoUrl ?? null,
+                    networks: [...(override.networks || [])]
+                        .map((network) => ({
+                            ...network,
+                            id: network.id.trim(),
+                            code: network.code?.trim() || undefined,
+                            network: network.network.trim(),
+                            logoUrl: network.logoUrl ?? null,
+                        }))
+                        .sort((a, b) => a.id.localeCompare(b.id) || a.network.localeCompare(b.network)),
+                },
+            ]),
+    );
+
+const createManualUpiAccountId = () =>
+    `manual-upi-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const buildManualUpiAccountTag = (upiId: string) =>
+    `Manual UPI${upiId.trim() ? ` · ${upiId.trim()}` : ''}`;
+
+const parseManualUpiAccounts = (config: Record<string, string>) => {
+    const parsed = parseJsonSafely<ManualUpiAccount[]>(config.MANUAL_UPI_ACCOUNTS, [])
+        .map((account) => ({
+            id: account?.id?.trim() || createManualUpiAccountId(),
+            upiId: account?.upiId?.trim() || '',
+            qrImageUrl: account?.qrImageUrl?.trim() || '',
+        }))
+        .filter((account) => account.upiId);
+
+    if (parsed.length) return parsed;
+
+    const legacyUpiId = config.MANUAL_UPI_ID?.trim() || '';
+    const legacyQrImageUrl = config.MANUAL_QR_URL?.trim() || '';
+    if (!legacyUpiId) return [];
+
+    return [{
+        id: createManualUpiAccountId(),
+        upiId: legacyUpiId,
+        qrImageUrl: legacyQrImageUrl,
+    }];
+};
+
+const normalizeAdminNetworkLabel = (network?: string | null, code?: string) => {
+    if (!network) return (code || '').toUpperCase();
+    const normalized = network.trim().toLowerCase();
+    const map: Record<string, string> = {
+        eth: 'ERC20',
+        erc20: 'ERC20',
+        tron: 'TRC20',
+        trc20: 'TRC20',
+        bsc: 'BSC',
+        polygon: 'Polygon',
+        matic: 'Polygon',
+        sol: 'Solana',
+        solana: 'Solana',
+        arbitrum: 'Arbitrum',
+        optimism: 'Optimism',
+        base: 'Base',
+        ton: 'TON',
+        zksync: 'zkSync',
+        avalanche: 'Avalanche',
+    };
+    return map[normalized] || network.toUpperCase();
+};
+
+const getAdminBaseAssetLabel = (name: string | null | undefined, code: string) => {
+    const rawName = (name || code).trim();
+    const withoutParentheses = rawName.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    return withoutParentheses || code.toUpperCase();
+};
+
+const getAdminBaseAssetCode = (code: string, network?: string | null) => {
+    const normalized = code.trim().toUpperCase();
+    const knownSuffixes = new Set([
+        'TRC20', 'ERC20', 'BSC', 'MATIC', 'MAINNET', 'SOL', 'ARB', 'ARC20', 'USDCE', 'BRC20',
+        'ETH', 'TRON', 'SOLANA', 'POLYGON', 'AVALANCHE', 'OPTIMISM', 'BASE', 'LINEA', 'ZKSYNC', 'TON',
+    ]);
+    const normalizedNetwork = (network || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (normalizedNetwork.length >= 3) knownSuffixes.add(normalizedNetwork);
+    const sortedSuffixes = Array.from(knownSuffixes).sort((a, b) => b.length - a.length);
+    for (const suffix of sortedSuffixes) {
+        if (normalized.endsWith(suffix) && normalized.length > suffix.length) {
+            return normalized.slice(0, -suffix.length);
+        }
+    }
+    return normalized;
+};
+
+const getAdminGroupKey = (currency: AdminNowPaymentsRawCurrency) => {
+    const baseCode = getAdminBaseAssetCode(currency.code, currency.network);
+    if (baseCode) return baseCode.toLowerCase();
+    if (currency.cg_id?.trim()) return currency.cg_id.trim().toLowerCase();
+    return getAdminBaseAssetLabel(currency.name, currency.code).toLowerCase();
+};
+
+const buildAdminNowPaymentsCoins = (
+    rawCurrencies: AdminNowPaymentsRawCurrency[],
+    overrides: AdminCurrencyOverrides,
+) => {
+    const coinMap = new Map<string, AdminNowPaymentsCoin>();
+
+    for (const currency of rawCurrencies) {
+        const groupKey = getAdminGroupKey(currency);
+        const existing = coinMap.get(groupKey) ?? {
+            groupKey,
+            code: getAdminBaseAssetCode(currency.code, currency.network),
+            label: getAdminBaseAssetLabel(currency.name, currency.code),
+            syncedLabel: getAdminBaseAssetLabel(currency.name, currency.code),
+            logoUrl: currency.logo_url || null,
+            syncedLogoUrl: currency.logo_url || null,
+            syncedNetworks: [],
+            overrideNetworks: [],
+        };
+
+        existing.syncedNetworks.push({
+            id: currency.code.toLowerCase(),
+            code: currency.code.toUpperCase(),
+            network: normalizeAdminNetworkLabel(currency.network, currency.code),
+        });
+
+        coinMap.set(groupKey, existing);
+    }
+
+    for (const [groupKey, override] of Object.entries(overrides)) {
+        const existing = coinMap.get(groupKey) ?? {
+            groupKey,
+            code: override.code?.trim().toUpperCase() || groupKey.toUpperCase(),
+            label: override.label?.trim() || groupKey.toUpperCase(),
+            syncedLabel: groupKey.toUpperCase(),
+            logoUrl: override.logoUrl || null,
+            syncedLogoUrl: null,
+            syncedNetworks: [],
+            overrideNetworks: [],
+        };
+
+        existing.code = override.code?.trim().toUpperCase() || existing.code;
+        existing.label = override.label?.trim() || existing.syncedLabel || existing.label;
+        existing.logoUrl = override.logoUrl ?? existing.logoUrl;
+        existing.overrideNetworks = override.networks || [];
+
+        coinMap.set(groupKey, existing);
+    }
+
+    return Array.from(coinMap.values())
+        .map((coin) => ({
+            ...coin,
+            syncedNetworks: coin.syncedNetworks.sort((a, b) => a.network.localeCompare(b.network) || a.code.localeCompare(b.code)),
+            overrideNetworks: [...coin.overrideNetworks].sort((a, b) => a.network.localeCompare(b.network) || a.id.localeCompare(b.id)),
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+};
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function DepositSettingsPage() {
-    const [config, setConfig] = useState<any>({});
+    const [config, setConfig] = useState<SystemConfigValues>({});
+    const [currencyOverrides, setCurrencyOverrides] = useState<AdminCurrencyOverrides>({});
+    const [savedCurrencyOverrides, setSavedCurrencyOverrides] = useState<AdminCurrencyOverrides>({});
+    const [manualAccounts, setManualAccounts] = useState<ManualUpiAccount[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+    const [coinSearch, setCoinSearch] = useState('');
+    const [uploadingGroupKey, setUploadingGroupKey] = useState<string | null>(null);
+    const [uploadingGatewayLogoKey, setUploadingGatewayLogoKey] = useState<string | null>(null);
+    const [uploadingManualAccountId, setUploadingManualAccountId] = useState<string | null>(null);
 
     const showToast = (msg: string, type: 'success' | 'error') => {
         setToast({ msg, type });
@@ -266,37 +490,325 @@ export default function DepositSettingsPage() {
 
     useEffect(() => {
         getSystemConfig()
-            .then(res => { if (res.success && res.data) setConfig(res.data); })
+            .then(res => {
+                if (res.success && res.data) {
+                    setConfig(res.data);
+                    setManualAccounts(parseManualUpiAccounts(res.data));
+                    const parsedOverrides = parseJsonSafely<AdminCurrencyOverrides>(res.data.NOWPAYMENTS_CURRENCY_OVERRIDES, {});
+                    setCurrencyOverrides(parsedOverrides);
+                    setSavedCurrencyOverrides(parsedOverrides);
+                }
+            })
             .catch(console.error)
             .finally(() => setLoading(false));
     }, []);
 
     const set = (key: string, value: string) =>
-        setConfig((p: any) => ({ ...p, [key]: value }));
+        setConfig((p) => ({ ...p, [key]: value }));
+
+    const addManualAccount = () => {
+        setManualAccounts((current) => [
+            ...current,
+            { id: createManualUpiAccountId(), upiId: '', qrImageUrl: '' },
+        ]);
+    };
+
+    const updateManualAccount = (id: string, field: keyof ManualUpiAccount, value: string) => {
+        setManualAccounts((current) =>
+            current.map((account) =>
+                account.id === id ? { ...account, [field]: value } : account,
+            ),
+        );
+    };
+
+    const removeManualAccount = (id: string) => {
+        setManualAccounts((current) => current.filter((account) => account.id !== id));
+    };
+
+    // ─── Derived: are any UPI gateways active? ────────────────────────────────
+    const noGatewayActive =
+        config.UPI1_ENABLED === 'false' && config.UPI2_ENABLED === 'false';
+
+    const nowPaymentsCoins = useMemo(
+        () => buildAdminNowPaymentsCoins(
+            parseJsonSafely<{ currencies?: AdminNowPaymentsRawCurrency[] }>(config.NOWPAYMENTS_FULL_CURRENCIES, { currencies: [] }).currencies || [],
+            currencyOverrides,
+        ),
+        [config.NOWPAYMENTS_FULL_CURRENCIES, currencyOverrides],
+    );
+
+    const filteredNowPaymentsCoins = useMemo(() => {
+        const query = coinSearch.trim().toLowerCase();
+        if (!query) return nowPaymentsCoins;
+        return nowPaymentsCoins.filter((coin) =>
+            `${coin.label} ${coin.code} ${coin.groupKey}`.toLowerCase().includes(query),
+        );
+    }, [coinSearch, nowPaymentsCoins]);
+
+    const normalizedCurrentOverrides = useMemo(
+        () => normalizeCurrencyOverridesForComparison(currencyOverrides),
+        [currencyOverrides],
+    );
+    const normalizedSavedOverrides = useMemo(
+        () => normalizeCurrencyOverridesForComparison(savedCurrencyOverrides),
+        [savedCurrencyOverrides],
+    );
+    const pendingOverrideCount = useMemo(() => {
+        const allKeys = new Set([
+            ...Object.keys(normalizedCurrentOverrides),
+            ...Object.keys(normalizedSavedOverrides),
+        ]);
+
+        let changed = 0;
+        for (const key of allKeys) {
+            const currentValue = normalizedCurrentOverrides[key] ?? null;
+            const savedValue = normalizedSavedOverrides[key] ?? null;
+            if (JSON.stringify(currentValue) !== JSON.stringify(savedValue)) {
+                changed += 1;
+            }
+        }
+        return changed;
+    }, [normalizedCurrentOverrides, normalizedSavedOverrides]);
+
+    const updateCurrencyOverride = (groupKey: string, updater: (current: AdminCurrencyOverride) => AdminCurrencyOverride) => {
+        setCurrencyOverrides((current) => ({
+            ...current,
+            [groupKey]: updater(current[groupKey] || {}),
+        }));
+    };
+
+    const setCoinLabelOverride = (groupKey: string, value: string) => {
+        setCurrencyOverrides((current) => {
+            const currentOverride = current[groupKey] || {};
+            const nextOverride: AdminCurrencyOverride = value.trim()
+                ? { ...currentOverride, label: value }
+                : { ...currentOverride };
+            if (!value.trim()) {
+                const hasOtherFields = !!nextOverride.code?.trim() || !!nextOverride.logoUrl || (nextOverride.networks || []).length > 0;
+                if (!hasOtherFields) {
+                    const { [groupKey]: _removed, ...rest } = current;
+                    return rest;
+                }
+            }
+            return { ...current, [groupKey]: nextOverride };
+        });
+    };
+
+    const setCoinLogoOverride = (groupKey: string, value: string | null) => {
+        setCurrencyOverrides((current) => {
+            const nextOverride = { ...(current[groupKey] || {}), logoUrl: value };
+            const hasOtherFields = !!nextOverride.label?.trim() || !!nextOverride.code?.trim() || (nextOverride.networks || []).length > 0;
+            if (!value && !hasOtherFields) {
+                const { [groupKey]: _removed, ...rest } = current;
+                return rest;
+            }
+            return { ...current, [groupKey]: nextOverride };
+        });
+    };
+
+    const addManualChain = (groupKey: string, coinCode: string) => {
+        updateCurrencyOverride(groupKey, (current) => ({
+            ...current,
+            code: current.code || coinCode,
+            networks: [
+                ...(current.networks || []),
+                {
+                    id: '',
+                    code: coinCode,
+                    network: '',
+                    enabled: true,
+                    isAvailableForPayment: true,
+                },
+            ],
+        }));
+    };
+
+    const updateManualChain = (
+        groupKey: string,
+        index: number,
+        field: keyof AdminCurrencyOverrideNetwork,
+        value: string | boolean,
+    ) => {
+        updateCurrencyOverride(groupKey, (current) => {
+            const networks = [...(current.networks || [])];
+            const target: AdminCurrencyOverrideNetwork = {
+                ...(networks[index] || {
+                    id: '',
+                    network: '',
+                    enabled: true,
+                    isAvailableForPayment: true,
+                }),
+            };
+            if (field === 'enabled' || field === 'isAvailableForPayment') {
+                target[field] = Boolean(value);
+            } else {
+                target[field] = String(value);
+            }
+            networks[index] = target;
+            return { ...current, networks };
+        });
+    };
+
+    const removeManualChain = (groupKey: string, index: number) => {
+        setCurrencyOverrides((current) => {
+            const nextOverride = { ...(current[groupKey] || {}) };
+            nextOverride.networks = (nextOverride.networks || []).filter((_, networkIndex) => networkIndex !== index);
+            const hasOtherFields = !!nextOverride.label?.trim() || !!nextOverride.code?.trim() || !!nextOverride.logoUrl || (nextOverride.networks || []).length > 0;
+            if (!hasOtherFields) {
+                const { [groupKey]: _removed, ...rest } = current;
+                return rest;
+            }
+            return { ...current, [groupKey]: nextOverride };
+        });
+    };
+
+    const handleCoinLogoUpload = async (groupKey: string, file: File) => {
+        setUploadingGroupKey(groupKey);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('folder', 'coin-logos');
+
+            const data = await uploadPublicImage(formData);
+            if (!data.success || !data.url) {
+                throw new Error(data.error || 'Upload failed');
+            }
+            setCoinLogoOverride(groupKey, data.url);
+            showToast('Coin logo uploaded', 'success');
+        } catch (error) {
+            console.error(error);
+            showToast('Failed to upload coin logo', 'error');
+        } finally {
+            setUploadingGroupKey(null);
+        }
+    };
+
+    const handleGatewayLogoUpload = async (configKey: string, file: File) => {
+        setUploadingGatewayLogoKey(configKey);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('folder', 'gateway-logos');
+
+            const data = await uploadPublicImage(formData);
+            if (!data.success || !data.url) {
+                throw new Error(data.error || 'Upload failed');
+            }
+
+            set(configKey, data.url);
+            showToast('Gateway logo uploaded', 'success');
+        } catch (error) {
+            console.error(error);
+            showToast('Failed to upload gateway logo', 'error');
+        } finally {
+            setUploadingGatewayLogoKey(null);
+        }
+    };
+
+    const handleManualQrUpload = async (accountId: string, file: File) => {
+        setUploadingManualAccountId(accountId);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('folder', 'manual-upi-qr');
+
+            const data = await uploadPublicImage(formData);
+            if (!data.success || !data.url) {
+                throw new Error(data.error || 'Upload failed');
+            }
+            updateManualAccount(accountId, 'qrImageUrl', data.url);
+            showToast('Manual QR uploaded', 'success');
+        } catch (error) {
+            console.error(error);
+            showToast('Failed to upload manual QR', 'error');
+        } finally {
+            setUploadingManualAccountId(null);
+        }
+    };
 
     const handleSave = async () => {
         setSaving(true);
         try {
+            const sanitizedManualAccounts = manualAccounts
+                .map((account) => ({
+                    id: account.id || createManualUpiAccountId(),
+                    upiId: account.upiId.trim(),
+                    qrImageUrl: account.qrImageUrl.trim(),
+                }))
+                .filter((account) => account.upiId);
+            const primaryManualAccount = sanitizedManualAccounts[0];
+            const normalizedOverrides = normalizeCurrencyOverridesForComparison(currencyOverrides);
+            const serializedOverrides = JSON.stringify(normalizedOverrides);
             const res = await updateSystemConfig({
-                UPI_GATEWAY_ORDER: config.UPI_GATEWAY_ORDER || 'UPI1,UPI2',
+                UPI_GATEWAY_ORDER: config.UPI_GATEWAY_ORDER || 'CASHFREE,UPI1,UPI2,UPI3,UPI4,UPI5,UPI6',
+                CASHFREE_ENABLED: config.CASHFREE_ENABLED ?? 'false',
                 UPI1_ENABLED: config.UPI1_ENABLED ?? 'true',
                 UPI2_ENABLED: config.UPI2_ENABLED ?? 'true',
+                UPI3_ENABLED: config.UPI3_ENABLED ?? 'true',
+                UPI4_ENABLED: config.UPI4_ENABLED ?? 'false',
+                UPI5_ENABLED: config.UPI5_ENABLED ?? 'true',
+                UPI6_ENABLED: config.UPI6_ENABLED ?? 'true',
+                UPI9_ENABLED: config.UPI9_ENABLED ?? 'true',
+                UPI_TEST_USERNAMES: config.UPI_TEST_USERNAMES || '',
                 // Gateway display names & taglines
+                CASHFREE_NAME: config.CASHFREE_NAME || 'Cashfree Gateway',
+                CASHFREE_TAGLINE: config.CASHFREE_TAGLINE || 'Secure · Fast',
+                CASHFREE_LOGO_URL: config.CASHFREE_LOGO_URL || '',
                 UPI1_NAME: config.UPI1_NAME || 'UPI Gateway 1',
                 UPI1_TAGLINE: config.UPI1_TAGLINE || 'NekPay · Instant',
+                UPI1_LOGO_URL: config.UPI1_LOGO_URL || '',
                 UPI2_NAME: config.UPI2_NAME || 'UPI Gateway 2',
                 UPI2_TAGLINE: config.UPI2_TAGLINE || 'UPI / Bank · Fast',
+                UPI2_LOGO_URL: config.UPI2_LOGO_URL || '',
+                UPI3_NAME: config.UPI3_NAME || 'UPI Gateway 3',
+                UPI3_TAGLINE: config.UPI3_TAGLINE || 'iPayment · Instant',
+                UPI3_LOGO_URL: config.UPI3_LOGO_URL || '',
+                UPI4_NAME: config.UPI4_NAME || 'UPI Gateway 4',
+                UPI4_TAGLINE: config.UPI4_TAGLINE || 'Silkpay · Fast',
+                UPI4_LOGO_URL: config.UPI4_LOGO_URL || '',
+                UPI5_NAME: config.UPI5_NAME || 'UPI Gateway 5',
+                UPI5_TAGLINE: config.UPI5_TAGLINE || 'RezorPay · Fast',
+                UPI5_LOGO_URL: config.UPI5_LOGO_URL || '',
+                UPI6_NAME: config.UPI6_NAME || 'UPI Gateway 6',
+                UPI6_TAGLINE: config.UPI6_TAGLINE || 'A-Pay · Fast',
+                UPI6_LOGO_URL: config.UPI6_LOGO_URL || '',
+                UPI9_NAME: config.UPI9_NAME || 'UPI Gateway 9 (UltraPay)',
+                UPI9_TAGLINE: config.UPI9_TAGLINE || 'UltraPay · Fast',
+                UPI9_LOGO_URL: config.UPI9_LOGO_URL || '',
                 MIN_DEPOSIT: config.MIN_DEPOSIT || '100',
+                MIN_DEPOSIT_CASHFREE: config.MIN_DEPOSIT_CASHFREE || '100',
                 MIN_DEPOSIT_UPI2: config.MIN_DEPOSIT_UPI2 || '200',
+                MIN_DEPOSIT_UPI3: config.MIN_DEPOSIT_UPI3 || '100',
+                MIN_DEPOSIT_UPI4: config.MIN_DEPOSIT_UPI4 || '100',
+                MIN_DEPOSIT_UPI5: config.MIN_DEPOSIT_UPI5 || '300',
+                MIN_DEPOSIT_UPI6: config.MIN_DEPOSIT_UPI6 || '100',
+                MIN_DEPOSIT_UPI9: config.MIN_DEPOSIT_UPI9 || '100',
                 MIN_DEPOSIT_CRYPTO: config.MIN_DEPOSIT_CRYPTO || '10',
                 MAX_DEPOSIT: config.MAX_DEPOSIT || '',
                 MIN_WITHDRAWAL: config.MIN_WITHDRAWAL || '500',
                 MIN_WITHDRAWAL_CRYPTO: config.MIN_WITHDRAWAL_CRYPTO || '10',
                 MAX_WITHDRAWAL: config.MAX_WITHDRAWAL || '',
                 AUTO_WITHDRAW_FIAT_LIMIT: config.AUTO_WITHDRAW_FIAT_LIMIT || '1000',
+                // Manual gateway (only relevant when no UPI gateway is active)
+                MANUAL_PAYMENT_ENABLED: config.MANUAL_PAYMENT_ENABLED ?? 'true',
+                MANUAL_UPI_ACCOUNTS: JSON.stringify(sanitizedManualAccounts),
+                MANUAL_UPI_ID: primaryManualAccount?.upiId || '',
+                MANUAL_QR_URL: primaryManualAccount?.qrImageUrl || '',
+                NOWPAYMENTS_CURRENCY_OVERRIDES: serializedOverrides,
             });
-            if (res.success) showToast('Settings saved successfully!', 'success');
-            else showToast('Failed to save settings', 'error');
+            if (res.success) {
+                setSavedCurrencyOverrides(normalizedOverrides);
+                setConfig((current) => ({
+                    ...current,
+                    MANUAL_UPI_ACCOUNTS: JSON.stringify(sanitizedManualAccounts),
+                    MANUAL_UPI_ID: primaryManualAccount?.upiId || '',
+                    MANUAL_QR_URL: primaryManualAccount?.qrImageUrl || '',
+                    NOWPAYMENTS_CURRENCY_OVERRIDES: serializedOverrides,
+                }));
+                showToast('Settings saved successfully!', 'success');
+            } else {
+                showToast('Failed to save settings', 'error');
+            }
         } catch {
             showToast('Failed to save settings', 'error');
         } finally {
@@ -361,19 +873,25 @@ export default function DepositSettingsPage() {
                     {/* Gateway info banner */}
                     <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/25 rounded-xl text-xs text-emerald-400 font-medium">
                         <CheckCircle size={13} />
-                        Enable/disable UPI gateways, set names, taglines, and drag to reorder how they appear to users.
+                        Enable/disable UPI gateways, set names, logos, taglines, and drag to reorder how they appear to users.
                     </div>
 
                     {/* Ordered gateway cards */}
                     {(() => {
-                        const GW_META: Record<string, { key: string; nameKey: string; tagKey: string; defaultName: string; defaultTag: string; accentEnabled: string; accentBadge: string }> = {
-                            UPI1: { key: 'UPI1_ENABLED', nameKey: 'UPI1_NAME', tagKey: 'UPI1_TAGLINE', defaultName: 'UPI Gateway 1', defaultTag: 'NekPay · Instant', accentEnabled: 'border-emerald-500/40 bg-emerald-500/5', accentBadge: 'bg-emerald-500/15 text-emerald-400' },
-                            UPI2: { key: 'UPI2_ENABLED', nameKey: 'UPI2_NAME', tagKey: 'UPI2_TAGLINE', defaultName: 'UPI Gateway 2', defaultTag: 'UPI / Bank · Fast', accentEnabled: 'border-blue-500/40 bg-blue-500/5', accentBadge: 'bg-blue-500/15 text-blue-400' },
+                        const GW_META: Record<string, { key: string; nameKey: string; tagKey: string; logoKey: string; minKey: string; defaultName: string; defaultTag: string; defaultMin: string; accentEnabled: string; accentBadge: string; icon: string }> = {
+                            CASHFREE: { key: 'CASHFREE_ENABLED', nameKey: 'CASHFREE_NAME', tagKey: 'CASHFREE_TAGLINE', logoKey: 'CASHFREE_LOGO_URL', minKey: 'MIN_DEPOSIT_CASHFREE', defaultName: 'Cashfree Gateway', defaultTag: 'Secure · Fast', defaultMin: '100', accentEnabled: 'border-orange-500/40 bg-orange-500/5', accentBadge: 'bg-orange-500/15 text-orange-400', icon: '💳' },
+                            UPI1: { key: 'UPI1_ENABLED', nameKey: 'UPI1_NAME', tagKey: 'UPI1_TAGLINE', logoKey: 'UPI1_LOGO_URL', minKey: 'MIN_DEPOSIT', defaultName: 'UPI Gateway 1', defaultTag: 'NekPay · Instant', defaultMin: '100', accentEnabled: 'border-emerald-500/40 bg-emerald-500/5', accentBadge: 'bg-emerald-500/15 text-emerald-400', icon: '🏦' },
+                            UPI2: { key: 'UPI2_ENABLED', nameKey: 'UPI2_NAME', tagKey: 'UPI2_TAGLINE', logoKey: 'UPI2_LOGO_URL', minKey: 'MIN_DEPOSIT_UPI2', defaultName: 'UPI Gateway 2', defaultTag: 'UPI / Bank · Fast', defaultMin: '200', accentEnabled: 'border-blue-500/40 bg-blue-500/5', accentBadge: 'bg-blue-500/15 text-blue-400', icon: '📲' },
+                            UPI3: { key: 'UPI3_ENABLED', nameKey: 'UPI3_NAME', tagKey: 'UPI3_TAGLINE', logoKey: 'UPI3_LOGO_URL', minKey: 'MIN_DEPOSIT_UPI3', defaultName: 'UPI Gateway 3', defaultTag: 'iPayment · Instant', defaultMin: '100', accentEnabled: 'border-violet-500/40 bg-violet-500/5', accentBadge: 'bg-violet-500/15 text-violet-400', icon: '⚡' },
+                            UPI4: { key: 'UPI4_ENABLED', nameKey: 'UPI4_NAME', tagKey: 'UPI4_TAGLINE', logoKey: 'UPI4_LOGO_URL', minKey: 'MIN_DEPOSIT_UPI4', defaultName: 'UPI Gateway 4', defaultTag: 'Silkpay · Fast', defaultMin: '100', accentEnabled: 'border-fuchsia-500/40 bg-fuchsia-500/5', accentBadge: 'bg-fuchsia-500/15 text-fuchsia-400', icon: '🚀' },
+                            UPI5: { key: 'UPI5_ENABLED', nameKey: 'UPI5_NAME', tagKey: 'UPI5_TAGLINE', logoKey: 'UPI5_LOGO_URL', minKey: 'MIN_DEPOSIT_UPI5', defaultName: 'UPI Gateway 5', defaultTag: 'RezorPay · Fast', defaultMin: '300', accentEnabled: 'border-rose-500/40 bg-rose-500/5', accentBadge: 'bg-rose-500/15 text-rose-400', icon: '🔥' },
+                            UPI6: { key: 'UPI6_ENABLED', nameKey: 'UPI6_NAME', tagKey: 'UPI6_TAGLINE', logoKey: 'UPI6_LOGO_URL', minKey: 'MIN_DEPOSIT_UPI6', defaultName: 'UPI Gateway 6', defaultTag: 'A-Pay · Fast', defaultMin: '100', accentEnabled: 'border-teal-500/40 bg-teal-500/5', accentBadge: 'bg-teal-500/15 text-teal-400', icon: '🔗' },
+                            UPI9: { key: 'UPI9_ENABLED', nameKey: 'UPI9_NAME', tagKey: 'UPI9_TAGLINE', logoKey: 'UPI9_LOGO_URL', minKey: 'MIN_DEPOSIT_UPI9', defaultName: 'UPI Gateway 9 (UltraPay)', defaultTag: 'UltraPay · Fast', defaultMin: '100', accentEnabled: 'border-amber-500/40 bg-amber-500/5', accentBadge: 'bg-amber-500/15 text-amber-400', icon: '⚡' },
                         };
-                        const orderStr: string = config.UPI_GATEWAY_ORDER || 'UPI1,UPI2';
+                        const orderStr: string = config.UPI_GATEWAY_ORDER || 'CASHFREE,UPI1,UPI2,UPI3,UPI4,UPI5,UPI6,UPI9';
                         const order: string[] = orderStr.split(',').map((s: string) => s.trim()).filter((s: string) => s in GW_META);
-                        // Ensure both IDs present (in case config is partial)
-                        ['UPI1', 'UPI2'].forEach(id => { if (!order.includes(id)) order.push(id); });
+                        // Ensure all IDs present (in case config is partial)
+                        ['CASHFREE', 'UPI1', 'UPI2', 'UPI3', 'UPI4', 'UPI5', 'UPI6', 'UPI9'].forEach(id => { if (!order.includes(id)) order.push(id); });
 
                         const moveUp = (idx: number) => {
                             if (idx === 0) return;
@@ -391,8 +909,9 @@ export default function DepositSettingsPage() {
                         return (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 {order.map((id, idx) => {
-                                    const { key, nameKey, tagKey, defaultName, defaultTag, accentEnabled, accentBadge } = GW_META[id];
+                                    const { key, nameKey, tagKey, logoKey, minKey, defaultName, defaultTag, defaultMin, accentEnabled, accentBadge, icon } = GW_META[id];
                                     const enabled = config[key] !== 'false';
+                                    const previewLogo = config[logoKey]?.trim() || '';
                                     return (
                                         <div key={id} className={`rounded-xl border p-4 space-y-3 transition-all ${enabled ? accentEnabled : 'border-slate-700 opacity-60'}`}>
                                             {/* Order controls + position badge */}
@@ -419,22 +938,34 @@ export default function DepositSettingsPage() {
                                             </div>
                                             <div className="flex items-start justify-between">
                                                 <div className="flex-1 min-w-0 mr-3">
-                                                    {/* Editable Name */}
-                                                    <input
-                                                        type="text"
-                                                        value={config[nameKey] || ''}
-                                                        onChange={e => set(nameKey, e.target.value)}
-                                                        placeholder={defaultName}
-                                                        className="w-full bg-transparent border-b border-slate-600 focus:border-indigo-400 outline-none text-sm font-bold text-white pb-0.5 placeholder:text-slate-500 transition-colors"
-                                                    />
-                                                    {/* Editable Tagline */}
-                                                    <input
-                                                        type="text"
-                                                        value={config[tagKey] || ''}
-                                                        onChange={e => set(tagKey, e.target.value)}
-                                                        placeholder={defaultTag}
-                                                        className="w-full bg-transparent border-b border-slate-700 focus:border-indigo-400/60 outline-none text-[11px] text-slate-500 mt-1 pb-0.5 placeholder:text-slate-600 transition-colors"
-                                                    />
+                                                    {/* Icon + Editable Name row */}
+                                                    <div className="flex items-start gap-3">
+                                                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 text-base leading-none text-white">
+                                                            {previewLogo ? (
+                                                                // eslint-disable-next-line @next/next/no-img-element
+                                                                <img src={previewLogo} alt={config[nameKey] || defaultName} className="h-full w-full object-contain p-2" />
+                                                            ) : (
+                                                                icon
+                                                            )}
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <input
+                                                                type="text"
+                                                                value={config[nameKey] || ''}
+                                                                onChange={e => set(nameKey, e.target.value)}
+                                                                placeholder={defaultName}
+                                                                className="w-full bg-transparent border-b border-slate-600 focus:border-indigo-400 outline-none text-sm font-bold text-white pb-0.5 placeholder:text-slate-500 transition-colors"
+                                                            />
+                                                            {/* Editable Tagline */}
+                                                            <input
+                                                                type="text"
+                                                                value={config[tagKey] || ''}
+                                                                onChange={e => set(tagKey, e.target.value)}
+                                                                placeholder={defaultTag}
+                                                                className="mt-2 w-full bg-transparent border-b border-slate-700 focus:border-indigo-400/60 outline-none text-[11px] text-slate-500 pb-0.5 placeholder:text-slate-600 transition-colors"
+                                                            />
+                                                        </div>
+                                                    </div>
                                                 </div>
                                                 <label className="relative inline-flex items-center cursor-pointer shrink-0">
                                                     <input
@@ -446,10 +977,61 @@ export default function DepositSettingsPage() {
                                                     <div className="w-10 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-5 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500" />
                                                 </label>
                                             </div>
+
+                                            <div className="space-y-2">
+                                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                                    Logo URL
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={config[logoKey] || ''}
+                                                    onChange={e => set(logoKey, e.target.value)}
+                                                    placeholder="https://cdn.example.com/payment-logo.png"
+                                                    className="w-full rounded-lg border border-slate-700 bg-slate-900/60 px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:border-indigo-400 focus:outline-none"
+                                                />
+                                                <div className="flex items-center gap-2">
+                                                    <label className="inline-flex cursor-pointer items-center rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:border-indigo-500">
+                                                        {uploadingGatewayLogoKey === logoKey ? 'Uploading…' : 'Upload Logo'}
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            className="hidden"
+                                                            onChange={(e) => {
+                                                                const file = e.target.files?.[0];
+                                                                if (file) void handleGatewayLogoUpload(logoKey, file);
+                                                                e.currentTarget.value = '';
+                                                            }}
+                                                        />
+                                                    </label>
+                                                    {config[logoKey] && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => set(logoKey, '')}
+                                                            className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-medium text-slate-300 hover:border-red-500 hover:text-red-300"
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Min deposit for this gateway */}
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] text-slate-500 shrink-0">Min ₹</span>
+                                                <input
+                                                    type="number"
+                                                    value={config[minKey] || ''}
+                                                    onChange={e => set(minKey, e.target.value)}
+                                                    placeholder={defaultMin}
+                                                    className="w-full bg-slate-900/60 border border-slate-700 focus:border-indigo-400 outline-none text-xs font-mono text-white rounded-lg px-2.5 py-1.5 placeholder:text-slate-600 transition-colors"
+                                                />
+                                            </div>
+
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${enabled ? accentBadge : 'bg-slate-700 text-slate-500'}`}>
                                                     {enabled ? '● ACTIVE' : '○ DISABLED'}
                                                 </span>
+                                                <span className="text-[10px] text-slate-600 font-mono">{id}</span>
                                             </div>
                                         </div>
                                     );
@@ -467,9 +1049,413 @@ export default function DepositSettingsPage() {
                         <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-amber-500/15 text-amber-400">● ALWAYS ON</span>
                     </div>
 
+                    <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-4 space-y-4">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div>
+                                <p className="text-sm font-bold text-white">Crypto Coin Manager</p>
+                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                    Rename coins, upload logos, and add extra chain codes. Your overrides are stored separately and stay applied after NOWPayments sync.
+                                </p>
+                                <p className="text-[10px] text-slate-600 mt-1">
+                                    Last NOWPayments sync: {config.NOWPAYMENTS_FULL_CURRENCIES_SYNCED_AT || 'Not synced yet'}
+                                </p>
+                            </div>
+                            <div className="relative w-full md:w-72">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                                <input
+                                    type="text"
+                                    value={coinSearch}
+                                    onChange={(e) => setCoinSearch(e.target.value)}
+                                    placeholder="Search coin or ticker"
+                                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-9 py-2.5 text-sm text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-500">
+                            <span>{filteredNowPaymentsCoins.length} currencies</span>
+                            <span>{pendingOverrideCount} override{pendingOverrideCount === 1 ? '' : 's'} pending save</span>
+                        </div>
+
+                        <div className="max-h-[900px] space-y-3 overflow-y-auto pr-1">
+                            {filteredNowPaymentsCoins.map((coin) => {
+                                const override = currencyOverrides[coin.groupKey] || {};
+                                const manualNetworks = override.networks || [];
+                                const previewLogo = override.logoUrl ?? coin.syncedLogoUrl;
+
+                                return (
+                                    <div key={coin.groupKey} className="rounded-xl border border-slate-700 bg-slate-950/60 p-4">
+                                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                            <div className="flex items-start gap-4">
+                                                <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 text-lg font-bold text-indigo-300">
+                                                    {previewLogo ? (
+                                                        // eslint-disable-next-line @next/next/no-img-element
+                                                        <img src={previewLogo} alt={coin.label} className="h-full w-full object-cover" />
+                                                    ) : (
+                                                        coin.code.slice(0, 1)
+                                                    )}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                                                            {coin.code}
+                                                        </span>
+                                                        <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                                                            {coin.groupKey}
+                                                        </span>
+                                                    </div>
+                                                    <p className="mt-2 text-sm font-semibold text-white">{coin.syncedLabel}</p>
+                                                    <p className="text-[11px] text-slate-500">
+                                                        Synced {coin.syncedNetworks.length} chain{coin.syncedNetworks.length === 1 ? '' : 's'}
+                                                    </p>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid w-full gap-3 lg:max-w-xl lg:grid-cols-[minmax(0,1fr)_220px]">
+                                                <div>
+                                                    <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                                                        Coin Name Override
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={override.label || ''}
+                                                        onChange={(e) => setCoinLabelOverride(coin.groupKey, e.target.value)}
+                                                        placeholder={coin.syncedLabel}
+                                                        className="w-full rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                                                        Logo Upload
+                                                    </label>
+                                                    <div className="flex items-center gap-2">
+                                                        <label className="inline-flex cursor-pointer items-center rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:border-indigo-500">
+                                                            {uploadingGroupKey === coin.groupKey ? 'Uploading…' : 'Upload Logo'}
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                className="hidden"
+                                                                onChange={(e) => {
+                                                                    const file = e.target.files?.[0];
+                                                                    if (file) void handleCoinLogoUpload(coin.groupKey, file);
+                                                                    e.currentTarget.value = '';
+                                                                }}
+                                                            />
+                                                        </label>
+                                                        {override.logoUrl && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setCoinLogoOverride(coin.groupKey, null)}
+                                                                className="rounded-xl border border-slate-700 px-3 py-2 text-xs font-medium text-slate-300 hover:border-red-500 hover:text-red-300"
+                                                            >
+                                                                Clear
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                                            <div>
+                                                <div className="mb-2 flex items-center justify-between">
+                                                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Synced Chains</p>
+                                                    <span className="text-[10px] text-slate-600">{coin.syncedNetworks.length} total</span>
+                                                </div>
+                                                <div className="flex max-h-40 flex-wrap gap-2 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/70 p-3">
+                                                    {coin.syncedNetworks.map((network) => (
+                                                        <div key={network.id} className="rounded-full border border-slate-700 bg-slate-800 px-3 py-1 text-[11px] text-slate-300">
+                                                            {network.network} · {network.code}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <div className="mb-2 flex items-center justify-between">
+                                                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Manual Chains</p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => addManualChain(coin.groupKey, coin.code)}
+                                                        className="rounded-lg border border-indigo-500/40 bg-indigo-500/10 px-3 py-1 text-[11px] font-semibold text-indigo-300 hover:bg-indigo-500/20"
+                                                    >
+                                                        Add Chain
+                                                    </button>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {manualNetworks.length === 0 ? (
+                                                        <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/60 px-4 py-5 text-center text-[11px] text-slate-500">
+                                                            No manual chains added for this currency.
+                                                        </div>
+                                                    ) : (
+                                                        manualNetworks.map((network, index) => (
+                                                            <div key={`${coin.groupKey}-${index}`} className="grid gap-2 rounded-xl border border-slate-800 bg-slate-900/60 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                                                                <input
+                                                                    type="text"
+                                                                    value={network.id}
+                                                                    onChange={(e) => updateManualChain(coin.groupKey, index, 'id', e.target.value)}
+                                                                    placeholder="NOWPayments pay currency code"
+                                                                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none"
+                                                                />
+                                                                <input
+                                                                    type="text"
+                                                                    value={network.network}
+                                                                    onChange={(e) => updateManualChain(coin.groupKey, index, 'network', e.target.value)}
+                                                                    placeholder="Network label"
+                                                                    className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-indigo-500 focus:outline-none"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => removeManualChain(coin.groupKey, index)}
+                                                                    className="rounded-lg border border-slate-700 px-3 py-2 text-xs font-semibold text-slate-300 hover:border-red-500 hover:text-red-300"
+                                                                >
+                                                                    Remove
+                                                                </button>
+                                                            </div>
+                                                        ))
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
+            {/* ── SECTION 1.5: Test Environment configuration ── */}
+            <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-700 flex items-center gap-3">
+                    <AlertTriangle size={18} className="text-amber-400" />
+                    <div>
+                        <h2 className="text-white font-bold">Test Environment Routing</h2>
+                        <p className="text-slate-500 text-xs mt-0.5">Whitelist users to test UPI3 and UPI4 on the live site</p>
+                    </div>
+                </div>
+                <div className="p-6">
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl p-4">
+                        <label className="block text-xs font-bold text-slate-400 mb-1.5 flex items-center justify-between">
+                            <span>Test Usernames</span>
+                            <span className="text-slate-500 font-normal">Comma-separated</span>
+                        </label>
+                        <textarea
+                            value={config.UPI_TEST_USERNAMES || ''}
+                            onChange={(e) => set('UPI_TEST_USERNAMES', e.target.value)}
+                            placeholder="e.g., testuser1, admin, harsh"
+                            className="w-full h-24 bg-slate-800 border border-slate-700 rounded-lg p-3 text-white text-sm font-mono focus:border-indigo-500 focus:outline-none placeholder-slate-600 resize-none"
+                        />
+                        <p className="text-[11px] text-slate-500 mt-2 leading-relaxed">
+                            <strong className="text-amber-400/80">Only these exact usernames</strong> (case-insensitive) will be able to see and use <strong>Gateway 3</strong> and <strong>Gateway 4</strong> when active.
+                            Leave blank to disable Gateways 3 and 4 entirely.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            {/* ── SECTION 2: Manual Gateway (shown only when no UPI gateway is active) ── */}
+            {noGatewayActive ? (
+                <div className="bg-slate-800 rounded-2xl border border-amber-500/40 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-amber-500/20 flex items-center gap-3">
+                        <QrCode size={18} className="text-amber-400" />
+                        <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-white font-bold">Manual Gateway</h2>
+                                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">FALLBACK ACTIVE</span>
+                            </div>
+                            <p className="text-slate-500 text-xs mt-0.5">
+                                Shown to users because all UPI gateways are disabled. Users scan a QR code and submit UTR for manual approval.
+                            </p>
+                        </div>
+                        {/* Enable/disable toggle */}
+                        <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                            <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={config.MANUAL_PAYMENT_ENABLED !== 'false'}
+                                onChange={e => set('MANUAL_PAYMENT_ENABLED', e.target.checked ? 'true' : 'false')}
+                            />
+                            <div className="w-10 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-5 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500" />
+                        </label>
+                    </div>
+
+                    <div className="p-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Left: fields */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Manual UPI Accounts</p>
+                                        <p className="text-[10px] text-slate-600 mt-1">
+                                            Users get one random account from this list each time they open Manual UPI.
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={addManualAccount}
+                                        className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/15"
+                                    >
+                                        Add Account
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {manualAccounts.length === 0 ? (
+                                        <div className="rounded-xl border border-dashed border-slate-700 px-4 py-5 text-center text-xs text-slate-500">
+                                            No manual UPI accounts added yet. Add at least one account to enable random assignment.
+                                        </div>
+                                    ) : (
+                                        manualAccounts.map((account, index) => (
+                                            <div key={account.id} className="rounded-xl border border-slate-700 bg-slate-900/60 p-4 space-y-4">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0">
+                                                        <p className="text-[10px] text-slate-500 uppercase tracking-[0.24em] font-semibold">
+                                                            Account {index + 1}
+                                                        </p>
+                                                        <div className="mt-1 inline-flex max-w-full items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold text-amber-300">
+                                                            <span className="truncate">
+                                                                {account.upiId ? buildManualUpiAccountTag(account.upiId) : 'Manual UPI'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    {manualAccounts.length > 1 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeManualAccount(account.id)}
+                                                            className="rounded-lg border border-slate-700 px-3 py-2 text-[11px] font-semibold text-slate-400 hover:border-red-500 hover:text-red-300"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                                                        UPI ID / VPA
+                                                        <span className="ml-1.5 text-slate-600 text-xs font-normal normal-case">e.g. payments@yourbank</span>
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={account.upiId}
+                                                        onChange={e => updateManualAccount(account.id, 'upiId', e.target.value)}
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white font-mono text-sm focus:border-amber-500 focus:outline-none placeholder-slate-600"
+                                                        placeholder="yourname@upi"
+                                                    />
+                                                </div>
+
+                                                <div>
+                                                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">
+                                                        QR Image URL
+                                                        <span className="ml-1.5 text-slate-600 text-xs font-normal normal-case">optional override</span>
+                                                    </label>
+                                                    <input
+                                                        type="url"
+                                                        value={account.qrImageUrl}
+                                                        onChange={e => updateManualAccount(account.id, 'qrImageUrl', e.target.value)}
+                                                        className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none placeholder-slate-600"
+                                                        placeholder="https://example.com/qr.png"
+                                                    />
+                                                    <div className="mt-2 flex items-center justify-between gap-3">
+                                                        <p className="text-[10px] text-slate-600">
+                                                            Leave blank to auto-generate QR from this UPI ID.
+                                                        </p>
+                                                        <label className="shrink-0 cursor-pointer rounded-lg border border-slate-700 px-3 py-2 text-[11px] font-semibold text-slate-300 hover:border-amber-500 hover:text-amber-300">
+                                                            {uploadingManualAccountId === account.id ? 'Uploading…' : 'Upload QR'}
+                                                            <input
+                                                                type="file"
+                                                                accept="image/*"
+                                                                className="hidden"
+                                                                onChange={(e) => {
+                                                                    const file = e.target.files?.[0];
+                                                                    if (file) void handleManualQrUpload(account.id, file);
+                                                                    e.currentTarget.value = '';
+                                                                }}
+                                                            />
+                                                        </label>
+                                                    </div>
+                                                </div>
+
+                                                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                                                    <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold mb-3">QR Preview</p>
+                                                    {account.qrImageUrl ? (
+                                                        <img
+                                                            src={account.qrImageUrl}
+                                                            alt={`Manual UPI QR ${index + 1}`}
+                                                            className="h-28 w-28 rounded-lg bg-white p-1 object-contain"
+                                                            onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.display = 'none'; }}
+                                                        />
+                                                    ) : account.upiId ? (
+                                                        <div className="w-28 h-28 rounded-lg bg-white text-slate-700 text-[10px] font-semibold flex items-center justify-center text-center p-2 leading-relaxed">
+                                                            QR auto-generated from
+                                                            <br />
+                                                            {account.upiId}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="w-28 h-28 rounded-lg border border-dashed border-slate-700 flex items-center justify-center text-center text-[10px] text-slate-600 p-2 leading-relaxed">
+                                                            Add a UPI ID to preview this account
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+
+                                <div className={`rounded-xl p-3 border text-xs flex items-center gap-2 ${
+                                    config.MANUAL_PAYMENT_ENABLED !== 'false'
+                                        ? 'bg-amber-500/8 border-amber-500/25 text-amber-400'
+                                        : 'bg-slate-900 border-slate-700 text-slate-500'
+                                }`}>
+                                    {config.MANUAL_PAYMENT_ENABLED !== 'false' ? (
+                                        <><CheckCircle size={13} className="shrink-0" /><span><strong>Active</strong> — shown to users as the only deposit option.</span></>
+                                    ) : (
+                                        <><AlertTriangle size={13} className="shrink-0" /><span><strong>Disabled</strong> — no deposit option will be available to users!</span></>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Right: QR preview */}
+                            <div className="flex flex-col gap-4 bg-slate-900 rounded-xl border border-slate-700 p-5">
+                                <div>
+                                    <p className="text-[11px] text-slate-500 font-semibold uppercase tracking-widest">Random Assignment</p>
+                                    <p className="text-sm text-slate-300 mt-2">
+                                        {manualAccounts.length > 0
+                                            ? `${manualAccounts.filter(account => account.upiId.trim()).length} manual UPI account${manualAccounts.filter(account => account.upiId.trim()).length === 1 ? '' : 's'} ready for rotation.`
+                                            : 'Add accounts on the left to start rotating UPI targets.'}
+                                    </p>
+                                </div>
+
+                                <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-slate-300 space-y-2">
+                                    <p className="font-semibold text-amber-300">What users will see</p>
+                                    <p>1 random manual account is picked when the manual deposit screen opens.</p>
+                                    <p>The chosen account is stored with the deposit request so admins can match the UTR against the correct UPI ID.</p>
+                                    <p>Support contacts are still managed in Site Settings.</p>
+                                </div>
+
+                                {manualAccounts[0]?.upiId && (
+                                    <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                                        <p className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Sample Tag</p>
+                                        <div className="mt-2 inline-flex max-w-full items-center rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300">
+                                            <span className="truncate">{buildManualUpiAccountTag(manualAccounts[0].upiId)}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                /* Info banner when gateways are active */
+                <div className="flex items-center gap-3 px-5 py-3.5 bg-slate-800/50 border border-slate-700 rounded-2xl text-sm text-slate-400">
+                    <Info size={16} className="shrink-0 text-slate-500" />
+                    <p>
+                        <strong className="text-slate-300">Manual Gateway</strong> settings are available only when all UPI gateways are disabled.
+                        Disable both <strong className="text-slate-300">UPI Gateway 1</strong> and <strong className="text-slate-300">UPI Gateway 2</strong> above to configure the manual fallback.
+                    </p>
+                </div>
+            )}
 
             {/* ── SECTION 3: Deposit Limits ── */}
             <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
@@ -485,6 +1471,11 @@ export default function DepositSettingsPage() {
                         {[
                             { key: 'MIN_DEPOSIT', label: 'Min Deposit', sub: 'UPI Gateway 1 (INR)', placeholder: '100', color: 'emerald' },
                             { key: 'MIN_DEPOSIT_UPI2', label: 'Min Deposit', sub: 'UPI Gateway 2 (INR)', placeholder: '200', color: 'blue' },
+                            { key: 'MIN_DEPOSIT_UPI3', label: 'Min Deposit', sub: 'UPI Gateway 3 (INR)', placeholder: '100', color: 'violet' },
+                            { key: 'MIN_DEPOSIT_UPI4', label: 'Min Deposit', sub: 'UPI Gateway 4 (INR)', placeholder: '100', color: 'fuchsia' },
+                            { key: 'MIN_DEPOSIT_UPI5', label: 'Min Deposit', sub: 'UPI Gateway 5 (INR)', placeholder: '300', color: 'rose' },
+                            { key: 'MIN_DEPOSIT_UPI6', label: 'Min Deposit', sub: 'UPI Gateway 6 (INR)', placeholder: '100', color: 'teal' },
+                            { key: 'MIN_DEPOSIT_UPI9', label: 'Min Deposit', sub: 'UPI Gateway 9 / UltraPay (INR)', placeholder: '100', color: 'amber' },
                             { key: 'MIN_DEPOSIT_CRYPTO', label: 'Min Deposit', sub: 'Crypto (USD)', placeholder: '10', color: 'amber' },
                         ].map(({ key, label, sub, placeholder, color }) => (
                             <div key={key} className={`bg-slate-900 border border-slate-700 rounded-xl p-4 hover:border-${color}-500/40 transition-colors`}>

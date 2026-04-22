@@ -1,12 +1,15 @@
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { jwtConstants } from './constants';
+import { PrismaService } from '../prisma.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-    constructor(configService: ConfigService) {
+    constructor(
+        configService: ConfigService,
+        private prisma: PrismaService,
+    ) {
         super({
             jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
             ignoreExpiration: false,
@@ -15,6 +18,30 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     async validate(payload: any) {
-        return { userId: payload.sub, username: payload.username };
+        const user = await this.prisma.user.findUnique({
+            where: { id: payload.sub },
+            select: {
+                id: true,
+                username: true,
+                role: true,
+                isBanned: true,
+            },
+        });
+
+        if (!user) {
+            throw new UnauthorizedException('Account no longer exists.');
+        }
+
+        if (user.isBanned) {
+            throw new UnauthorizedException('Your account has been suspended. Please contact support.');
+        }
+
+        return {
+            id: user.id,
+            userId: user.id,
+            username: user.username,
+            role: user.role,
+            isBanned: user.isBanned,
+        };
     }
 }

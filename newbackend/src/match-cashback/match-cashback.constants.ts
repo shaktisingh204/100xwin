@@ -37,7 +37,7 @@ export const SPORTS_PROMOTION_DEFINITIONS: Record<
     },
     FIRST_OVER_SIX_CASHBACK: {
         benefitType: 'REFUND',
-        selectionMode: 'ALL_LOSING_BETS',
+        selectionMode: 'TRIGGER_SELECTION_ONLY',
         requiresTrigger: true,
         defaultBadge: 'TRIGGER PROMO',
     },

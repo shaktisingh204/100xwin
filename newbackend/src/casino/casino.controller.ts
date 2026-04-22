@@ -39,9 +39,19 @@ export class CasinoController {
         return this.casinoService.getGamesByProviderHub(provider, category, search, p, l, type);
     }
 
+    @UseGuards(JwtAuthGuard)
     @Post('casino/launch')
-    async launchGame(@Body() body: { username: string; provider: string; gameId: string; isLobby?: boolean; walletMode?: string }) {
-        return this.casinoService.getGameUrlHub(body.username, body.provider, body.gameId, body.isLobby, body.walletMode);
+    async launchGame(
+        @Req() req: any,
+        @Body() body: { provider: string; gameId: string; isLobby?: boolean; walletMode?: string },
+    ) {
+        return this.casinoService.getGameUrlHub(
+            req.user.username,
+            body.provider,
+            body.gameId,
+            body.isLobby,
+            body.walletMode,
+        );
     }
 
     @Public()
@@ -151,7 +161,7 @@ export class CasinoController {
     }
 
     // Providers
-    @Public()
+    @UseGuards(SecurityTokenGuard)
     @Get('admin/providers')
     async getAdminProviders() {
         return this.casinoService.getAdminProviders();
@@ -182,7 +192,7 @@ export class CasinoController {
     }
 
     // Games
-    @Public()
+    @UseGuards(SecurityTokenGuard)
     @Get('admin/games-list')
     async getAdminGamesList(
         @Query('page') page: number = 1,
@@ -216,5 +226,81 @@ export class CasinoController {
     @Post('admin/games/sync')
     async syncGames() {
         return this.casinoService.syncGames();
+    }
+
+    // ─── HUIDU direct query (admin) ───────────────────────────────────────
+
+    /**
+     * GET /admin/huidu/transactions?fromDate=<ms>&toDate=<ms>&pageNo=1&pageSize=100
+     * Calls HUIDU /game/transaction/list directly. from/to MUST be same UTC day
+     * and within the last 60 days (HUIDU limitations).
+     */
+    @UseGuards(SecurityTokenGuard)
+    @Get('admin/huidu/transactions')
+    async adminHuiduTransactions(
+        @Query('fromDate') fromDate: string,
+        @Query('toDate') toDate: string,
+        @Query('pageNo') pageNo?: string,
+        @Query('pageSize') pageSize?: string,
+    ) {
+        const from = Number(fromDate);
+        const to = Number(toDate);
+        if (!Number.isFinite(from) || !Number.isFinite(to)) {
+            return { success: false, error: 'fromDate/toDate required (ms UTC)' };
+        }
+        return this.casinoService.queryHuiduTransactions({
+            fromDate: from,
+            toDate: to,
+            pageNo: pageNo ? Number(pageNo) : 1,
+            pageSize: pageSize ? Number(pageSize) : 100,
+        });
+    }
+
+    /**
+     * GET /admin/huidu/user/:userId/history?fromDate=<ms>&toDate=<ms>
+     * Fetches a single user's HUIDU history for a single UTC day.
+     */
+    @UseGuards(SecurityTokenGuard)
+    @Get('admin/huidu/user/:userId/history')
+    async adminHuiduUserHistory(
+        @Param('userId') userId: string,
+        @Query('fromDate') fromDate: string,
+        @Query('toDate') toDate: string,
+        @Query('pageNo') pageNo?: string,
+        @Query('pageSize') pageSize?: string,
+    ) {
+        const uid = Number(userId);
+        const from = Number(fromDate);
+        const to = Number(toDate);
+        if (!Number.isFinite(uid)) {
+            return { success: false, error: 'Invalid userId' };
+        }
+        if (!Number.isFinite(from) || !Number.isFinite(to)) {
+            return { success: false, error: 'fromDate/toDate required (ms UTC)' };
+        }
+        return this.casinoService.queryHuiduUserHistory(uid, {
+            fromDate: from,
+            toDate: to,
+            pageNo: pageNo ? Number(pageNo) : 1,
+            pageSize: pageSize ? Number(pageSize) : 5000,
+        });
+    }
+
+    /**
+     * GET /admin/huidu/user/:userId/accounts
+     * Returns the four HUIDU member_account variants for a given user.
+     */
+    @UseGuards(SecurityTokenGuard)
+    @Get('admin/huidu/user/:userId/accounts')
+    async adminHuiduUserAccounts(@Param('userId') userId: string) {
+        const uid = Number(userId);
+        if (!Number.isFinite(uid)) {
+            return { success: false, error: 'Invalid userId' };
+        }
+        return {
+            success: true,
+            userId: uid,
+            accounts: this.casinoService.getHuiduMemberAccountsForUser(uid),
+        };
     }
 }

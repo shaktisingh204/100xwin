@@ -15,6 +15,59 @@ import { PrismaService } from '../prisma.service';
 import { Request, Response } from 'express';
 import { getGatewayRetryState } from '../payment/payment-retry.util';
 
+type ManualUpiAccount = {
+  id: string;
+  upiId: string;
+  qrImageUrl: string;
+};
+
+const buildManualUpiAccountTag = (upiId: string) =>
+  `Manual UPI${upiId.trim() ? ` · ${upiId.trim()}` : ''}`;
+
+const parseManualUpiAccountsFromMap = (
+  map: Record<string, string>,
+): ManualUpiAccount[] => {
+  const rawAccounts = map['MANUAL_UPI_ACCOUNTS'] || '';
+  if (rawAccounts) {
+    try {
+      const parsed = JSON.parse(rawAccounts);
+      if (Array.isArray(parsed)) {
+        const normalized = parsed
+          .map((entry) => {
+            if (!entry || typeof entry !== 'object') return null;
+            const account = entry as Partial<ManualUpiAccount>;
+            const upiId = String(account.upiId || '').trim();
+            if (!upiId) return null;
+            return {
+              id:
+                String(account.id || '').trim() ||
+                `manual-upi-${Date.now()}-${Math.random()
+                  .toString(36)
+                  .slice(2, 8)}`,
+              upiId,
+              qrImageUrl: String(account.qrImageUrl || '').trim(),
+            };
+          })
+          .filter(Boolean) as ManualUpiAccount[];
+        if (normalized.length) return normalized;
+      }
+    } catch {
+      // ignore parse errors and fall back to legacy keys
+    }
+  }
+
+  const legacyUpiId = (map['MANUAL_UPI_ID'] || '').trim();
+  if (!legacyUpiId) return [];
+
+  return [
+    {
+      id: 'legacy-manual-upi',
+      upiId: legacyUpiId,
+      qrImageUrl: (map['MANUAL_QR_URL'] || '').trim(),
+    },
+  ];
+};
+
 @Controller('manual-deposit')
 export class ManualDepositController {
   private readonly logger = new Logger(ManualDepositController.name);
@@ -43,6 +96,54 @@ export class ManualDepositController {
     }
   }
 
+  // ──────────────────────────────────────────────────────────────────────────────
+  //  RESET GATEWAY RETRY — explicitly cancel all stale PENDING gateway txns
+  //  Called when user dismisses the "pending gateway" banner or arrives via
+  //  the "Make Another Deposit" button after a manual payment.
+  // ──────────────────────────────────────────────────────────────────────────────
+  @UseGuards(JwtAuthGuard)
+  @Post('reset-gateway-retry')
+  async resetGatewayRetry(@Req() req: Request, @Res() res: Response) {
+    try {
+      const userId: number = (req as any).user?.userId || (req as any).user?.id;
+      if (!userId) {
+        return res
+          .status(HttpStatus.UNAUTHORIZED)
+          .json({ success: false, message: 'Not authenticated' });
+      }
+
+      const GATEWAY_LABELS = ['UPI Gateway 1', 'UPI Gateway 2', 'UPI Gateway 3'];
+      const stale = await this.prisma.transaction.findMany({
+        where: {
+          userId,
+          type: 'DEPOSIT',
+          status: 'PENDING',
+          paymentMethod: { in: GATEWAY_LABELS },
+        },
+      });
+
+      if (stale.length > 0) {
+        await this.prisma.transaction.updateMany({
+          where: { id: { in: stale.map((t) => t.id) } },
+          data: {
+            status: 'REJECTED',
+            remarks: 'User dismissed pending gateway payment — auto-cancelled',
+          },
+        });
+        this.logger.log(
+          `[ManualDeposit] Gateway retry reset (dismiss) — cancelled ${stale.length} txn(s) for userId: ${userId}`,
+        );
+      }
+
+      return res.status(HttpStatus.OK).json({ success: true, cancelled: stale.length });
+    } catch (error) {
+      this.logger.error(`[ManualDeposit] reset-gateway-retry error: ${error.message}`);
+      return res
+        .status(HttpStatus.INTERNAL_SERVER_ERROR)
+        .json({ success: false, message: error.message });
+    }
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   //  PUBLIC CONFIG — returns UPI ID + QR URL + support contacts
   //  Sourced from SystemConfig keys:
@@ -56,7 +157,12 @@ export class ManualDepositController {
       const rows = await this.prisma.systemConfig.findMany({
         where: {
           key: {
-            in: ['MANUAL_UPI_ID', 'MANUAL_QR_URL', 'CONTACT_SETTINGS'],
+            in: [
+              'MANUAL_UPI_ACCOUNTS',
+              'MANUAL_UPI_ID',
+              'MANUAL_QR_URL',
+              'CONTACT_SETTINGS',
+            ],
           },
         },
       });
@@ -66,8 +172,13 @@ export class ManualDepositController {
         map[r.key] = r.value;
       });
 
-      const upiId = map['MANUAL_UPI_ID'] || '';
-      const qrImageUrl = map['MANUAL_QR_URL'] || '';
+      const accounts = parseManualUpiAccountsFromMap(map);
+      const selectedAccount =
+        accounts.length > 0
+          ? accounts[Math.floor(Math.random() * accounts.length)]
+          : null;
+      const upiId = selectedAccount?.upiId || '';
+      const qrImageUrl = selectedAccount?.qrImageUrl || '';
 
       let whatsappNumber = '';
       let telegramHandle = '';
@@ -84,6 +195,11 @@ export class ManualDepositController {
       }
 
       return res.status(HttpStatus.OK).json({
+        accountId: selectedAccount?.id || '',
+        accountTag: selectedAccount
+          ? buildManualUpiAccountTag(selectedAccount.upiId)
+          : '',
+        accountCount: accounts.length,
         upiId,
         qrImageUrl,
         whatsappNumber,
@@ -99,7 +215,7 @@ export class ManualDepositController {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  //  SUBMIT — user claims they have paid and uploads UTR + screenshot URL
+  //  SUBMIT — user claims they have paid and submits amount + UTR
   //  Creates a PENDING transaction that admin must approve
   // ─────────────────────────────────────────────────────────────────────────
   @UseGuards(JwtAuthGuard)
@@ -109,15 +225,17 @@ export class ManualDepositController {
     body: {
       amount: number;
       utr: string;
-      screenshotUrl?: string;
       bonusCode?: string;
+      accountId?: string;
+      upiId?: string;
+      accountTag?: string;
     },
     @Req() req: Request,
     @Res() res: Response,
   ) {
     try {
       const userId: number = (req as any).user?.userId || (req as any).user?.id;
-      const { amount, utr, screenshotUrl, bonusCode } = body;
+      const { amount, utr, bonusCode, accountId, upiId, accountTag } = body;
 
       if (!userId) {
         return res
@@ -140,6 +258,29 @@ export class ManualDepositController {
       const cleanUtr = utr.trim().toUpperCase();
       const effectiveBonusCode =
         (bonusCode || '').trim().toUpperCase() || undefined;
+      const configRows = await this.prisma.systemConfig.findMany({
+        where: {
+          key: {
+            in: ['MANUAL_UPI_ACCOUNTS', 'MANUAL_UPI_ID', 'MANUAL_QR_URL'],
+          },
+        },
+      });
+      const configMap: Record<string, string> = {};
+      configRows.forEach((row) => {
+        configMap[row.key] = row.value;
+      });
+      const manualAccounts = parseManualUpiAccountsFromMap(configMap);
+      const matchedManualAccount =
+        manualAccounts.find((account) => account.id === (accountId || '').trim()) ||
+        manualAccounts.find((account) => account.upiId === (upiId || '').trim()) ||
+        null;
+      const effectiveUpiId =
+        matchedManualAccount?.upiId || (upiId || '').trim() || undefined;
+      const effectiveAccountTag =
+        matchedManualAccount?.upiId
+          ? buildManualUpiAccountTag(matchedManualAccount.upiId)
+          : (accountTag || '').trim() ||
+            (effectiveUpiId ? buildManualUpiAccountTag(effectiveUpiId) : 'Manual UPI');
 
       // Check for duplicate UTR
       const existing = await this.prisma.transaction.findUnique({
@@ -159,14 +300,17 @@ export class ManualDepositController {
           amount: numAmount,
           type: 'DEPOSIT',
           status: 'PENDING',
-          paymentMethod: 'Manual UPI',
+          paymentMethod: effectiveAccountTag,
           utr: cleanUtr,
-          remarks: 'Manual UPI deposit — awaiting admin approval',
+          remarks: `${effectiveAccountTag} deposit — awaiting admin approval`,
           paymentDetails: {
             gateway: 'manual_upi',
             requiresAdminReview: true,
+            accountId: matchedManualAccount?.id || (accountId || '').trim() || null,
+            accountTag: effectiveAccountTag,
+            upiId: effectiveUpiId || null,
+            qrImageUrl: matchedManualAccount?.qrImageUrl || null,
             utr: cleanUtr,
-            screenshotUrl: screenshotUrl || null,
             submittedAt: new Date().toISOString(),
             ...(effectiveBonusCode ? { bonusCode: effectiveBonusCode } : {}),
           } as any,
@@ -176,6 +320,42 @@ export class ManualDepositController {
       this.logger.log(
         `[ManualDeposit] PENDING created — userId: ${userId}, amount: ${numAmount}, utr: ${cleanUtr}, txnId: ${txn.id}`,
       );
+
+      // ── Reset gateway retry state ─────────────────────────────────────────
+      // Cancel all stale PENDING gateway transactions so the next deposit
+      // opens the gateway flow again (not the forced-manual screen).
+      // We mark them REJECTED with a clear audit reason — no balance impact
+      // because gateway PENDING txns have NOT debited the user yet.
+      const GATEWAY_LABELS = ['UPI Gateway 1', 'UPI Gateway 2', 'UPI Gateway 3'];
+      try {
+        const staleGatewayTxns = await this.prisma.transaction.findMany({
+          where: {
+            userId,
+            type: 'DEPOSIT',
+            status: 'PENDING',
+            paymentMethod: { in: GATEWAY_LABELS },
+          },
+        });
+
+        if (staleGatewayTxns.length > 0) {
+          const staleIds = staleGatewayTxns.map((t) => t.id);
+          await this.prisma.transaction.updateMany({
+            where: { id: { in: staleIds } },
+            data: {
+              status: 'REJECTED',
+              remarks: `Auto-cancelled: user completed manual deposit (UTR: ${cleanUtr}, txnId: ${txn.id})`,
+            },
+          });
+          this.logger.log(
+            `[ManualDeposit] Reset gateway retry — cancelled ${staleGatewayTxns.length} stale PENDING gateway txn(s) for userId: ${userId}`,
+          );
+        }
+      } catch (resetError) {
+        // Non-fatal — log but don't fail the successful manual submission
+        this.logger.error(
+          `[ManualDeposit] Gateway retry reset failed (non-fatal): ${resetError.message}`,
+        );
+      }
 
       return res.status(HttpStatus.OK).json({
         success: true,

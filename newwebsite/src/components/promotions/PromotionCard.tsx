@@ -1,82 +1,84 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Clock, Gift, Tag, ChevronDown, ChevronUp, Copy, Check, Info } from 'lucide-react';
+import React from 'react';
+import Link from 'next/link';
+import { Clock, Gift, ArrowRight, Percent, Star } from 'lucide-react';
 import { Promotion } from '@/services/promotions';
-import { useWallet } from '@/context/WalletContext';
 
 interface PromotionCardProps {
     promo: Promotion;
 }
 
-const PromotionCard: React.FC<PromotionCardProps> = ({ promo }) => {
-    const { activeSymbol } = useWallet();
-    const [showTerms, setShowTerms] = useState(false);
-    const [copied, setCopied] = useState(false);
+const CATEGORY_STYLE: Record<string, { color: string; bg: string }> = {
+    CASINO: { color: 'text-purple-300', bg: 'bg-purple-500/15' },
+    SPORTS: { color: 'text-emerald-300', bg: 'bg-emerald-500/15' },
+    LIVE: { color: 'text-red-300', bg: 'bg-red-500/15' },
+    VIP: { color: 'text-amber-300', bg: 'bg-amber-500/15' },
+    ALL: { color: 'text-white/70', bg: 'bg-white/[0.06]' },
+};
 
-    const handleCopyCode = () => {
-        if (promo.promoCode) {
-            navigator.clipboard.writeText(promo.promoCode);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
-        }
-    };
+export default function PromotionCard({ promo }: PromotionCardProps) {
+    const cat = CATEGORY_STYLE[promo.category || 'ALL'] || CATEGORY_STYLE.ALL;
 
-    const isExpired = promo.expiryDate ? new Date(promo.expiryDate) < new Date() : false;
     const daysLeft = promo.expiryDate
-        ? Math.max(0, Math.ceil((new Date(promo.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+        ? Math.max(0, Math.ceil((new Date(promo.expiryDate).getTime() - Date.now()) / 86400000))
+        : null;
+    const isExpired = daysLeft !== null && daysLeft <= 0;
+
+    const claimProgress = promo.claimLimit
+        ? Math.min(100, Math.round(((promo.claimCount || 0) / promo.claimLimit) * 100))
         : null;
 
-    const gradientStyle = promo.gradient
-        ? { background: promo.gradient }
-        : { background: 'linear-gradient(135deg, rgba(226, 140, 75, 0.25) 0%, rgba(30,30,30,0) 60%)' };
-
     return (
-        <div className={`group relative overflow-hidden rounded-2xl bg-bg-elevated border transition-all duration-300 hover:shadow-2xl flex flex-col ${isExpired ? 'border-white/5 opacity-70' : 'border-white/10 hover:border-brand-gold/30'}`}>
-            {/* Featured Badge */}
-            {promo.isFeatured && (
-                <div className="absolute top-3 right-3 z-20">
-                    <span className="bg-brand-gold text-text-inverse text-[10px] font-black uppercase px-2 py-0.5 rounded-full tracking-wider">
-                        ⭐ FEATURED
-                    </span>
-                </div>
-            )}
-
-            {/* Top Banner Area */}
-            <div className="relative h-[180px] overflow-hidden flex-shrink-0">
+        <Link
+            href={`/promotions/${promo._id}`}
+            className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-[#1a1d22] transition-all duration-200 hover:border-brand-gold/25 hover:shadow-[0_8px_32px_rgba(0,0,0,0.3)] active:scale-[0.99]"
+        >
+            {/* Banner */}
+            <div className="relative h-[160px] overflow-hidden">
                 {promo.bgImage ? (
                     <img
                         src={promo.bgImage}
                         alt={promo.title}
-                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
                 ) : (
-                    <div className="absolute inset-0" style={gradientStyle} />
+                    <div
+                        className="h-full w-full"
+                        style={{ background: promo.gradient || 'linear-gradient(135deg, #1f2330 0%, #2a2030 50%, #1a1520 100%)' }}
+                    />
                 )}
-                {/* Overlay gradient */}
-                <div className="absolute inset-0 bg-gradient-to-t from-bg-elevated via-bg-elevated/40 to-transparent" />
-                <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-transparent" />
 
-                {/* Badge overlay */}
-                <div className="absolute top-3 left-3 flex gap-2 z-10">
+                {/* Dark gradient overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#1a1d22] via-black/20 to-transparent" />
+
+                {/* Top-left badges */}
+                <div className="absolute top-3 left-3 flex items-center gap-1.5">
+                    {promo.category && (
+                        <span className={`px-2.5 py-1 rounded-full ${cat.bg} ${cat.color} text-[10px] font-bold uppercase backdrop-blur-md`}>
+                            {promo.category}
+                        </span>
+                    )}
                     {promo.badgeLabel && (
-                        <span className="bg-white text-black text-[10px] font-black uppercase px-2 py-0.5 rounded tracking-wider">
+                        <span className="px-2.5 py-1 rounded-full bg-black/40 backdrop-blur-md text-white text-[10px] font-bold border border-white/[0.08]">
                             {promo.badgeLabel}
                         </span>
                     )}
                 </div>
 
-                {promo.bonusPercentage && promo.bonusPercentage > 0 ? (
-                    <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
-                        <div className="text-4xl font-black text-white leading-none">
-                            +{promo.bonusPercentage}%
-                        </div>
-                        <div className="text-sm text-white/70 font-medium">{promo.title}</div>
+                {/* Featured star */}
+                {promo.isFeatured && (
+                    <div className="absolute top-3 right-3">
+                        <Star size={14} className="text-brand-gold fill-brand-gold drop-shadow-lg" />
                     </div>
-                ) : (
-                    <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
-                        <div className="text-2xl font-black text-white leading-tight">{promo.title}</div>
-                        {promo.subtitle && <div className="text-sm text-white/70 mt-0.5">{promo.subtitle}</div>}
+                )}
+
+                {/* Bonus overlay */}
+                {promo.bonusPercentage && promo.bonusPercentage > 0 && (
+                    <div className="absolute bottom-3 left-3">
+                        <span className="text-4xl font-black text-white/90 drop-shadow-lg leading-none">
+                            +{promo.bonusPercentage}%
+                        </span>
                     </div>
                 )}
 
@@ -84,95 +86,69 @@ const PromotionCard: React.FC<PromotionCardProps> = ({ promo }) => {
                 {promo.charImage && (
                     <img
                         src={promo.charImage}
-                        alt="Character"
-                        className="absolute right-0 bottom-0 h-[160px] object-contain z-10 drop-shadow-2xl"
+                        alt=""
+                        className="absolute bottom-0 right-2 h-[85%] object-contain pointer-events-none opacity-90"
                     />
                 )}
             </div>
 
-            {/* Content Area */}
-            <div className="p-4 flex flex-col gap-3 flex-1">
-                {/* Bonus Percentage title row (if shown above) */}
-                {promo.bonusPercentage && promo.bonusPercentage > 0 ? (
-                    <p className="text-text-secondary text-sm leading-relaxed line-clamp-2">
-                        {promo.description || promo.subtitle}
-                    </p>
-                ) : (
-                    promo.description && (
-                        <p className="text-text-secondary text-sm leading-relaxed line-clamp-2">{promo.description}</p>
-                    )
-                )}
-
-                {/* Stats Row */}
-                <div className="flex flex-wrap gap-2">
-                    {promo.minDeposit && promo.minDeposit > 0 ? (
-                        <div className="flex items-center gap-1 bg-bg-base rounded-lg px-2 py-1 text-xs text-text-muted">
-                            <Gift size={12} className="text-brand-gold" />
-                            Min Deposit: {activeSymbol}{promo.minDeposit.toLocaleString()}
-                        </div>
-                    ) : null}
-                    {daysLeft !== null && !isExpired && (
-                        <div className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs ${daysLeft <= 3 ? 'bg-red-500/10 text-red-400' : 'bg-bg-base text-text-muted'}`}>
-                            <Clock size={12} />
-                            {daysLeft === 0 ? 'Expires today' : `${daysLeft}d left`}
-                        </div>
-                    )}
-                    {isExpired && (
-                        <div className="flex items-center gap-1 bg-red-500/10 rounded-lg px-2 py-1 text-xs text-red-400">
-                            <Clock size={12} />
-                            Expired
-                        </div>
+            {/* Content */}
+            <div className="flex flex-col flex-1 p-4 gap-3">
+                {/* Title + subtitle */}
+                <div>
+                    <h3 className="text-[15px] font-bold text-white leading-snug line-clamp-2 group-hover:text-brand-gold transition-colors">
+                        {promo.title}
+                    </h3>
+                    {promo.subtitle && (
+                        <p className="text-[12px] text-white/40 mt-1 line-clamp-1">{promo.subtitle}</p>
                     )}
                 </div>
 
-                {/* Promo Code */}
-                {promo.promoCode && (
-                    <div className="flex items-center gap-2 bg-bg-base border border-dashed border-brand-gold/40 rounded-lg p-2">
-                        <Tag size={14} className="text-brand-gold flex-shrink-0" />
-                        <span className="text-brand-gold font-mono font-bold text-sm tracking-widest flex-1">{promo.promoCode}</span>
-                        <button
-                            onClick={handleCopyCode}
-                            className="text-text-muted hover:text-brand-gold transition-colors flex-shrink-0"
-                            title="Copy code"
-                        >
-                            {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
-                        </button>
+                {/* Quick info chips */}
+                <div className="flex flex-wrap gap-1.5">
+                    {promo.maxBonus && (
+                        <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[10px] font-semibold text-white/60">
+                            <Gift size={10} className="text-brand-gold" />
+                            Up to ₹{promo.maxBonus.toLocaleString()}
+                        </span>
+                    )}
+                    {promo.wageringMultiplier && (
+                        <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.06] text-[10px] font-semibold text-white/60">
+                            <Percent size={10} className="text-white/40" />
+                            {promo.wageringMultiplier}× wager
+                        </span>
+                    )}
+                </div>
+
+                {/* Claim progress */}
+                {claimProgress !== null && promo.claimLimit && (
+                    <div className="space-y-1">
+                        <div className="flex justify-between text-[10px]">
+                            <span className="text-white/30">Claims</span>
+                            <span className="text-white/50 font-bold">{promo.claimCount || 0}/{promo.claimLimit}</span>
+                        </div>
+                        <div className="h-1 bg-white/[0.04] rounded-full overflow-hidden">
+                            <div className="h-full bg-brand-gold rounded-full" style={{ width: `${claimProgress}%` }} />
+                        </div>
                     </div>
                 )}
 
-                {/* CTA Button */}
-                <a
-                    href={!isExpired ? (promo.buttonLink || '#') : '#'}
-                    className={`w-full flex items-center justify-center py-2.5 rounded-lg font-bold text-sm uppercase tracking-wide transition-all duration-300 ${isExpired
-                        ? 'bg-white/5 text-text-muted cursor-not-allowed'
-                        : 'bg-brand-gold hover:bg-brand-gold-hover text-text-inverse shadow-glow-gold hover:scale-[1.02]'
-                        }`}
-                    onClick={isExpired ? (e) => e.preventDefault() : undefined}
-                >
-                    {isExpired ? 'Expired' : (promo.buttonText || 'CLAIM NOW')}
-                </a>
+                {/* Bottom row: expiry + CTA */}
+                <div className="flex items-center justify-between mt-auto pt-2 border-t border-white/[0.04]">
+                    {daysLeft !== null ? (
+                        <span className={`flex items-center gap-1 text-[11px] font-semibold ${isExpired ? 'text-danger' : daysLeft <= 3 ? 'text-amber-400' : 'text-white/40'}`}>
+                            <Clock size={11} />
+                            {isExpired ? 'Expired' : `${daysLeft}d left`}
+                        </span>
+                    ) : (
+                        <span className="text-[11px] text-white/30">No expiry</span>
+                    )}
 
-                {/* Terms & Conditions Toggler */}
-                {promo.termsAndConditions && (
-                    <div className="border-t border-white/5 pt-2">
-                        <button
-                            onClick={() => setShowTerms(!showTerms)}
-                            className="flex items-center gap-1.5 text-text-muted hover:text-text-secondary text-xs w-full transition-colors"
-                        >
-                            <Info size={12} />
-                            <span>Terms & Conditions</span>
-                            {showTerms ? <ChevronUp size={12} className="ml-auto" /> : <ChevronDown size={12} className="ml-auto" />}
-                        </button>
-                        {showTerms && (
-                            <p className="mt-2 text-xs text-text-muted leading-relaxed bg-bg-base/50 rounded-lg p-2">
-                                {promo.termsAndConditions}
-                            </p>
-                        )}
-                    </div>
-                )}
+                    <span className="flex items-center gap-1 text-[11px] font-bold text-brand-gold group-hover:gap-2 transition-all">
+                        View Details <ArrowRight size={12} />
+                    </span>
+                </div>
             </div>
-        </div>
+        </Link>
     );
-};
-
-export default PromotionCard;
+}

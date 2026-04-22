@@ -32,4 +32,14 @@ export class ReviewVipApplicationDto {
     @IsString()
     @MaxLength(500)
     reviewNotes?: string;
+
+    @IsOptional()
+    @IsString()
+    assignedTier?: 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND';
+}
+
+export class UpdateVipTierDto {
+    @IsNotEmpty()
+    @IsString()
+    tier: 'NONE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND';
 }

@@ -1,8 +1,6 @@
 import { WebSocketGateway, WebSocketServer, SubscribeMessage, MessageBody, ConnectedSocket } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { SupportService } from './support.service';
-import { UseGuards } from '@nestjs/common';
-// import { WsJwtAuthGuard } from '../auth/ws-jwt-auth.guard'; // Assuming we have one, or just standard check
 
 @WebSocketGateway({ cors: { origin: '*' } })
 export class SupportGateway {
@@ -19,27 +17,38 @@ export class SupportGateway {
 
     @SubscribeMessage('adminJoinSupport')
     handleAdminJoinSupport(@ConnectedSocket() client: Socket) {
-        client.join('support_admin'); // Admins join this room to see new tickets/messages? 
-        // Or admin just subscribes to specific user rooms when they open chat.
+        client.join('support_admin');
         return { event: 'joinedAdminSupport', data: 'Joined support_admin' };
     }
 
+    // Socket-based message sending (used by user website)
     @SubscribeMessage('sendMessage')
-    async handleMessage(@ConnectedSocket() client: Socket, @MessageBody() payload: { ticketId: number, message: string, sender: 'USER' | 'ADMIN', userId?: number }) {
-        // Save message
+    async handleMessage(@ConnectedSocket() client: Socket, @MessageBody() payload: { ticketId: number; message: string; sender: 'USER' | 'ADMIN' }) {
         const savedMessage = await this.supportService.addMessage(payload.ticketId, payload.message, payload.sender);
-
-        // Broadcast to specific ticket room or user room
-        // If sender is USER, notify ADMIN room and USER room
-        // If sender is ADMIN, notify USER room
-
-        // We need to know the User ID associated with the ticket to emit to `support_user_${userId}`
         const ticket = await this.supportService.getTicket(payload.ticketId);
         if (ticket) {
             this.server.to(`support_user_${ticket.userId}`).emit('newMessage', savedMessage);
             this.server.to('support_admin').emit('newMessage', { ...savedMessage, userId: ticket.userId });
         }
-
         return savedMessage;
+    }
+
+    // Broadcast-only: used after message is already saved via HTTP/server action
+    @SubscribeMessage('broadcastSupportMessage')
+    async handleBroadcast(@ConnectedSocket() client: Socket, @MessageBody() payload: { ticketId: number; message: any }) {
+        const ticket = await this.supportService.getTicket(payload.ticketId);
+        if (ticket) {
+            this.server.to(`support_user_${ticket.userId}`).emit('newMessage', payload.message);
+            this.server.to('support_admin').emit('newMessage', { ...payload.message, userId: ticket.userId });
+        }
+    }
+
+    // Public method: called by controller after saving message via HTTP
+    async broadcastMessage(ticketId: number, message: any) {
+        const ticket = await this.supportService.getTicket(ticketId);
+        if (ticket) {
+            this.server.to(`support_user_${ticket.userId}`).emit('newMessage', message);
+            this.server.to('support_admin').emit('newMessage', { ...message, userId: ticket.userId });
+        }
     }
 }

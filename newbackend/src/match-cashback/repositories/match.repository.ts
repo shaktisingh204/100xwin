@@ -48,7 +48,7 @@ export class MatchRepository {
                         status: this.mapEventStatus(event.match_status),
                     },
                 },
-                { upsert: true, new: true },
+                { upsert: true, returnDocument: 'after' },
             ).exec();
         }
 
@@ -91,6 +91,15 @@ export class MatchRepository {
         }
 
         return 'upcoming';
+    }
+
+    /**
+     * Returns the match_status from the underlying Event document for a given matchId.
+     * Used to check if the event was dismissed/abandoned before settling.
+     */
+    async getEventMatchStatus(matchId: string): Promise<string | null> {
+        const event = await this.eventModel.findOne({ event_id: String(matchId) }).lean();
+        return (event?.match_status as string) || (event as any)?.status || null;
     }
 
     private extractTeams(event: any): { teamA: string; teamB: string } {

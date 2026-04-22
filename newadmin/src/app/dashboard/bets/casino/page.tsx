@@ -1,25 +1,33 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { getCasinoBets, getCasinoBetStats, getCasinoBetProviders } from '@/actions/bets';
 import {
     Gamepad2, Search, RefreshCcw, ChevronLeft, ChevronRight,
     Loader2, X, Clock, CheckCircle, XCircle,
-    TrendingDown, TrendingUp,
+    TrendingDown, TrendingUp, Copy, Check, ShieldCheck,
 } from 'lucide-react';
+import Link from 'next/link';
+import { UserPopup } from '@/components/shared/UserPopup';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface CasinoBet {
     _id: string;
+    id?: number;
     userId: number;
     username?: string;
     gameCode: string;
     gameName?: string;
     provider?: string;
     roundId?: string;
+    txnId?: string;
+    type?: string;          // BET | WIN | UPDATE
+    walletType?: string;    // fiat | crypto
     betAmount: number;
     winAmount: number;
+    amount?: number;
     status: string;
     currency: string;
     createdAt: string;
@@ -27,11 +35,40 @@ interface CasinoBet {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-const fmt = (n: number) =>
-    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 }).format(n);
+const fmt = (n: number, currency: string = 'INR') => {
+    try {
+        return new Intl.NumberFormat('en-IN', { style: 'currency', currency, maximumFractionDigits: 2 }).format(n);
+    } catch {
+        return `${currency} ${n.toFixed(2)}`;
+    }
+};
 
 const fmtNum = (n: number) =>
     new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(n);
+
+function CopyChip({ value }: { value: string }) {
+    const [copied, setCopied] = useState(false);
+    if (!value) return null;
+    return (
+        <button
+            onClick={(e) => {
+                e.stopPropagation();
+                navigator.clipboard.writeText(value);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1200);
+            }}
+            className="text-slate-500 hover:text-white transition-colors ml-1 inline-flex align-middle"
+            title="Copy"
+        >
+            {copied ? <Check size={10} className="text-emerald-400" /> : <Copy size={10} />}
+        </button>
+    );
+}
+
+const WALLET_PILL: Record<string, string> = {
+    fiat: 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20',
+    crypto: 'bg-amber-500/10 text-amber-300 border-amber-500/20',
+};
 
 const STATUS_STYLES: Record<string, string> = {
     PENDING: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
@@ -60,7 +97,8 @@ function StatPill({ label, value, color }: { label: string; value: string; color
 
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
-export default function CasinoBetsPage() {
+function CasinoBetsContent() {
+    const searchParams = useSearchParams();
     const [bets, setBets] = useState<CasinoBet[]>([]);
     const [stats, setStats] = useState<any>(null);
     const [providers, setProviders] = useState<string[]>([]);
@@ -69,8 +107,8 @@ export default function CasinoBetsPage() {
     const [totalPages, setTotalPages] = useState(1);
     const [total, setTotal] = useState(0);
 
-    const [searchInput, setSearchInput] = useState('');
-    const [search, setSearch] = useState('');
+    const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
+    const [search, setSearch] = useState(searchParams.get('search') || '');
     const [typeFilter, setTypeFilter] = useState('ALL'); // ALL | BET | WIN
     const [providerFilter, setProviderFilter] = useState('ALL');
     const [userIdFilter, setUserIdFilter] = useState('');
@@ -196,10 +234,10 @@ export default function CasinoBetsPage() {
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table className="w-full min-w-[1400px] text-sm">
                             <thead>
                                 <tr className="bg-slate-900/60 border-b border-slate-700">
-                                    {['User', 'Game', 'Provider', 'Round ID', 'Bet Amount', 'Win Amount', 'P&L', 'Status', 'Date'].map(h => (
+                                    {['#', 'User', 'Game', 'Provider', 'Type', 'Wallet', 'Bet', 'Win', 'P&L', 'Round ID', 'Txn / Serial', 'Game Code', 'Date'].map(h => (
                                         <th key={h} className="px-3 py-2.5 text-left text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap">{h}</th>
                                     ))}
                                 </tr>
@@ -207,47 +245,88 @@ export default function CasinoBetsPage() {
                             <tbody>
                                 {bets.map(bet => {
                                     const pnl = bet.winAmount - bet.betAmount;
+                                    const currency = bet.currency || 'INR';
+                                    const wallet = bet.walletType || (currency === 'USD' ? 'crypto' : 'fiat');
+                                    const type = bet.type || (bet.betAmount > 0 ? 'BET' : 'WIN');
+                                    const isBet = type === 'BET';
+                                    const isWin = type === 'WIN';
                                     return (
-                                        <tr key={bet._id} className="border-t border-slate-700/50 hover:bg-slate-700/20 transition-colors">
+                                        <tr key={bet._id} className="border-t border-slate-700/50 hover:bg-slate-700/20 transition-colors align-top">
+                                            <td className="px-3 py-2.5 font-mono text-[10px] text-slate-600">{bet.id ?? bet._id}</td>
                                             <td className="px-3 py-2.5">
                                                 <div className="text-xs font-mono text-indigo-400">#{bet.userId}</div>
-                                                {bet.username && <div className="text-[10px] text-slate-500">{bet.username}</div>}
+                                                {bet.username && (
+                                                    <div className="mt-0.5">
+                                                        <UserPopup
+                                                            userId={bet.userId}
+                                                            username={bet.username}
+                                                        />
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-3 py-2.5">
-                                                <div className="text-xs text-white font-medium max-w-[160px] truncate" title={bet.gameName}>
+                                                <div className="text-xs text-white font-medium max-w-[180px] truncate" title={bet.gameName}>
                                                     {bet.gameName || bet.gameCode}
                                                 </div>
-                                                <div className="text-[10px] text-slate-500 truncate">{bet.gameCode}</div>
                                             </td>
                                             <td className="px-3 py-2.5">
                                                 <span className="text-xs text-slate-400">{bet.provider || '—'}</span>
                                             </td>
                                             <td className="px-3 py-2.5">
-                                                <span className="text-[10px] font-mono text-slate-400 max-w-[120px] truncate block" title={bet.roundId}>
+                                                <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${
+                                                    isBet ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                                                        : isWin ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                                        : 'bg-slate-700 text-slate-300 border-slate-600'
+                                                }`}>
+                                                    {type}
+                                                </span>
+                                            </td>
+                                            <td className="px-3 py-2.5">
+                                                <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${WALLET_PILL[wallet] || 'bg-slate-700 text-slate-300 border-slate-600'}`}>
+                                                    {wallet}
+                                                </span>
+                                            </td>
+                                            <td className="px-3 py-2.5">
+                                                <span className="text-xs font-mono text-emerald-400 whitespace-nowrap">{fmt(bet.betAmount, currency)}</span>
+                                            </td>
+                                            <td className="px-3 py-2.5">
+                                                <span className="text-xs font-mono text-sky-400 whitespace-nowrap">{fmt(bet.winAmount, currency)}</span>
+                                            </td>
+                                            <td className="px-3 py-2.5">
+                                                <div className={`flex items-center gap-1 text-xs font-mono font-bold whitespace-nowrap ${pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    {pnl >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                                                    {fmt(Math.abs(pnl), currency)}
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-2.5">
+                                                <span className="text-[10px] font-mono text-slate-400 max-w-[140px] truncate block" title={bet.roundId}>
                                                     {bet.roundId || '—'}
                                                 </span>
                                             </td>
                                             <td className="px-3 py-2.5">
-                                                <span className="text-xs font-mono text-emerald-400">{fmt(bet.betAmount)}</span>
-                                            </td>
-                                            <td className="px-3 py-2.5">
-                                                <span className="text-xs font-mono text-sky-400">{fmt(bet.winAmount)}</span>
-                                            </td>
-                                            <td className="px-3 py-2.5">
-                                                <div className={`flex items-center gap-1 text-xs font-mono font-bold ${pnl >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                    {pnl >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-                                                    {fmt(Math.abs(pnl))}
-                                                </div>
-                                            </td>
-                                            <td className="px-3 py-2.5">
-                                                <span className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${bet.betAmount > 0 ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                                    }`}>
-                                                    {bet.betAmount > 0 ? 'BET' : 'WIN'}
+                                                <span className="text-[10px] font-mono text-slate-400 max-w-[160px] truncate inline-block align-middle" title={bet.txnId}>
+                                                    {bet.txnId || '—'}
                                                 </span>
+                                                {bet.txnId && <CopyChip value={bet.txnId} />}
+                                                {bet.txnId && (
+                                                    <Link
+                                                        href={`/dashboard/bets/casino/verify?txnId=${encodeURIComponent(bet.txnId)}&day=${new Date(bet.createdAt).toISOString().slice(0, 10)}&auto=1`}
+                                                        className="ml-1.5 inline-flex items-center align-middle text-emerald-400 hover:text-emerald-300"
+                                                        title="Verify against HUIDU"
+                                                    >
+                                                        <ShieldCheck size={11} />
+                                                    </Link>
+                                                )}
                                             </td>
                                             <td className="px-3 py-2.5">
+                                                <span className="text-[10px] font-mono text-slate-500 max-w-[120px] truncate inline-block align-middle" title={bet.gameCode}>
+                                                    {bet.gameCode}
+                                                </span>
+                                                <CopyChip value={bet.gameCode} />
+                                            </td>
+                                            <td className="px-3 py-2.5 whitespace-nowrap">
                                                 <span className="text-[10px] text-slate-500">
-                                                    {new Date(bet.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                                                    {new Date(bet.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                                                 </span>
                                             </td>
                                         </tr>
@@ -277,5 +356,13 @@ export default function CasinoBetsPage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function CasinoBetsPage() {
+    return (
+        <Suspense fallback={<div className="py-20 flex justify-center"><Loader2 className="animate-spin text-violet-500" size={32} /></div>}>
+            <CasinoBetsContent />
+        </Suspense>
     );
 }

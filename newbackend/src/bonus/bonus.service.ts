@@ -1,13 +1,24 @@
-import { Injectable, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { PrismaService } from '../prisma.service';
 import { Bonus, BonusDocument } from './schemas/bonus.schema';
+import { Bet, BetDocument } from '../bets/schemas/bet.schema';
 import { PendingDepositBonus, PendingDepositBonusDocument } from './schemas/pending-deposit-bonus.schema';
 import { EventsGateway } from '../events.gateway';
+import { RedisService } from '../redis/redis.service';
+import { EmailService } from '../email/email.service';
 
 // Helper: access new Prisma tables/fields not yet in generated types
 const db = (prisma: any) => prisma as any;
+
+// ── Safeguard constants ──────────────────────────────────────────────────────
+const MIN_WAGERABLE_BET = 1.0;         // ₹1 minimum bet to count toward wagering
+const MAX_DAILY_REDEMPTIONS = 3;       // max bonus codes a user can redeem per 24h
+const VALIDATE_RATE_LIMIT = 10;        // max validate calls per IP per 60s
+const REDEEM_MUTEX_TTL = 8;            // seconds: mutex lock on redeemBonus
+const DEDUP_CACHE_TTL = 3600;          // seconds (1h): idempotency window — prevents replays after lock release
+const IP_CLAIM_TTL = 60 * 60 * 24 * 30; // 30 days: per-IP bonus claim memory
 
 export type DepositCurrency = 'INR' | 'CRYPTO';
 type UserBonusType = 'CASINO' | 'SPORTS';
@@ -16,6 +27,7 @@ type AdminDirectBonusType = 'FIAT_BONUS' | 'CASINO_BONUS' | 'SPORTS_BONUS' | 'CR
 interface BonusRedemptionContext {
     depositCurrency?: DepositCurrency;
     approvedDepositCountBeforeThisDeposit?: number;
+    ip?: string; // caller IP for cross-account dedup
 }
 
 @Injectable()
@@ -24,10 +36,106 @@ export class BonusService {
 
     constructor(
         @InjectModel(Bonus.name) private bonusModel: Model<BonusDocument>,
+        @InjectModel(Bet.name) private betModel: Model<BetDocument>,
         @InjectModel(PendingDepositBonus.name) private pendingBonusModel: Model<PendingDepositBonusDocument>,
         private prisma: PrismaService,
         private eventsGateway: EventsGateway,
+        private redisService: RedisService,
+        private emailService: EmailService,
     ) { }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  SAFEGUARD HELPERS
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Normalise raw IP (strip IPv6 prefix, pick first forwarded IP) */
+    private normalizeIp(ip: string): string {
+        const raw = (ip || '').split(',')[0].trim();
+        return raw.replace(/^::ffff:/, '') || 'unknown';
+    }
+
+    /**
+     * Acquire a per-user Redis mutex to prevent concurrent bonus redemptions.
+     * Returns a release function — always call it in a finally block.
+     */
+    private async acquireRedeemLock(userId: number): Promise<() => Promise<void>> {
+        const key = `bonus:lock:redeem:${userId}`;
+        const acquired = await this.redisService.acquireLock(key, REDEEM_MUTEX_TTL);
+        if (!acquired) {
+            throw new BadRequestException('A bonus redemption is already in progress. Please wait a moment and try again.');
+        }
+        return async () => { await this.redisService.releaseLock(key); };
+    }
+
+    /**
+     * Check and record an IP-level bonus claim to detect cross-account abuse.
+     * Throws if the same IP already claimed this bonus on another account.
+     */
+    private async checkAndRecordIpClaim(ip: string, bonusId: string, userId: number): Promise<void> {
+        if (!ip || ip === 'unknown') return; // skip unknown IPs
+        const redis = this.redisService.getClient();
+        const key = `bonus:ip:${ip}:${bonusId}`;
+        const existing = await redis.get(key);
+        if (existing && existing !== String(userId)) {
+            this.logger.warn(`[Bonus] IP ${ip} already claimed bonus ${bonusId} under userId ${existing}, blocked for userId ${userId}`);
+            throw new BadRequestException('This bonus has already been claimed from your network. Please contact support.');
+        }
+        // Record this claim (TTL 30 days)
+        await redis.set(key, String(userId), 'EX', IP_CLAIM_TTL);
+    }
+
+    /**
+     * Velocity throttle — block if user has redeemed too many bonuses in last 24h.
+     */
+    private async checkRedemptionVelocity(userId: number): Promise<void> {
+        const key = `bonus:velocity:${userId}`;
+        const allowed = await this.redisService.checkRateLimit(key, MAX_DAILY_REDEMPTIONS, 60 * 60 * 24);
+        if (!allowed) {
+            throw new HttpException(
+                `You have reached the maximum of ${MAX_DAILY_REDEMPTIONS} bonus redemptions per day.`,
+                HttpStatus.TOO_MANY_REQUESTS,
+            );
+        }
+    }
+
+    /**
+     * Phone-number cross-account dedup for any bonus type.
+     * Returns silently if phone is unset (don't block users without a phone).
+     */
+    private async checkPhoneDedup(userId: number, bonusId: string): Promise<void> {
+        const claimingUser = await db(this.prisma).user.findUnique({
+            where: { id: userId },
+            select: { phoneNumber: true },
+        });
+        const phone = claimingUser?.phoneNumber?.trim();
+        if (!phone) return;
+
+        const samePhoneUsers = await db(this.prisma).user.findMany({
+            where: { phoneNumber: phone, id: { not: userId } },
+            select: { id: true },
+        });
+        if (samePhoneUsers.length === 0) return;
+
+        const samePhoneIds = samePhoneUsers.map((u: any) => u.id);
+        const priorClaim = await db(this.prisma).userBonus.findFirst({
+            where: { userId: { in: samePhoneIds }, bonusId, status: { not: 'FORFEITED' } },
+        });
+        if (priorClaim) {
+            throw new BadRequestException('This bonus has already been claimed from your mobile number.');
+        }
+    }
+
+    /**
+     * Idempotency dedup cache — if same (userId, bonusCode) succeeded in last 5s, skip re-processing.
+     */
+    private async checkAndSetDedup(userId: number, bonusCode: string): Promise<boolean> {
+        const key = `bonus:dedup:${userId}:${bonusCode}`;
+        const redis = this.redisService.getClient();
+        const hit = await redis.get(key);
+        if (hit) return true; // already processed
+        await redis.set(key, '1', 'EX', DEDUP_CACHE_TTL);
+        return false;
+    }
 
     public emitWalletRefresh(userId: number, payload: Record<string, any> = {}) {
         this.eventsGateway.emitUserWalletUpdate(userId, payload);
@@ -98,25 +206,51 @@ export class BonusService {
         applicableTo: string | null | undefined,
         isCrypto: boolean,
         requestedAmount?: number | null,
+        conversionCapAmount?: number | null,
     ) {
-        const capAmount = requestedAmount == null ? null : this.roundCurrency(Number(requestedAmount || 0));
+        const requestedWalletAmount =
+            requestedAmount == null ? null : this.roundCurrency(Number(requestedAmount || 0));
+        const requestedCreditCap =
+            conversionCapAmount == null
+                ? null
+                : this.roundCurrency(Number(conversionCapAmount || 0));
 
         if (isCrypto) {
             const cryptoBonus = this.roundCurrency(Number(user?.cryptoBonus || 0));
-            const convertibleAmount = capAmount == null ? cryptoBonus : Math.min(cryptoBonus, capAmount);
+            const deductibleAmount =
+                requestedWalletAmount == null ? cryptoBonus : Math.min(cryptoBonus, requestedWalletAmount);
+            const convertibleAmount =
+                requestedCreditCap == null
+                    ? deductibleAmount
+                    : Math.min(deductibleAmount, requestedCreditCap);
             return {
                 convertibleAmount,
-                deductionData: convertibleAmount > 0 ? { cryptoBonus: { decrement: convertibleAmount } } : {},
+                deductibleAmount,
+                forfeitedAmount: this.roundCurrency(Math.max(0, deductibleAmount - convertibleAmount)),
+                deductionData:
+                    deductibleAmount > 0
+                        ? { cryptoBonus: { decrement: deductibleAmount } }
+                        : {},
                 walletLabel: 'Crypto Bonus',
             };
         }
 
         if (applicableTo === 'SPORTS') {
             const sportsBonus = this.roundCurrency(Number(user?.sportsBonus || 0));
-            const convertibleAmount = capAmount == null ? sportsBonus : Math.min(sportsBonus, capAmount);
+            const deductibleAmount =
+                requestedWalletAmount == null ? sportsBonus : Math.min(sportsBonus, requestedWalletAmount);
+            const convertibleAmount =
+                requestedCreditCap == null
+                    ? deductibleAmount
+                    : Math.min(deductibleAmount, requestedCreditCap);
             return {
                 convertibleAmount,
-                deductionData: convertibleAmount > 0 ? { sportsBonus: { decrement: convertibleAmount } } : {},
+                deductibleAmount,
+                forfeitedAmount: this.roundCurrency(Math.max(0, deductibleAmount - convertibleAmount)),
+                deductionData:
+                    deductibleAmount > 0
+                        ? { sportsBonus: { decrement: deductibleAmount } }
+                        : {},
                 walletLabel: 'Sports Bonus',
             };
         }
@@ -124,22 +258,133 @@ export class BonusService {
         const casinoBonus = this.roundCurrency(Number(user?.casinoBonus || 0));
         const legacyFiatBonus = this.roundCurrency(Number(user?.fiatBonus || 0));
         const totalAvailable = this.roundCurrency(casinoBonus + legacyFiatBonus);
-        const convertibleAmount = capAmount == null ? totalAvailable : Math.min(totalAvailable, capAmount);
-        const fromCasinoBonus = Math.min(casinoBonus, convertibleAmount);
-        const fromLegacyFiatBonus = Math.min(legacyFiatBonus, this.roundCurrency(convertibleAmount - fromCasinoBonus));
+        const deductibleAmount =
+            requestedWalletAmount == null ? totalAvailable : Math.min(totalAvailable, requestedWalletAmount);
+        const convertibleAmount =
+            requestedCreditCap == null
+                ? deductibleAmount
+                : Math.min(deductibleAmount, requestedCreditCap);
+        const cappedCasinoDeduction = this.roundCurrency(
+            Math.min(casinoBonus, deductibleAmount),
+        );
+        const cappedLegacyDeduction = this.roundCurrency(
+            Math.max(0, deductibleAmount - cappedCasinoDeduction),
+        );
 
         return {
             convertibleAmount,
+            deductibleAmount,
+            forfeitedAmount: this.roundCurrency(Math.max(0, deductibleAmount - convertibleAmount)),
             deductionData: {
-                ...(fromCasinoBonus > 0 ? { casinoBonus: { decrement: fromCasinoBonus } } : {}),
-                ...(fromLegacyFiatBonus > 0 ? { fiatBonus: { decrement: fromLegacyFiatBonus } } : {}),
+                ...(cappedCasinoDeduction > 0
+                    ? { casinoBonus: { decrement: cappedCasinoDeduction } }
+                    : {}),
+                ...(cappedLegacyDeduction > 0
+                    ? { fiatBonus: { decrement: cappedLegacyDeduction } }
+                    : {}),
             },
             walletLabel: 'Casino Bonus',
         };
     }
 
+    private getBonusConversionCapAmount(
+        bonus: {
+            bonusAmount?: number | null;
+            depositAmount?: number | null;
+        } | null | undefined,
+    ) {
+        const bonusAmount = this.roundCurrency(Number(bonus?.bonusAmount || 0));
+        const depositAmount = this.roundCurrency(Number(bonus?.depositAmount || 0));
+
+        if (depositAmount > 0) {
+            return Math.min(bonusAmount, depositAmount);
+        }
+
+        return bonusAmount;
+    }
+
+    private buildBonusGrantPaymentDetails(params: {
+        source: string;
+        bonusCode: string;
+        applicableTo: string | null | undefined;
+        walletLabel: string;
+        bonusCurrency: string | null | undefined;
+        depositAmount?: number | null;
+        bonusAmount?: number | null;
+        wageringRequired?: number | null;
+        wageringRequirement?: number | null;
+        extra?: Record<string, any>;
+    }) {
+        const depositAmount = this.roundCurrency(Number(params.depositAmount || 0));
+        const bonusAmount = this.roundCurrency(Number(params.bonusAmount || 0));
+        const wageringRequired = this.roundCurrency(Number(params.wageringRequired || 0));
+        const conversionCapAmount = this.getBonusConversionCapAmount({
+            bonusAmount,
+            depositAmount,
+        });
+
+        return {
+            source: params.source,
+            bonusCode: params.bonusCode,
+            bonusType: params.applicableTo || 'BOTH',
+            applicableTo: params.applicableTo || 'BOTH',
+            walletLabel: params.walletLabel,
+            bonusCurrency: params.bonusCurrency || 'INR',
+            depositAmount,
+            bonusAmount,
+            conversionCapAmount,
+            wageringRequired,
+            ...(params.wageringRequirement != null
+                ? { wageringRequirement: Number(params.wageringRequirement || 0) }
+                : {}),
+            ...(params.extra || {}),
+        };
+    }
+
     private normalizeDepositCurrency(currency?: string): DepositCurrency {
         return currency === 'CRYPTO' ? 'CRYPTO' : 'INR';
+    }
+
+    private normalizeBonusTemplateData(data: Record<string, any>) {
+        const currency = data.currency === 'CRYPTO' || data.currency === 'BOTH' ? data.currency : 'INR';
+        const legacyMinimum = this.roundCurrency(Number(data.minDeposit || 0));
+        const minDepositFiat = data.minDepositFiat == null
+            ? (currency === 'CRYPTO' ? 0 : legacyMinimum)
+            : this.roundCurrency(Number(data.minDepositFiat || 0));
+        const minDepositCrypto = data.minDepositCrypto == null
+            ? (currency === 'INR' ? 0 : legacyMinimum)
+            : this.roundCurrency(Number(data.minDepositCrypto || 0));
+
+        return {
+            ...data,
+            code: data.code?.toUpperCase?.() ?? data.code,
+            currency,
+            minDeposit: currency === 'CRYPTO' ? minDepositCrypto : minDepositFiat,
+            minDepositFiat,
+            minDepositCrypto,
+            validFrom: data.validFrom || undefined,
+            validUntil: data.validUntil || undefined,
+        };
+    }
+
+    private getMinimumDepositForCurrency(
+        bonus: {
+            minDeposit?: number | null;
+            minDepositFiat?: number | null;
+            minDepositCrypto?: number | null;
+        },
+        depositCurrency: DepositCurrency,
+    ) {
+        const legacyMinimum = this.roundCurrency(Number(bonus.minDeposit || 0));
+        const fiatMinimum = bonus.minDepositFiat == null
+            ? null
+            : this.roundCurrency(Number(bonus.minDepositFiat || 0));
+        const cryptoMinimum = bonus.minDepositCrypto == null
+            ? null
+            : this.roundCurrency(Number(bonus.minDepositCrypto || 0));
+
+        if (depositCurrency === 'CRYPTO') return cryptoMinimum ?? legacyMinimum;
+        return fiatMinimum ?? legacyMinimum;
     }
 
     private isBonusCurrencyEligible(bonusCurrency: string | null | undefined, depositCurrency: DepositCurrency) {
@@ -151,7 +396,7 @@ export class BonusService {
             where: {
                 userId,
                 type: 'DEPOSIT',
-                status: 'APPROVED',
+                status: { in: ['APPROVED', 'COMPLETED'] },
                 ...(typeof excludeTransactionId === 'number' ? { id: { not: excludeTransactionId } } : {}),
             },
         });
@@ -165,7 +410,7 @@ export class BonusService {
         await this.pendingBonusModel.findOneAndUpdate(
             { userId },
             { userId, bonusCode: bonusCode.toUpperCase() },
-            { upsert: true, new: true },
+            { upsert: true, returnDocument: 'after' },
         );
         return { success: true };
     }
@@ -185,7 +430,7 @@ export class BonusService {
     // ─────────────────────────────────────────────────────────────────────────
 
     async create(data: any) {
-        const bonus = new this.bonusModel({ ...data, code: data.code?.toUpperCase() });
+        const bonus = new this.bonusModel(this.normalizeBonusTemplateData(data));
         return bonus.save();
     }
 
@@ -198,7 +443,7 @@ export class BonusService {
     }
 
     async update(id: string, data: any) {
-        return this.bonusModel.findByIdAndUpdate(id, data, { new: true }).exec();
+        return this.bonusModel.findByIdAndUpdate(id, this.normalizeBonusTemplateData(data), { returnDocument: 'after' }).exec();
     }
 
     async remove(id: string) {
@@ -230,7 +475,17 @@ export class BonusService {
     //  PUBLIC: Promo Code Validation (preview before deposit)
     // ─────────────────────────────────────────────────────────────────────────
 
-    async validatePromoCode(code: string, userId: number, depositAmount: number, depositCurrency?: string) {
+    async validatePromoCode(code: string, userId: number, depositAmount: number, depositCurrency?: string, ip?: string) {
+        // ── Guard: IP rate-limit on code probing (10 calls/min) ──────────────────
+        if (ip) {
+            const normalizedIp = this.normalizeIp(ip);
+            const rateLimitKey = `bonus:ratelimit:validate:${normalizedIp}`;
+            const allowed = await this.redisService.checkRateLimit(rateLimitKey, VALIDATE_RATE_LIMIT, 60);
+            if (!allowed) {
+                throw new HttpException('Too many promo code lookups. Please slow down.', HttpStatus.TOO_MANY_REQUESTS);
+            }
+        }
+
         const bonus = await this.bonusModel.findOne({ code: code.toUpperCase(), isActive: true });
         if (!bonus) throw new BadRequestException('Invalid or expired promo code');
 
@@ -251,13 +506,15 @@ export class BonusService {
             );
         }
         if (bonus.forFirstDepositOnly && !isFirstDeposit) {
+            await this.clearPendingDepositBonus(userId);
             throw new BadRequestException('This bonus is only available on your first deposit');
         }
-        if (depositAmount > 0 && depositAmount < bonus.minDeposit)
+        const minimumDeposit = this.getMinimumDepositForCurrency(bonus, normalizedDepositCurrency);
+        if (depositAmount > 0 && depositAmount < minimumDeposit)
             throw new BadRequestException(
                 normalizedDepositCurrency === 'CRYPTO'
-                    ? `Minimum deposit of $${bonus.minDeposit} required for this bonus`
-                    : `Minimum deposit of ₹${bonus.minDeposit} required for this bonus`,
+                    ? `Minimum deposit of $${minimumDeposit} required for this bonus`
+                    : `Minimum deposit of ₹${minimumDeposit} required for this bonus`,
             );
 
         // Check one-time usage enforcement (cannot claim same bonus code twice)
@@ -291,7 +548,9 @@ export class BonusService {
                 currency: bonus.currency,
                 percentage: bonus.percentage,
                 amount: bonus.amount,
-                minDeposit: bonus.minDeposit,
+                minDeposit: minimumDeposit,
+                minDepositFiat: bonus.minDepositFiat ?? bonus.minDeposit ?? 0,
+                minDepositCrypto: bonus.minDepositCrypto ?? bonus.minDeposit ?? 0,
                 maxBonus: bonus.maxBonus,
                 wageringRequirement: bonus.wageringRequirement,
                 depositWagerMultiplier: depositMultiplier,
@@ -307,9 +566,9 @@ export class BonusService {
                 approvedDepositCount,
                 isFirstDeposit,
                 requiresFirstDeposit: !!bonus.forFirstDepositOnly,
-                minDeposit: bonus.minDeposit,
-                minDepositMet: depositAmount >= bonus.minDeposit,
-                minDepositShortfall: Math.max(0, bonus.minDeposit - depositAmount),
+                minDeposit: minimumDeposit,
+                minDepositMet: depositAmount >= minimumDeposit,
+                minDepositShortfall: Math.max(0, minimumDeposit - depositAmount),
             },
         };
     }
@@ -320,6 +579,22 @@ export class BonusService {
 
     async redeemBonus(userId: number, bonusCode: string, depositAmount: number, context: BonusRedemptionContext = {}) {
         const code = bonusCode.toUpperCase();
+
+        // ── Guard 1: Idempotency cache (5s dedup) ────────────────────────────
+        const alreadyProcessed = await this.checkAndSetDedup(userId, code);
+        if (alreadyProcessed) {
+            this.logger.log(`[Bonus] Dedup cache hit — skipping duplicate redeemBonus for user ${userId}, code ${code}`);
+            return null;
+        }
+
+        // ── Guard 2: Redis mutex — prevent concurrent double-redemption ───────
+        const releaseLock = await this.acquireRedeemLock(userId);
+        try { return await this._redeemBonusInner(userId, code, depositAmount, context); }
+        finally { await releaseLock(); }
+    }
+
+    /** Inner logic called after lock is acquired */
+    private async _redeemBonusInner(userId: number, code: string, depositAmount: number, context: BonusRedemptionContext) {
         const bonus = await this.bonusModel.findOne({ code, isActive: true });
         if (!bonus) {
             this.logger.warn(`[Bonus] Code "${code}" not found or inactive for user ${userId}`);
@@ -343,9 +618,10 @@ export class BonusService {
             this.logger.warn(`[Bonus] Code "${code}" is first-deposit only for user ${userId}`);
             return null;
         }
-        if (depositAmount < bonus.minDeposit) return null;
+        const minimumDeposit = this.getMinimumDepositForCurrency(bonus, normalizedDepositCurrency);
+        if (depositAmount < minimumDeposit) return null;
 
-        // One-time usage check
+        // ── Guard 3: One-time usage check ────────────────────────────────────
         const alreadyUsed = await db(this.prisma).userBonus.findFirst({
             where: { userId, bonusId: String(bonus._id), status: { not: 'FORFEITED' } }
         });
@@ -353,6 +629,17 @@ export class BonusService {
             this.logger.warn(`[Bonus] User ${userId} already used code "${code}"`);
             return null;
         }
+
+        // ── Guard 4: Phone dedup (same phone on another account) ─────────────
+        await this.checkPhoneDedup(userId, String(bonus._id));
+
+        // ── Guard 5: IP cross-account dedup ──────────────────────────────────
+        if (context.ip) {
+            await this.checkAndRecordIpClaim(this.normalizeIp(context.ip), String(bonus._id), userId);
+        }
+
+        // ── Guard 6: Daily velocity throttle ─────────────────────────────────
+        await this.checkRedemptionVelocity(userId);
 
         const applicableTo = (bonus as any).applicableTo || 'BOTH';
         const expiryDays = (bonus as any).expiryDays ?? 30;
@@ -418,6 +705,18 @@ export class BonusService {
                     amount: bonusAmount,
                     type: 'BONUS',
                     status: 'APPROVED',
+                    paymentMethod: 'BONUS_WALLET',
+                    paymentDetails: this.buildBonusGrantPaymentDetails({
+                        source: 'PROMO_REDEEM',
+                        bonusCode: code,
+                        applicableTo,
+                        walletLabel,
+                        bonusCurrency: bonus.currency,
+                        depositAmount,
+                        bonusAmount,
+                        wageringRequired,
+                        wageringRequirement: bonus.wageringRequirement,
+                    }),
                     remarks: `${walletLabel}: ${bonus.title} (${code}) — ${bonus.wageringRequirement}x wagering, ${applicableTo} only`,
                     createdAt: new Date(),
                     updatedAt: new Date(),
@@ -432,6 +731,22 @@ export class BonusService {
         this.emitWalletRefresh(userId);
 
         this.logger.log(`[Bonus] User ${userId} redeemed "${code}" → ${walletLabel}: ${bonusAmount}, wagering: ${wageringRequired}, applicableTo: ${applicableTo}`);
+
+        // ── Bonus credited email (fire-and-forget) ───────────────────────
+        try {
+            const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true, username: true } });
+            if (user?.email) {
+                this.emailService.sendBonusCredited(
+                    user.email, user.username || user.email,
+                    bonusAmount.toFixed(2), walletLabel,
+                    wageringRequired.toFixed(2), code,
+                    bonus.currency === 'CRYPTO' ? 'CRYPTO' : 'INR',
+                ).catch(() => {});
+            }
+        } catch (e) {
+            this.logger.error(`[Bonus] Bonus credited email failed (non-fatal): ${e.message}`);
+        }
+
         return result;
     }
 
@@ -471,7 +786,20 @@ export class BonusService {
         return src === 'fiatbonus' || src === 'cryptobonus';
     }
 
-    async recordWagering(userId: number, stakeAmount: number, gameType: 'CASINO' | 'SPORTS' = 'SPORTS', betSource: string = '') {
+    async recordWagering(
+        userId: number,
+        stakeAmount: number,
+        gameType: 'CASINO' | 'SPORTS' = 'SPORTS',
+        betSource: string = '',
+        bonusStakeAmount?: number,
+    ) {
+        // ── Guard: Minimum bet size — bets below ₹1 don't count toward wagering ───
+        // Prevents micro-bet spamming (e.g. 10,000 × ₹0.50 bets) to game wagering progress.
+        if (stakeAmount < MIN_WAGERABLE_BET) {
+            this.logger.debug(`[Bonus] Bet ₹${stakeAmount} < min ₹${MIN_WAGERABLE_BET} — skipping wagering for user ${userId}`);
+            return;
+        }
+
         await this.expireOverdueUserBonuses(userId);
 
         const user = await db(this.prisma).user.findUnique({
@@ -520,10 +848,41 @@ export class BonusService {
         // ── 2. Bonus wagering — only when bet is from bonus funds ────────────
         // Skip bonus wagering entirely if the bet came from the main wallet
         const shouldTrackBonusWagering = this.isBonusBetSource(betSource, gameType);
+        const normalizedBonusStakeAmount = this.roundCurrency(
+            Number(
+                bonusStakeAmount == null
+                    ? (shouldTrackBonusWagering ? stakeAmount : 0)
+                    : bonusStakeAmount,
+            ),
+        );
+        const effectiveBonusWagerAmount = this.roundCurrency(
+            Math.min(stakeAmount, Math.max(0, normalizedBonusStakeAmount)),
+        );
 
         if (!shouldTrackBonusWagering) {
             this.logger.debug(`[Bonus] User ${userId}: skipping bonus wagering — betSource="${betSource}" is not bonus`);
             // Still apply deposit wagering + totalWagered updates
+            if (Object.keys(updates).length > 0) {
+                await db(this.prisma).user.update({
+                    where: { id: userId },
+                    data: updates as any,
+                });
+            }
+            this.emitWalletRefresh(userId);
+            return {
+                depositWagering: {
+                    done: (user.depositWageringDone ?? 0) + stakeAmount,
+                    required: user.depositWageringRequired ?? 0,
+                    unlocked: depositUnlocked,
+                },
+                bonusWagering: { casino: null, converted: [] },
+            };
+        }
+
+        if (effectiveBonusWagerAmount <= 0) {
+            this.logger.debug(
+                `[Bonus] User ${userId}: skipping strict bonus wagering — no bonus-funded stake recorded for betSource="${betSource}"`,
+            );
             if (Object.keys(updates).length > 0) {
                 await db(this.prisma).user.update({
                     where: { id: userId },
@@ -548,17 +907,45 @@ export class BonusService {
 
         const activeBonuses = await db(this.prisma).userBonus.findMany({
             where: { userId, status: 'ACTIVE', applicableTo: { in: applicableTypes } },
+            orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         });
 
-        let bonusConverted = false;
+        let remainingBonusWagerBudget = effectiveBonusWagerAmount;
+        let partialGlobalWagerIncrement = 0;
+        let partialCasinoWagerIncrement = 0;
+        let partialSportsWagerIncrement = 0;
         const convertedBonuses: any[] = [];
 
         for (const activeBonus of activeBonuses) {
+            if (remainingBonusWagerBudget <= 0) {
+                break;
+            }
+
             if ((activeBonus.wageringRequired ?? 0) <= 0) {
                 continue;
             }
 
-            const newWageringDone = activeBonus.wageringDone + stakeAmount;
+            const wageringRemaining = this.roundCurrency(
+                Math.max(
+                    0,
+                    Number(activeBonus.wageringRequired || 0) -
+                    Number(activeBonus.wageringDone || 0),
+                ),
+            );
+            if (wageringRemaining <= 0) {
+                continue;
+            }
+
+            const appliedWagerAmount = this.roundCurrency(
+                Math.min(remainingBonusWagerBudget, wageringRemaining),
+            );
+            if (appliedWagerAmount <= 0) {
+                continue;
+            }
+
+            const newWageringDone = this.roundCurrency(
+                Number(activeBonus.wageringDone || 0) + appliedWagerAmount,
+            );
             const isComplete = newWageringDone >= activeBonus.wageringRequired;
 
             const bonusApplicableTo = activeBonus.applicableTo;
@@ -566,109 +953,72 @@ export class BonusService {
             if (isComplete) {
                 const isCrypto = activeBonus.bonusCurrency === 'CRYPTO';
                 const completedWagering = Math.min(newWageringDone, activeBonus.wageringRequired);
-                let convertedAmount = 0;
 
-                await this.prisma.$transaction(async (tx: any) => {
-                    const walletUser = await tx.user.findUnique({
-                        where: { id: userId },
-                        select: {
-                            casinoBonus: true,
-                            sportsBonus: true,
-                            fiatBonus: true,
-                            cryptoBonus: true,
-                        },
-                    });
-                    const walletSnapshot = this.getEligibleBonusSnapshot(
-                        walletUser,
-                        bonusApplicableTo,
-                        isCrypto,
-                        activeBonus.bonusAmount,
-                    );
-                    convertedAmount = walletSnapshot.convertibleAmount;
-                    await tx.userBonus.update({
-                        where: { id: activeBonus.id },
-                        data: { status: 'COMPLETED', wageringDone: completedWagering, completedAt: new Date() },
-                    });
-
-                    const mainWalletField = isCrypto ? 'cryptoBalance' : 'balance';
-                    const completionUpdates: any = {
-                        ...updates,
-                        ...(walletSnapshot.convertibleAmount > 0
-                            ? { [mainWalletField]: { increment: walletSnapshot.convertibleAmount } }
-                            : {}),
-                        ...walletSnapshot.deductionData,
-                        wageringRequired: { decrement: activeBonus.wageringRequired },
-                        wageringDone: { decrement: Math.min(activeBonus.wageringDone, activeBonus.wageringRequired) },
-                    };
-                    // Clear per-type wagering for this bonus
-                    if (bonusApplicableTo !== 'SPORTS') {
-                        completionUpdates.casinoBonusWageringRequired = { decrement: activeBonus.wageringRequired };
-                        completionUpdates.casinoBonusWageringDone = { decrement: Math.min(activeBonus.wageringDone, activeBonus.wageringRequired) };
-                    }
-                    if (bonusApplicableTo === 'SPORTS') {
-                        completionUpdates.sportsBonusWageringRequired = { decrement: activeBonus.wageringRequired };
-                        completionUpdates.sportsBonusWageringDone = { decrement: Math.min(activeBonus.wageringDone, activeBonus.wageringRequired) };
-                    }
-
-                    await tx.user.update({ where: { id: userId }, data: completionUpdates });
-
-                    if (walletSnapshot.convertibleAmount > 0) {
-                        await tx.transaction.create({
-                            data: {
-                                userId,
-                                amount: walletSnapshot.convertibleAmount,
-                                type: 'BONUS_CONVERT',
-                                status: 'APPROVED',
-                                paymentMethod: 'BONUS_WALLET',
-                                paymentDetails: {
-                                    source: 'AUTO_WAGERING',
-                                    bonusCode: activeBonus.bonusCode,
-                                    bonusType: bonusApplicableTo,
-                                    walletLabel: walletSnapshot.walletLabel,
-                                    destinationWallet: isCrypto ? 'CRYPTO_WALLET' : 'MAIN_WALLET',
-                                },
-                                remarks: `${walletSnapshot.walletLabel} converted to ${isCrypto ? 'crypto' : 'main'} wallet: ${activeBonus.bonusCode} (${bonusApplicableTo})`,
-                                createdAt: new Date(),
-                                updatedAt: new Date(),
-                            },
-                        });
-                    }
+                await db(this.prisma).userBonus.update({
+                    where: { id: activeBonus.id },
+                    data: { status: 'PENDING_CONVERSION', wageringDone: completedWagering },
                 });
 
-                bonusConverted = true;
                 convertedBonuses.push(activeBonus);
-                this.logger.log(`[Bonus] User ${userId} completed ${bonusApplicableTo} bonus wagering for "${activeBonus.bonusCode}" — credited!`);
+                remainingBonusWagerBudget = this.roundCurrency(
+                    Math.max(0, remainingBonusWagerBudget - appliedWagerAmount),
+                );
+                this.logger.log(`[Bonus] User ${userId} completed ${bonusApplicableTo} bonus wagering for "${activeBonus.bonusCode}" — pending admin conversion!`);
 
                 this.eventsGateway.server.to(`user:${userId}`).emit('bonusConverted', {
                     userId,
-                    message: `🎉 ${bonusApplicableTo} bonus wagering complete! ${isCrypto ? '$' : '₹'}${convertedAmount} moved to your ${isCrypto ? 'crypto' : 'main'} wallet.`,
+                    message: `🎉 ${bonusApplicableTo} bonus wagering complete! Awaiting admin approval to move to your ${isCrypto ? 'crypto' : 'main'} wallet.`,
                 });
-            } else {
-                // Partial progress
-                updates.wageringDone = { increment: stakeAmount };
-                if (bonusApplicableTo !== 'SPORTS') {
-                    const currentDone = user.casinoBonusWageringDone ?? 0;
-                    const required = user.casinoBonusWageringRequired ?? 0;
-                    if (required > 0 && currentDone < required) {
-                        updates.casinoBonusWageringDone = Math.min(currentDone + stakeAmount, required);
+
+                // ── Wagering complete email (fire-and-forget) ────────────────
+                try {
+                    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true, username: true } });
+                    if (user?.email) {
+                        this.emailService.sendBonusWagered(
+                            user.email, user.username || user.email,
+                            activeBonus.bonusTitle || activeBonus.bonusCode,
+                            String(activeBonus.bonusAmount),
+                            isCrypto ? 'CRYPTO' : 'INR',
+                        ).catch(() => {});
                     }
+                } catch (e) {
+                    this.logger.error(`[Bonus] Wagering email failed (non-fatal): ${e.message}`);
+                }
+            } else {
+                partialGlobalWagerIncrement = this.roundCurrency(
+                    partialGlobalWagerIncrement + appliedWagerAmount,
+                );
+                if (bonusApplicableTo !== 'SPORTS') {
+                    partialCasinoWagerIncrement = this.roundCurrency(
+                        partialCasinoWagerIncrement + appliedWagerAmount,
+                    );
                 }
                 if (bonusApplicableTo === 'SPORTS') {
-                    const currentDone = user.sportsBonusWageringDone ?? 0;
-                    const required = user.sportsBonusWageringRequired ?? 0;
-                    if (required > 0 && currentDone < required) {
-                        updates.sportsBonusWageringDone = Math.min(currentDone + stakeAmount, required);
-                    }
+                    partialSportsWagerIncrement = this.roundCurrency(
+                        partialSportsWagerIncrement + appliedWagerAmount,
+                    );
                 }
                 await db(this.prisma).userBonus.update({
                     where: { id: activeBonus.id },
                     data: { wageringDone: newWageringDone },
                 });
+                remainingBonusWagerBudget = this.roundCurrency(
+                    Math.max(0, remainingBonusWagerBudget - appliedWagerAmount),
+                );
             }
         }
 
-        // Apply remaining user field updates if bonus wasn't fully converted
-        if (!bonusConverted && Object.keys(updates).length > 0) {
+        if (partialGlobalWagerIncrement > 0) {
+            updates.wageringDone = { increment: partialGlobalWagerIncrement };
+        }
+        if (partialCasinoWagerIncrement > 0) {
+            updates.casinoBonusWageringDone = { increment: partialCasinoWagerIncrement };
+        }
+        if (partialSportsWagerIncrement > 0) {
+            updates.sportsBonusWageringDone = { increment: partialSportsWagerIncrement };
+        }
+
+        if (Object.keys(updates).length > 0) {
             await db(this.prisma).user.update({
                 where: { id: userId },
                 data: updates as any,
@@ -682,13 +1032,13 @@ export class BonusService {
                 done: (user.depositWageringDone ?? 0) + stakeAmount,
                 required: user.depositWageringRequired ?? 0,
                 unlocked: depositUnlocked,
-            },
-            bonusWagering: {
-                casino: activeBonuses.find((b: any) => b.applicableTo === 'CASINO' || b.applicableTo === 'BOTH')
-                    ? { done: activeBonuses[0].wageringDone + stakeAmount, required: activeBonuses[0].wageringRequired }
+                },
+                bonusWagering: {
+                    casino: activeBonuses.find((b: any) => b.applicableTo === 'CASINO' || b.applicableTo === 'BOTH')
+                    ? { done: activeBonuses[0].wageringDone + effectiveBonusWagerAmount, required: activeBonuses[0].wageringRequired }
                     : null,
-                converted: convertedBonuses.map(b => b.bonusCode),
-            },
+                    converted: convertedBonuses.map(b => b.bonusCode),
+                },
         };
     }
 
@@ -698,30 +1048,53 @@ export class BonusService {
 
     private async forfeitBonusById(userBonusId: number, reason = 'Forfeited') {
         const ub = await db(this.prisma).userBonus.findUnique({ where: { id: userBonusId } });
-        if (!ub || ub.status !== 'ACTIVE') return null;
+        if (!ub || (ub.status !== 'ACTIVE' && ub.status !== 'PENDING_CONVERSION')) return null;
 
         const isCrypto = ub.bonusCurrency === 'CRYPTO';
         const applicableTo = ub.applicableTo || 'BOTH';
-        const bonusWalletField = this.getBonusWalletField(applicableTo, isCrypto);
 
         await this.prisma.$transaction(async (tx: any) => {
+            const walletUser = await tx.user.findUnique({
+                where: { id: ub.userId },
+                select: {
+                    casinoBonus: true,
+                    sportsBonus: true,
+                    fiatBonus: true,
+                    cryptoBonus: true,
+                },
+            });
+
             await tx.userBonus.update({
                 where: { id: userBonusId },
                 data: { status: 'FORFEITED', forfeitedAt: new Date() },
             });
 
+            const snapshot = this.getEligibleBonusSnapshot(
+                walletUser,
+                applicableTo,
+                isCrypto,
+                ub.bonusAmount,
+            );
+
+            // Use the smaller of (bonusAmount stored at grant time) vs (actual wallet snapshot)
+            // to ensure wagering counters—set using bonusAmount—are never decremented more than they were incremented.
+            const safeWageringDecrement = this.roundCurrency(
+                Math.min(ub.wageringRequired, Math.max(0, Number(ub.wageringRequired || 0))),
+            );
+            const safeDoneDecrement = Math.min(Number(ub.wageringDone || 0), safeWageringDecrement);
+
             const updateData: any = {
-                [bonusWalletField]: { decrement: ub.bonusAmount },
-                wageringRequired: { decrement: ub.wageringRequired },
-                wageringDone: { decrement: Math.min(ub.wageringDone, ub.wageringRequired) },
+                ...snapshot.deductionData,
+                wageringRequired: { decrement: safeWageringDecrement },
+                wageringDone: { decrement: safeDoneDecrement },
             };
             if (applicableTo !== 'SPORTS') {
-                updateData.casinoBonusWageringRequired = { decrement: ub.wageringRequired };
-                updateData.casinoBonusWageringDone = { decrement: Math.min(ub.wageringDone, ub.wageringRequired) };
+                updateData.casinoBonusWageringRequired = { decrement: safeWageringDecrement };
+                updateData.casinoBonusWageringDone = { decrement: safeDoneDecrement };
             }
             if (applicableTo === 'SPORTS') {
-                updateData.sportsBonusWageringRequired = { decrement: ub.wageringRequired };
-                updateData.sportsBonusWageringDone = { decrement: Math.min(ub.wageringDone, ub.wageringRequired) };
+                updateData.sportsBonusWageringRequired = { decrement: safeWageringDecrement };
+                updateData.sportsBonusWageringDone = { decrement: safeDoneDecrement };
             }
 
             await tx.user.update({ where: { id: ub.userId }, data: updateData });
@@ -738,7 +1111,7 @@ export class BonusService {
 
     async forfeitActiveBonus(userId: number, reason = 'Withdrawal requested') {
         // Forfeit all active bonuses
-        const activeBonuses = await db(this.prisma).userBonus.findMany({ where: { userId, status: 'ACTIVE' } });
+        const activeBonuses = await db(this.prisma).userBonus.findMany({ where: { userId, status: { in: ['ACTIVE', 'PENDING_CONVERSION'] } } });
         for (const ub of activeBonuses) {
             await this.forfeitBonusById(ub.id, reason);
         }
@@ -748,9 +1121,9 @@ export class BonusService {
     async forfeitActiveBonusByType(userId: number, type: 'CASINO' | 'SPORTS', reason = 'User revoked') {
         const applicableTypes = type === 'CASINO' ? ['CASINO', 'BOTH'] : ['SPORTS'];
         const active = await db(this.prisma).userBonus.findFirst({
-            where: { userId, status: 'ACTIVE', applicableTo: { in: applicableTypes } },
+            where: { userId, status: { in: ['ACTIVE', 'PENDING_CONVERSION'] }, applicableTo: { in: applicableTypes } },
         });
-        if (!active) throw new BadRequestException(`No active ${type} bonus found`);
+        if (!active) throw new BadRequestException(`No active or pending ${type} bonus found`);
         return this.forfeitBonusById(active.id, reason);
     }
 
@@ -762,7 +1135,7 @@ export class BonusService {
         await this.expireOverdueUserBonuses(userId);
 
         const [activeBonuses, user] = await Promise.all([
-            db(this.prisma).userBonus.findMany({ where: { userId, status: 'ACTIVE' } }),
+            db(this.prisma).userBonus.findMany({ where: { userId, status: { in: ['ACTIVE', 'PENDING_CONVERSION'] } } }),
             db(this.prisma).user.findUnique({
                 where: { id: userId },
                 select: { casinoBonus: true, sportsBonus: true, fiatBonus: true, cryptoBonus: true },
@@ -861,9 +1234,9 @@ export class BonusService {
     async toggleBonusEnabled(userId: number, type: 'CASINO' | 'SPORTS') {
         const applicableTypes = type === 'CASINO' ? ['CASINO', 'BOTH'] : ['SPORTS'];
         const bonus = await db(this.prisma).userBonus.findFirst({
-            where: { userId, status: 'ACTIVE', applicableTo: { in: applicableTypes } },
+            where: { userId, status: { in: ['ACTIVE', 'PENDING_CONVERSION'] }, applicableTo: { in: applicableTypes } },
         });
-        if (!bonus) throw new BadRequestException(`No active ${type} bonus found`);
+        if (!bonus) throw new BadRequestException(`No active or pending ${type} bonus found`);
 
         const updated = await db(this.prisma).userBonus.update({
             where: { id: bonus.id },
@@ -916,17 +1289,47 @@ export class BonusService {
 
     async adminForfeitBonus(userBonusId: number, adminId: number) {
         const ub = await db(this.prisma).userBonus.findUnique({ where: { id: userBonusId } });
-        if (!ub || ub.status !== 'ACTIVE') throw new BadRequestException('Bonus not found or not active');
+        if (!ub || (ub.status !== 'ACTIVE' && ub.status !== 'PENDING_CONVERSION')) throw new BadRequestException('Bonus not found or not active');
         return this.forfeitBonusById(userBonusId, `Admin forfeit by admin #${adminId}`);
     }
 
     async adminCompleteBonus(userBonusId: number, adminId: number) {
         const ub = await db(this.prisma).userBonus.findUnique({ where: { id: userBonusId } });
-        if (!ub || ub.status !== 'ACTIVE') throw new BadRequestException('Bonus not found or not active');
+        if (!ub || (ub.status !== 'ACTIVE' && ub.status !== 'PENDING_CONVERSION')) throw new BadRequestException('Bonus not found or not active');
 
         const isCrypto = ub.bonusCurrency === 'CRYPTO';
         const mainWalletField = isCrypto ? 'cryptoBalance' : 'balance';
         const applicableTo = ub.applicableTo || 'BOTH';
+
+        // ── Sweep pending bets created with bonus wallet before continuing ──
+        const pendingBonusBets = await this.betModel.find({
+            userId: ub.userId,
+            status: 'PENDING',
+            betSource: { $regex: /bonus/i } // Matches "sportsBonus", "sportsBonus+balance", "casinoBonus", etc.
+        });
+
+        let realRefundInr = 0;
+        let realRefundCrypto = 0;
+        let exposureDecrement = 0;
+
+        for (const pBet of pendingBonusBets) {
+            const walletStake = Number((pBet as any).walletStakeAmount || 0);
+            if (pBet.walletType === 'crypto') {
+                realRefundCrypto += walletStake;
+            } else {
+                realRefundInr += walletStake;
+            }
+            exposureDecrement += Number(pBet.stake || 0);
+
+            // Void in Mongo
+            pBet.status = 'VOID';
+            (pBet as any).settledReason = 'Bet was voided by admin due to bonus conversion.';
+            (pBet as any).settledAt = new Date();
+            await pBet.save();
+
+            // Clear from active bets cache in Redis
+            await this.redisService.getClient().srem(`active_bets:${ub.userId}`, pBet._id.toString());
+        }
 
         await this.prisma.$transaction(async (tx: any) => {
             const walletUser = await tx.user.findUnique({
@@ -943,28 +1346,51 @@ export class BonusService {
                 applicableTo,
                 isCrypto,
                 ub.bonusAmount,
+                this.getBonusConversionCapAmount(ub),
             );
             await tx.userBonus.update({
                 where: { id: userBonusId },
                 data: { status: 'COMPLETED', wageringDone: ub.wageringRequired, completedAt: new Date() },
             });
 
+            // ── Also forfeit all other ACTIVE or PENDING_CONVERSION bonuses for this user since we just reset their wallets ──
+            await tx.userBonus.updateMany({
+                where: { 
+                    userId: ub.userId,
+                    id: { not: userBonusId },
+                    status: { in: ['ACTIVE', 'PENDING_CONVERSION'] }
+                },
+                data: {
+                    status: 'FORFEITED',
+                    forfeitedAt: new Date()
+                }
+            });
+
+            let finalBalanceIncrement = 0;
+            let finalCryptoIncrement = 0;
+            if (walletSnapshot.convertibleAmount > 0) {
+                if (mainWalletField === 'cryptoBalance') finalCryptoIncrement += walletSnapshot.convertibleAmount;
+                else finalBalanceIncrement += walletSnapshot.convertibleAmount;
+            }
+            finalBalanceIncrement += realRefundInr;
+            finalCryptoIncrement += realRefundCrypto;
+
             const updateData: any = {
-                ...(walletSnapshot.convertibleAmount > 0
-                    ? { [mainWalletField]: { increment: walletSnapshot.convertibleAmount } }
-                    : {}),
-                ...walletSnapshot.deductionData,
-                wageringRequired: { decrement: ub.wageringRequired },
-                wageringDone: { decrement: Math.min(ub.wageringDone, ub.wageringRequired) },
+                wageringRequired: 0,
+                wageringDone: 0,
+                casinoBonusWageringRequired: 0,
+                casinoBonusWageringDone: 0,
+                sportsBonusWageringRequired: 0,
+                sportsBonusWageringDone: 0,
+                casinoBonus: 0,
+                sportsBonus: 0,
+                fiatBonus: 0,
+                cryptoBonus: 0,
             };
-            if (applicableTo !== 'SPORTS') {
-                updateData.casinoBonusWageringRequired = { decrement: ub.wageringRequired };
-                updateData.casinoBonusWageringDone = { decrement: Math.min(ub.wageringDone, ub.wageringRequired) };
-            }
-            if (applicableTo === 'SPORTS') {
-                updateData.sportsBonusWageringRequired = { decrement: ub.wageringRequired };
-                updateData.sportsBonusWageringDone = { decrement: Math.min(ub.wageringDone, ub.wageringRequired) };
-            }
+
+            if (finalBalanceIncrement > 0) updateData.balance = { increment: finalBalanceIncrement };
+            if (finalCryptoIncrement > 0) updateData.cryptoBalance = { increment: finalCryptoIncrement };
+            if (exposureDecrement > 0) updateData.exposure = { decrement: exposureDecrement };
 
             await tx.user.update({ where: { id: ub.userId }, data: updateData });
             if (walletSnapshot.convertibleAmount > 0) {
@@ -980,9 +1406,13 @@ export class BonusService {
                             bonusCode: ub.bonusCode,
                             bonusType: applicableTo,
                             walletLabel: walletSnapshot.walletLabel,
+                            bonusAmount: ub.bonusAmount,
+                            deductionAmount: walletSnapshot.deductibleAmount,
+                            conversionCapAmount: this.getBonusConversionCapAmount(ub),
+                            forfeitedAmount: walletSnapshot.forfeitedAmount,
                             destinationWallet: isCrypto ? 'CRYPTO_WALLET' : 'MAIN_WALLET',
                         },
-                        remarks: `Admin force-completed bonus: ${ub.bonusCode} by admin #${adminId}`,
+                        remarks: `Admin force-completed bonus: ${ub.bonusCode} by admin #${adminId}${walletSnapshot.forfeitedAmount > 0 ? `, capped at ${walletSnapshot.convertibleAmount}` : ''}`,
                         adminId,
                         createdAt: new Date(),
                         updatedAt: new Date(),
@@ -999,6 +1429,7 @@ export class BonusService {
 
         const applicableTypes = this.getApplicableBonusTypes(type);
         const [activeBonus, user] = await Promise.all([
+            // Only fetch ACTIVE bonuses — PENDING_CONVERSION requires admin approval and cannot be self-converted
             db(this.prisma).userBonus.findFirst({
                 where: { userId, status: 'ACTIVE', applicableTo: { in: applicableTypes } },
             }),
@@ -1024,18 +1455,32 @@ export class BonusService {
             throw new BadRequestException('User not found');
         }
 
-        if (activeBonus) {
-            const wageringRemaining = Math.max(0, Number(activeBonus.wageringRequired || 0) - Number(activeBonus.wageringDone || 0));
-            if (wageringRemaining > 0) {
-                throw new BadRequestException(`Complete your ${type.toLowerCase()} bonus wagering before moving it to the main wallet`);
+        if (!activeBonus) {
+            // Check if there's a PENDING_CONVERSION bonus and give a specific error
+            const pendingBonus = await db(this.prisma).userBonus.findFirst({
+                where: { userId, status: 'PENDING_CONVERSION', applicableTo: { in: applicableTypes } },
+            });
+            if (pendingBonus) {
+                throw new BadRequestException(
+                    `Your ${type.toLowerCase()} bonus is awaiting admin approval. You will be notified once it is converted to your main wallet.`,
+                );
             }
+            throw new BadRequestException(
+                `No tracked active ${type.toLowerCase()} bonus found to convert. Please refresh your wallet or contact support.`,
+            );
+        }
+
+        const wageringRemaining = Math.max(0, Number(activeBonus.wageringRequired || 0) - Number(activeBonus.wageringDone || 0));
+        if (wageringRemaining > 0) {
+            throw new BadRequestException(`Complete your ${type.toLowerCase()} bonus wagering before moving it to the main wallet`);
         }
 
         const walletSnapshot = this.getEligibleBonusSnapshot(
             user,
-            activeBonus?.applicableTo || type,
+            activeBonus.applicableTo || type,
             false,
-            activeBonus?.bonusAmount,
+            activeBonus.bonusAmount,
+            this.getBonusConversionCapAmount(activeBonus),
         );
         if (walletSnapshot.convertibleAmount <= 0) {
             throw new BadRequestException(`No ${walletSnapshot.walletLabel.toLowerCase()} balance available to move`);
@@ -1088,9 +1533,13 @@ export class BonusService {
                         bonusCode: activeBonus?.bonusCode || null,
                         bonusType: type,
                         walletLabel: walletSnapshot.walletLabel,
+                        bonusAmount: activeBonus?.bonusAmount || walletSnapshot.deductibleAmount,
+                        deductionAmount: walletSnapshot.deductibleAmount,
+                        conversionCapAmount: activeBonus ? this.getBonusConversionCapAmount(activeBonus) : walletSnapshot.convertibleAmount,
+                        forfeitedAmount: walletSnapshot.forfeitedAmount,
                         destinationWallet: 'MAIN_WALLET',
                     },
-                    remarks: `${walletSnapshot.walletLabel} moved to main wallet${activeBonus?.bonusCode ? `: ${activeBonus.bonusCode}` : ''}`,
+                    remarks: `${walletSnapshot.walletLabel} moved to main wallet${activeBonus?.bonusCode ? `: ${activeBonus.bonusCode}` : ''}${walletSnapshot.forfeitedAmount > 0 ? `, capped at ${walletSnapshot.convertibleAmount}` : ''}`,
                     createdAt: new Date(),
                     updatedAt: new Date(),
                 },
@@ -1142,6 +1591,7 @@ export class BonusService {
         const expiresAt = new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000);
         const isCrypto = bonus.currency === 'CRYPTO';
         const bonusWalletField = this.getBonusWalletField(applicableTo, isCrypto);
+        const walletLabel = this.getBonusWalletLabel(applicableTo, isCrypto);
 
         const casinoWagerInc = applicableTo === 'SPORTS' ? 0 : wageringRequired;
         const sportsWagerInc = applicableTo === 'SPORTS' ? wageringRequired : 0;
@@ -1180,6 +1630,21 @@ export class BonusService {
                     type: 'BONUS',
                     status: 'APPROVED',
                     adminId,
+                    paymentMethod: 'BONUS_WALLET',
+                    paymentDetails: this.buildBonusGrantPaymentDetails({
+                        source: 'ADMIN_TEMPLATE',
+                        bonusCode: code,
+                        applicableTo,
+                        walletLabel,
+                        bonusCurrency: bonus.currency,
+                        depositAmount,
+                        bonusAmount,
+                        wageringRequired,
+                        wageringRequirement: bonus.wageringRequirement,
+                        extra: {
+                            adminId,
+                        },
+                    }),
                     remarks: `Manual bonus grant: ${bonus.title} (${code}) — by admin #${adminId}`,
                     createdAt: new Date(),
                     updatedAt: new Date(),
@@ -1259,12 +1724,21 @@ export class BonusService {
                     status: 'APPROVED',
                     adminId,
                     paymentMethod: 'BONUS_WALLET',
-                    paymentDetails: {
+                    paymentDetails: this.buildBonusGrantPaymentDetails({
                         source: 'ADMIN_DIRECT',
-                        bonusType,
+                        bonusCode,
+                        applicableTo: config.applicableTo,
                         walletLabel: config.walletLabel,
+                        bonusCurrency: config.bonusCurrency,
+                        depositAmount: 0,
+                        bonusAmount: amount,
+                        wageringRequired,
                         wageringRequirement,
-                    },
+                        extra: {
+                            adminId,
+                            adminDirectBonusType: bonusType,
+                        },
+                    }),
                     remarks: `Manual ${config.walletLabel} credit: ${bonusTitle} by admin #${adminId}`,
                     createdAt: new Date(),
                     updatedAt: new Date(),
@@ -1322,10 +1796,10 @@ export class BonusService {
                 { validUntil: { $exists: false } },
                 { validUntil: { $gt: now } },
             ],
-        }).select('code title description type applicableTo amount percentage minDeposit maxBonus wageringRequirement depositWagerMultiplier expiryDays imageUrl forFirstDepositOnly currency').sort({ createdAt: -1 }).exec();
+        }).select('code title description type applicableTo amount percentage minDeposit minDepositFiat minDepositCrypto maxBonus wageringRequirement depositWagerMultiplier expiryDays imageUrl forFirstDepositOnly currency').sort({ createdAt: -1 }).exec();
     }
 
-    async redeemSignupBonus(userId: number, bonusCode: string) {
+    async redeemSignupBonus(userId: number, bonusCode: string, ip?: string) {
         const bonus = await this.bonusModel.findOne({ code: bonusCode.toUpperCase() });
         if (!bonus || !bonus.isActive || !bonus.showOnSignup)
             throw new BadRequestException('Invalid or unavailable signup bonus');
@@ -1334,10 +1808,23 @@ export class BonusService {
         if (bonus.type !== 'NO_DEPOSIT')
             throw new BadRequestException('Only NO_DEPOSIT bonuses are immediately redeemable at signup');
 
+        // ── Guard 1: Concurrent mutex lock ───────────────────────────────────────
+        const releaseLock = await this.acquireRedeemLock(userId);
+        try {
+
+        // ── Guard 2: One-time usage ──────────────────────────────────────────
         const alreadyUsed = await db(this.prisma).userBonus.findFirst({
             where: { userId, bonusId: String(bonus._id), status: { not: 'FORFEITED' } }
         });
         if (alreadyUsed) throw new BadRequestException('You have already used this bonus');
+
+        // ── Guard 3: Phone dedup (shared helper) ────────────────────────────
+        await this.checkPhoneDedup(userId, String(bonus._id));
+
+        // ── Guard 4: IP cross-account dedup ────────────────────────────────
+        if (ip) {
+            await this.checkAndRecordIpClaim(this.normalizeIp(ip), String(bonus._id), userId);
+        }
 
         const bonusAmount = bonus.amount > 0 ? bonus.amount : 0;
         if (bonusAmount <= 0) throw new BadRequestException('Bonus has no value');
@@ -1378,9 +1865,25 @@ export class BonusService {
             await tx.user.update({ where: { id: userId }, data: userUpdate });
             await tx.transaction.create({
                 data: {
-                    userId, amount: bonusAmount, type: 'BONUS', status: 'APPROVED',
+                    userId,
+                    amount: bonusAmount,
+                    type: 'BONUS',
+                    status: 'APPROVED',
+                    paymentMethod: 'BONUS_WALLET',
+                    paymentDetails: this.buildBonusGrantPaymentDetails({
+                        source: 'SIGNUP_BONUS',
+                        bonusCode: bonus.code,
+                        applicableTo,
+                        walletLabel: this.getBonusWalletLabel(applicableTo, isCrypto),
+                        bonusCurrency: bonus.currency,
+                        depositAmount: 0,
+                        bonusAmount,
+                        wageringRequired,
+                        wageringRequirement: bonus.wageringRequirement,
+                    }),
                     remarks: `Signup bonus: ${bonus.title} (${bonus.code}) — ${bonus.wageringRequirement}x wagering, ${applicableTo}`,
-                    createdAt: new Date(), updatedAt: new Date(),
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
                 },
             });
         });
@@ -1389,6 +1892,8 @@ export class BonusService {
         this.emitWalletRefresh(userId);
         this.logger.log(`[Bonus] Signup bonus redeemed for user ${userId}: ${bonus.code} — ${bonusAmount}`);
         return { success: true, bonusAmount, bonusCode: bonus.code };
+
+        } finally { await releaseLock(); }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

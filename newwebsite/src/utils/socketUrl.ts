@@ -25,7 +25,10 @@ function parseConfiguredUrl(rawUrl: string): URL | null {
 }
 
 function buildSocketPath(pathname: string) {
-    const cleanedPath = pathname.replace(/\/+$/, '');
+    let cleanedPath = pathname.replace(/\/+$/, '');
+    if (cleanedPath.endsWith('/api')) {
+        cleanedPath = cleanedPath.slice(0, -4);
+    }
     return cleanedPath ? `${cleanedPath}/socket.io` : '/socket.io';
 }
 
@@ -51,7 +54,14 @@ export function getConfiguredSocketEndpoint(): SocketEndpoint | null {
         || process.env.NEXT_PUBLIC_API_URL;
 
     if (!apiUrl) {
-        return null;
+        if (typeof window === 'undefined') {
+            return null;
+        }
+
+        return {
+            url: window.location.origin,
+            path: '/socket.io',
+        };
     }
 
     const parsedUrl = parseConfiguredUrl(apiUrl);
