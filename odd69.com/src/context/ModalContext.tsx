@@ -15,7 +15,9 @@ interface ModalContextType {
     closeDeposit: () => void;
     // UPI gateway deposit
     isDepositOpen: boolean;
-    openUPIDeposit: () => void;
+    depositInitialTab: 'fiat' | 'crypto' | null;
+    depositAllowFiatTab: boolean;
+    openUPIDeposit: (options?: { initialTab?: 'fiat' | 'crypto'; allowFiatTab?: boolean }) => void;
     closeUPIDeposit: () => void;
     // Manual UPI deposit
     isManualDepositOpen: boolean;
@@ -35,15 +37,23 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
     const [isRegisterOpen, setIsRegisterOpen] = useState(false);
     const [isDepositChooserOpen, setIsDepositChooserOpen] = useState(false);
     const [isDepositOpen, setIsDepositOpen] = useState(false);
+    const [depositInitialTab, setDepositInitialTab] = useState<'fiat' | 'crypto' | null>(null);
+    const [depositAllowFiatTab, setDepositAllowFiatTab] = useState(true);
     const [isManualDepositOpen, setIsManualDepositOpen] = useState(false);
     const [manualDepositAllowBack, setManualDepositAllowBack] = useState(true);
     const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+
+    const resetDepositMode = () => {
+        setDepositInitialTab(null);
+        setDepositAllowFiatTab(true);
+    };
 
     const closeAll = () => {
         setIsLoginOpen(false);
         setIsRegisterOpen(false);
         setIsDepositChooserOpen(false);
         setIsDepositOpen(false);
+        resetDepositMode();
         setIsManualDepositOpen(false);
         setManualDepositAllowBack(true);
         setIsWithdrawOpen(false);
@@ -55,12 +65,19 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
     const openRegister = () => { closeAll(); setIsRegisterOpen(true); };
     const closeRegister = () => setIsRegisterOpen(false);
 
-    // openDeposit → directly opens UPI gateway deposit (skips chooser sheet)
-    const openDeposit = () => { closeAll(); setIsDepositOpen(true); };
-    const closeDeposit = () => { setIsDepositChooserOpen(false); setIsDepositOpen(false); setIsManualDepositOpen(false); setManualDepositAllowBack(true); };
+    // openDeposit → opens the chooser sheet which auto-routes based on gateway config
+    const openDeposit = () => { closeAll(); setIsDepositChooserOpen(true); };
+    const closeDeposit = () => { setIsDepositChooserOpen(false); setIsDepositOpen(false); resetDepositMode(); setIsManualDepositOpen(false); setManualDepositAllowBack(true); };
 
-    const openUPIDeposit = () => { setIsDepositChooserOpen(false); setIsManualDepositOpen(false); setManualDepositAllowBack(true); setIsDepositOpen(true); };
-    const closeUPIDeposit = () => setIsDepositOpen(false);
+    const openUPIDeposit = (options?: { initialTab?: 'fiat' | 'crypto'; allowFiatTab?: boolean }) => {
+        setIsDepositChooserOpen(false);
+        setIsManualDepositOpen(false);
+        setManualDepositAllowBack(true);
+        setDepositInitialTab(options?.initialTab ?? null);
+        setDepositAllowFiatTab(options?.allowFiatTab ?? true);
+        setIsDepositOpen(true);
+    };
+    const closeUPIDeposit = () => { setIsDepositOpen(false); resetDepositMode(); };
 
     const openManualDeposit = (options?: { allowBack?: boolean }) => {
         setIsDepositChooserOpen(false);
@@ -68,7 +85,7 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
         setManualDepositAllowBack(options?.allowBack ?? true);
         setIsManualDepositOpen(true);
     };
-    const closeManualDeposit = () => { setIsManualDepositOpen(false); setManualDepositAllowBack(true); };
+    const closeManualDeposit = () => { setIsManualDepositOpen(false); setManualDepositAllowBack(true); resetDepositMode(); };
 
     const openWithdraw = () => { closeAll(); setIsWithdrawOpen(true); };
     const closeWithdraw = () => setIsWithdrawOpen(false);
@@ -79,7 +96,7 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
                 isLoginOpen, openLogin, closeLogin,
                 isRegisterOpen, openRegister, closeRegister,
                 isDepositChooserOpen, openDeposit, closeDeposit,
-                isDepositOpen, openUPIDeposit, closeUPIDeposit,
+                isDepositOpen, depositInitialTab, depositAllowFiatTab, openUPIDeposit, closeUPIDeposit,
                 isManualDepositOpen, manualDepositAllowBack, openManualDeposit, closeManualDeposit,
                 isWithdrawOpen, openWithdraw, closeWithdraw,
             }}

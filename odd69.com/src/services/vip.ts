@@ -6,9 +6,9 @@ export interface VipApplicationStatus {
     message?: string;
     currentPlatform?: string;
     monthlyVolume?: number;
-    assignedTier?: string;
     reviewNotes?: string;
     reviewedAt?: string;
+    assignedTier?: string;
     createdAt: string;
     updatedAt: string;
 }
@@ -42,17 +42,11 @@ export interface VipStatus {
 }
 
 export const vipApi = {
-    /**
-     * Submit a VIP application. Requires JWT token in cookies.
-     */
     apply: async (data: VipApplyDto): Promise<{ id: number; status: string; createdAt: string }> => {
         const response = await api.post('/vip/apply', data);
         return response.data;
     },
 
-    /**
-     * Get the current user's VIP application status (or null if none).
-     */
     getMyApplication: async (): Promise<VipApplicationStatus | null> => {
         try {
             const response = await api.get('/vip/my-application');

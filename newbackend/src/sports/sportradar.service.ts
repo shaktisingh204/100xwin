@@ -163,6 +163,14 @@ export class SportradarService implements OnModuleInit {
   private readonly API_KEY =
     process.env.SPORTRADAR_API_KEY || '67f1a9c2d4e8b1a3c9f05673';
 
+  // ── Backup mode: pull data from primary's /api/sportradar-proxy ─────────────
+  // When enabled, every periodic sync bypasses the Sportradar upstream and
+  // mirrors the primary's Redis (same keys, same TTLs) into ours.
+  private readonly PROXY_URL = (process.env.SPORTRADAR_PROXY_URL ?? '').replace(/\/$/, '');
+  private readonly PROXY_TOKEN = process.env.SPORTRADAR_PROXY_TOKEN ?? '';
+  private readonly proxyEnabled =
+    process.env.SPORTRADAR_PROXY_ENABLED === 'true' && this.PROXY_URL.length > 0;
+
   private readonly SPORTS_REDIS_KEY = 'sportradar:sports';
 
   private redisClient: Redis | null = null;
@@ -447,6 +455,31 @@ export class SportradarService implements OnModuleInit {
     return `sportradar:events:${sportId}`;
   }
 
+  // ── Proxy helper (backup mode) ────────────────────────────────────────────
+  /**
+   * GET from the primary's /api/sportradar-proxy/<path>. Response shape:
+   *   { key: string, data: <original cached JSON> }
+   * Returns the `data` field. 404 → null (primary hasn't warmed the key yet).
+   */
+  private async fetchFromProxy<T = any>(path: string): Promise<T | null> {
+    const url = `${this.PROXY_URL}${path.startsWith('/') ? path : `/${path}`}`;
+    try {
+      const res = await firstValueFrom(
+        this.httpService.get<{ key: string; data: T }>(url, {
+          headers: { 'x-api-token': this.PROXY_TOKEN },
+          timeout: 8_000,
+        }),
+      );
+      return (res.data?.data ?? null) as T | null;
+    } catch (e: any) {
+      if (e?.response?.status === 404) {
+        console.warn(`[sportradar-proxy] 404 not warm: ${path}`);
+        return null;
+      }
+      throw e;
+    }
+  }
+
   // ── Core API helper — dual-host race + 2s Redis cache ────────────────────────
 
   /**
@@ -517,6 +550,25 @@ export class SportradarService implements OnModuleInit {
    * Existing records are updated; new ones are inserted.
    */
   async seedSportsFromApi(): Promise<{ success: boolean; seeded: number; message: string }> {
+    if (this.proxyEnabled) {
+      try {
+        const mapped = await this.fetchFromProxy<any[]>('/sports');
+        if (!mapped) {
+          return { success: true, seeded: 0, message: 'Primary sports cache not warm yet' };
+        }
+        await this.getRedis()
+          .set(this.SPORTS_REDIS_KEY, JSON.stringify(mapped), 'EX', SPORTS_REDIS_TTL)
+          .catch(() => {});
+        return {
+          success: true,
+          seeded: Array.isArray(mapped) ? mapped.length : 0,
+          message: `Mirrored ${Array.isArray(mapped) ? mapped.length : 0} sports from primary proxy`,
+        };
+      } catch (e: any) {
+        return { success: false, seeded: 0, message: e?.message ?? 'proxy fetch failed' };
+      }
+    }
+
     try {
       const sports = await this.fetchAllSportsFromApi();
       const active = sports.filter((s) => s.status === 'ACTIVE');
@@ -691,6 +743,41 @@ export class SportradarService implements OnModuleInit {
    * Also writes merged sportradar:inplay:all  (all sports flat, TTL 30s)
    */
   async syncAllInplayEvents(): Promise<void> {
+    if (this.proxyEnabled) {
+      try {
+        const redis = this.getRedis();
+        const allInplay = (await this.fetchFromProxy<SportradarEvent[]>('/inplay')) ?? [];
+
+        const sportIds = Object.keys(SORT_ORDER);
+        const bySport = new Map<string, SportradarEvent[]>();
+        for (const ev of allInplay) {
+          const arr = bySport.get(ev.sportId) || [];
+          arr.push(ev);
+          bySport.set(ev.sportId, arr);
+        }
+
+        const pipeline = redis.pipeline();
+        sportIds.forEach((sportId) => {
+          const events = bySport.get(sportId) || [];
+          pipeline.set(
+            `sportradar:inplay:${sportId}`,
+            JSON.stringify(events),
+            'EX',
+            INPLAY_REDIS_TTL,
+          );
+          for (const ev of events) {
+            pipeline.set(`sportradar:event:${ev.eventId}`, JSON.stringify(ev), 'EX', INPLAY_REDIS_TTL);
+            pipeline.set(`sportradar:odds:${ev.eventId}`, JSON.stringify(ev.markets), 'EX', INPLAY_REDIS_TTL);
+          }
+        });
+        pipeline.set('sportradar:inplay:all', JSON.stringify(allInplay), 'EX', INPLAY_REDIS_TTL);
+        await pipeline.exec().catch(() => {});
+      } catch {
+        /* ignore proxy errors, next tick retries */
+      }
+      return;
+    }
+
     // Use SORT_ORDER keys — always sr:sport:X format, never old numeric IDs
     const sportIds = Object.keys(SORT_ORDER);
 
@@ -972,6 +1059,37 @@ export class SportradarService implements OnModuleInit {
    * Also writes sportradar:upcoming:all  (all sports flat, TTL 2min)
    */
   async syncAllUpcomingEvents(): Promise<void> {
+    if (this.proxyEnabled) {
+      try {
+        const redis = this.getRedis();
+        const allUpcoming = (await this.fetchFromProxy<SportradarEvent[]>('/upcoming')) ?? [];
+
+        const sportIds = Object.keys(SORT_ORDER);
+        const bySport = new Map<string, SportradarEvent[]>();
+        for (const ev of allUpcoming) {
+          const arr = bySport.get(ev.sportId) || [];
+          arr.push(ev);
+          bySport.set(ev.sportId, arr);
+        }
+
+        const pipeline = redis.pipeline();
+        sportIds.forEach((sportId) => {
+          const events = bySport.get(sportId) || [];
+          pipeline.set(
+            `sportradar:upcoming:${sportId}`,
+            JSON.stringify(events),
+            'EX',
+            UPCOMING_REDIS_TTL,
+          );
+        });
+        pipeline.set('sportradar:upcoming:all', JSON.stringify(allUpcoming), 'EX', UPCOMING_REDIS_TTL);
+        await pipeline.exec().catch(() => {});
+      } catch {
+        /* ignore proxy errors, next tick retries */
+      }
+      return;
+    }
+
     const sportIds = Object.keys(SORT_ORDER);
     const redis = this.getRedis();
     const allUpcoming: SportradarEvent[] = [];
@@ -1103,6 +1221,34 @@ export class SportradarService implements OnModuleInit {
     marketCount: number;
     error?: string;
   }> {
+    if (this.proxyEnabled) {
+      try {
+        const events = (await this.fetchFromProxy<SportradarEvent[]>(`/events/${sportId}`)) ?? [];
+        if (events.length === 0) return { sportId, eventCount: 0, marketCount: 0 };
+
+        const redis = this.getRedis();
+        const pipeline = redis.pipeline();
+        pipeline.set(
+          this.eventsRedisKey(sportId),
+          JSON.stringify(events),
+          'EX',
+          EVENTS_REDIS_TTL,
+        );
+        for (const ev of events) {
+          const ttl =
+            ev.status === 'LIVE' || (ev as any).status === 'IN_PLAY' || ev.eventStatus === 'LIVE'
+              ? INPLAY_REDIS_TTL
+              : UPCOMING_REDIS_TTL;
+          pipeline.set(`sportradar:event:${ev.eventId}`, JSON.stringify(ev), 'EX', ttl);
+          pipeline.set(`sportradar:odds:${ev.eventId}`, JSON.stringify(ev.markets), 'EX', ttl);
+        }
+        await pipeline.exec().catch(() => {});
+        return { sportId, eventCount: events.length, marketCount: 0 };
+      } catch (e: any) {
+        return { sportId, eventCount: 0, marketCount: 0, error: e?.message ?? 'proxy fetch failed' };
+      }
+    }
+
     try {
       const events = await this.fetchAllEventsForSport(sportId);
       const redis = this.getRedis();
@@ -1446,6 +1592,10 @@ export class SportradarService implements OnModuleInit {
     eventId: string,
     options?: { bypassCache?: boolean },
   ): Promise<any> {
+    if (this.proxyEnabled) {
+      const data = await this.fetchFromProxy<any>(`/market/${eventId}`);
+      return data ?? { success: false, message: 'Primary market cache not warm yet' };
+    }
     return this.apiGet<any>('list-market', { sportId, eventId }, options);
   }
 
@@ -1513,6 +1663,17 @@ export class SportradarService implements OnModuleInit {
         return JSON.parse(cached);
       }
     } catch { /* fall through */ }
+
+    // 1b. Proxy mode — pull the primary's cached market-result verbatim
+    if (this.proxyEnabled) {
+      const data = await this.fetchFromProxy<any>(`/market-result/${eventId}`);
+      if (data?.success) {
+        redis
+          .set(cacheKey, JSON.stringify(data), 'EX', SportradarService.MARKET_RESULT_TTL)
+          .catch(() => {});
+      }
+      return data ?? { success: false, message: 'Primary market-result not warm yet' };
+    }
 
     // 2. Auto-resolve sportId if not provided
     if (!sportId) {

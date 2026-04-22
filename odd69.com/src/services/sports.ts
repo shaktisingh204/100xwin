@@ -2,9 +2,6 @@
 
 import api from './api';
 
-// Revert back to local backend (which caches efficiently in Redis)
-export const sportsAxios = api;
-
 export interface DiamondMarketOdds {
     sid: number;
     psid: number;
@@ -38,7 +35,6 @@ export interface MatchOddSummary {
     selectionId: string;
     name: string;
     back: number | null;
-    lay?: number | null;
     betType?: 'back';
 }
 
@@ -70,7 +66,7 @@ export const sportsApi = {
     getLiveEvents: async (sportId?: string | number): Promise<Event[]> => {
         try {
             const url = sportId ? `/sports/live?sportId=${sportId}` : '/sports/live';
-            const response = await sportsAxios.get(url);
+            const response = await api.get(url);
             return response.data;
         } catch (error) {
             console.error("Error fetching live events:", error);
@@ -80,7 +76,7 @@ export const sportsApi = {
     getUpcomingEvents: async (sportId?: string | number): Promise<Event[]> => {
         try {
             const url = sportId ? `/sports/upcoming?sportId=${sportId}` : '/sports/upcoming';
-            const response = await sportsAxios.get(url);
+            const response = await api.get(url);
             return response.data;
         } catch (error) {
             console.error("Error fetching upcoming events:", error);
@@ -91,25 +87,48 @@ export const sportsApi = {
     getAllEvents: async (sportId?: string | number): Promise<Event[]> => {
         try {
             const url = sportId ? `/sports/all-events?sportId=${sportId}` : '/sports/all-events';
-            const response = await sportsAxios.get(url);
+            const response = await api.get(url);
             return response.data;
         } catch (error) {
             console.error("Error fetching all events:", error);
             return [];
         }
     },
+    /** Sportsradar-only events — reads allevents:sr:* Redis keys (legacy compat) */
+    getSREvents: async (sportId?: string): Promise<Event[]> => {
+        try {
+            const url = sportId
+                ? `/sportsbook/events?sport_id=${encodeURIComponent(sportId)}`
+                : '/sportsbook/events';
+            const response = await api.get(url);
+            return Array.isArray(response.data?.data) ? response.data.data : [];
+        } catch (error) {
+            console.error("Error fetching SR events:", error);
+            return [];
+        }
+    },
+
     getCompetitions: async () => {
         try {
-            const response = await sportsAxios.get('/sports/competitions');
+            const response = await api.get('/sports/competitions');
             return response.data;
         } catch (error) {
             console.error("Error fetching competitions:", error);
             return [];
         }
     },
+    getSports: async () => {
+        try {
+            const response = await api.get('/sports/list');
+            return response.data;
+        } catch (error) {
+            console.error("Error fetching sports list:", error);
+            return [];
+        }
+    },
     getEventsBySport: async (sportId: number) => {
         try {
-            const response = await sportsAxios.get(`/sports/events/${sportId}`);
+            const response = await api.get(`/sports/events/${sportId}`);
             return response.data;
         } catch (error) {
             console.error("Error fetching events by sport:", error);
@@ -118,7 +137,7 @@ export const sportsApi = {
     },
     getMatchDetails: async (matchId: string): Promise<Event> => {
         try {
-            const response = await sportsAxios.get(`/sports/db/match/${matchId}`);
+            const response = await api.get(`/sports/db/match/${matchId}`);
             return response.data;
         } catch (error) {
             console.error("Error fetching match details:", error);
@@ -130,7 +149,7 @@ export const sportsApi = {
             const url = userId
                 ? `/sports/match-details/${sportId}/${matchId}?userId=${userId}`
                 : `/sports/match-details/${sportId}/${matchId}`;
-            const response = await sportsAxios.get(url);
+            const response = await api.get(url);
             return response.data;
         } catch (error) {
             console.error("Error fetching diamond match details:", error);
@@ -139,7 +158,7 @@ export const sportsApi = {
     },
     getScorecardAndTvData: async (sportId: string, matchId: string) => {
         try {
-            const response = await sportsAxios.get(`/sports/scorecard-tv/${sportId}/${matchId}`);
+            const response = await api.get(`/sports/scorecard-tv/${sportId}/${matchId}`);
             return response.data;
         } catch (error) {
             console.error("Error fetching tv and scorecard data:", error);
@@ -148,7 +167,7 @@ export const sportsApi = {
     },
     getTvUrl: async (sportId: string, matchId: string): Promise<string | null> => {
         try {
-            const response = await sportsAxios.get(`/sports/tv-url/${sportId}/${matchId}`);
+            const response = await api.get(`/sports/tv-url/${sportId}/${matchId}`);
             return response.data?.url || null;
         } catch (error) {
             console.error("Error fetching tv url:", error);
@@ -157,7 +176,7 @@ export const sportsApi = {
     },
     getScoreUrl: async (sportId: string, matchId: string): Promise<string | null> => {
         try {
-            const response = await sportsAxios.get(`/sports/score-url/${sportId}/${matchId}`);
+            const response = await api.get(`/sports/score-url/${sportId}/${matchId}`);
             return response.data?.url || null;
         } catch (error) {
             console.error("Error fetching score url:", error);
@@ -166,7 +185,7 @@ export const sportsApi = {
     },
     getTopEvents: async () => {
         try {
-            const response = await sportsAxios.get('/sports/top-events');
+            const response = await api.get('/sports/top-events');
             return response.data;
         } catch (error) {
             console.error("Error fetching top events:", error);
@@ -175,7 +194,7 @@ export const sportsApi = {
     },
     getHomeEvents: async () => {
         try {
-            const response = await sportsAxios.get('/sports/home-events');
+            const response = await api.get('/sports/home-events');
             return response.data;
         } catch (error) {
             console.error("Error fetching home events:", error);
@@ -184,16 +203,20 @@ export const sportsApi = {
     },
     checkOdds: async (bets: { eventId?: string; marketId: string; selectionId: string; odds: number }[]) => {
         try {
-            const response = await sportsAxios.post('/sports/check-odds', { bets });
+            const response = await api.post('/sports/check-odds', { bets });
             return response.data as {
                 success: boolean;
                 results: {
+                    eventId: string;
                     marketId: string;
                     selectionId: string;
                     requestedOdds: number;
                     currentOdds: number | null;
                     changed: boolean;
                     suspended: boolean;
+                    eventStatus?: string | null;
+                    eventClosed?: boolean;
+                    reason?: string | null;
                 }[];
             };
         } catch (error) {
@@ -204,7 +227,7 @@ export const sportsApi = {
     },
     getTeamIcons: async (): Promise<Record<string, string>> => {
         try {
-            const response = await sportsAxios.get('/sports/team-icons');
+            const response = await api.get('/sports/team-icons');
             const icons: { team_name: string; icon_url: string }[] = response.data || [];
             const map: Record<string, string> = {};
             for (const i of icons) {
@@ -215,5 +238,107 @@ export const sportsApi = {
             console.error("Error fetching team icons:", error);
             return {};
         }
+    },
+};
+
+// ─── Sportsbook API (/sportsbook/*) — Sportsradar only ──────────────────────
+export const sportsbookApi = {
+    /** All SR sports */
+    getSports: async () => {
+        try {
+            const r = await api.get('/sportsbook/sports');
+            return Array.isArray(r.data?.data) ? r.data.data : [];
+        } catch { return []; }
+    },
+
+    /** Events count from SR proxy */
+    getEventsCount: async () => {
+        try {
+            const r = await api.get('/sportsbook/events-count');
+            return r.data?.data ?? r.data;
+        } catch { return null; }
+    },
+
+    /** All events (live + upcoming). Optional sportId filter */
+    getEvents: async (sportId?: string): Promise<Event[]> => {
+        try {
+            const url = sportId
+                ? `/sportsbook/events?sport_id=${encodeURIComponent(sportId)}`
+                : '/sportsbook/events';
+            const r = await api.get(url);
+            return Array.isArray(r.data?.data) ? r.data.data : [];
+        } catch { return []; }
+    },
+
+    /** Only live (in-play) events */
+    getLiveEvents: async (sportId?: string): Promise<Event[]> => {
+        try {
+            const url = sportId
+                ? `/sportsbook/live?sport_id=${encodeURIComponent(sportId)}`
+                : '/sportsbook/live';
+            const r = await api.get(url);
+            return Array.isArray(r.data?.data) ? r.data.data : [];
+        } catch { return []; }
+    },
+
+    /** Only upcoming (pre-match) events */
+    getUpcomingEvents: async (sportId?: string): Promise<Event[]> => {
+        try {
+            const url = sportId
+                ? `/sportsbook/upcoming?sport_id=${encodeURIComponent(sportId)}`
+                : '/sportsbook/upcoming';
+            const r = await api.get(url);
+            return Array.isArray(r.data?.data) ? r.data.data : [];
+        } catch { return []; }
+    },
+
+    /** Market (odds) for a specific event */
+    getMarket: async (eventId: string) => {
+        try {
+            const r = await api.get(`/sportsbook/market?event_id=${encodeURIComponent(eventId)}`);
+            return r.data?.data ?? null;
+        } catch { return null; }
+    },
+
+    /** Settled results */
+    getResults: async (sportId?: string, limit = 50) => {
+        try {
+            const params = new URLSearchParams({ limit: String(limit) });
+            if (sportId) params.set('sport_id', sportId);
+            const r = await api.get(`/sportsbook/results?${params}`);
+            return r.data?.data ?? null;
+        } catch { return null; }
+    },
+
+    /** Result for a settled market */
+    getMarketResult: async (marketId: string) => {
+        try {
+            const r = await api.get(`/sportsbook/market-result?market_id=${encodeURIComponent(marketId)}`);
+            return r.data?.data ?? null;
+        } catch { return null; }
+    },
+
+    /** Virtual events */
+    getVirtualEvents: async () => {
+        try {
+            const r = await api.get('/sportsbook/virtual');
+            return r.data?.data ?? null;
+        } catch { return null; }
+    },
+
+    /** Live scoreboard */
+    getScoreboard: async (eventId: string) => {
+        try {
+            const r = await api.get(`/sportsbook/scoreboard?event_id=${encodeURIComponent(eventId)}`);
+            return r.data?.data ?? null;
+        } catch { return null; }
+    },
+
+    /** Summary stats: total, live, upcoming, bySport */
+    getSummary: async () => {
+        try {
+            const r = await api.get('/sportsbook/summary');
+            return r.data?.data ?? null;
+        } catch { return null; }
     },
 };

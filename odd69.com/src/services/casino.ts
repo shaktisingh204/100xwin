@@ -70,7 +70,7 @@ export const casinoService = {
         };
     },
 
-    launchGame: async (payload: { username: string; provider: string; gameId: string; isLobby?: boolean }) => {
+    launchGame: async (payload: { username?: string; provider: string; gameId: string; isLobby?: boolean; walletMode?: string }) => {
         const response = await api.post(`/casino/launch`, payload);
         return response.data;
     },

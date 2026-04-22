@@ -5,6 +5,10 @@ import api from '@/services/api';
 import { useAuth } from './AuthContext';
 import { getCurrencySymbol } from '@/utils/currency';
 import { useSocket } from './SocketContext';
+import {
+    getMainSubWalletForWallet,
+    getWalletTypeFromSubWallet,
+} from '@/utils/casinoWalletMode';
 
 export type WalletType = 'fiat' | 'crypto';
 export type SubWalletType =
@@ -123,33 +127,34 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     const { isAuthenticated, token, user } = useAuth();
     const { socket } = useSocket();
 
-    const [selectedWallet, _setSelectedWallet] = useState<WalletType>(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem(LS_KEY);
-            if (saved === 'crypto' || saved === 'fiat') return saved;
-        }
-        return 'fiat';
-    });
+    const [selectedWallet, _setSelectedWallet] = useState<WalletType>('fiat');
 
     const validSubWallets: SubWalletType[] = [
         'fiat-main', 'fiat-casino', 'fiat-sports',
         'crypto-main', 'crypto-casino', 'crypto-sports',
     ];
 
-    const [selectedSubWallet, _setSelectedSubWallet] = useState<SubWalletType>(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem(LS_SUB_KEY) as SubWalletType | null;
-            if (saved && validSubWallets.includes(saved)) return saved;
-        }
-        return 'fiat-main';
-    });
+    const [selectedSubWallet, _setSelectedSubWallet] = useState<SubWalletType>('fiat-main');
 
+    // Handle hydration from localStorage to prevent mismatch
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem(LS_KEY) as WalletType | null;
-            document.documentElement.setAttribute('data-wallet', saved || 'fiat');
-        }
+        let savedWallet: WalletType = 'fiat';
+        let savedSubWallet: SubWalletType = 'fiat-main';
+        
+        try {
+            const w = localStorage.getItem(LS_KEY);
+            if (w === 'crypto' || w === 'fiat') savedWallet = w;
+            
+            const sw = localStorage.getItem(LS_SUB_KEY) as SubWalletType | null;
+            if (sw && validSubWallets.includes(sw)) savedSubWallet = sw;
+        } catch { /* ignore */ }
+
+        _setSelectedWallet(savedWallet);
+        _setSelectedSubWallet(savedSubWallet);
+        document.documentElement.setAttribute('data-wallet', savedWallet);
     }, []);
+
+
 
     const [walletData, setWalletData] = useState<WalletData>({
         fiatBalance: 0,
@@ -179,33 +184,42 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
     const [loading, setLoading] = useState(false);
 
+    const persistWalletPreference = useCallback(async (wallet: WalletType) => {
+        if (!isAuthenticated || !token) return;
+        try {
+            await api.patch('/user/wallet-preference', { wallet }, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+        } catch (e) {
+            console.error('Failed to persist wallet preference:', e);
+        }
+    }, [isAuthenticated, token]);
+
     const setSelectedWallet = async (w: WalletType) => {
+        const nextSubWallet = getWalletTypeFromSubWallet(selectedSubWallet) === w
+            ? selectedSubWallet
+            : getMainSubWalletForWallet(w);
+
         _setSelectedWallet(w);
+        _setSelectedSubWallet(nextSubWallet);
         if (typeof window !== 'undefined') {
             localStorage.setItem(LS_KEY, w);
+            localStorage.setItem(LS_SUB_KEY, nextSubWallet);
             document.documentElement.setAttribute('data-wallet', w);
         }
-        if (isAuthenticated && token) {
-            try {
-                await api.patch('/user/wallet-preference', { wallet: w }, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
-            } catch (e) {
-                console.error('Failed to persist wallet preference:', e);
-            }
-        }
+        await persistWalletPreference(w);
     };
 
     const setSelectedSubWallet = (sw: SubWalletType) => {
         _setSelectedSubWallet(sw);
-        // Keep the parent WalletType in sync
-        const parentWallet: WalletType = sw.startsWith('crypto') ? 'crypto' : 'fiat';
+        const parentWallet: WalletType = getWalletTypeFromSubWallet(sw);
         _setSelectedWallet(parentWallet);
         if (typeof window !== 'undefined') {
             localStorage.setItem(LS_SUB_KEY, sw);
             localStorage.setItem(LS_KEY, parentWallet);
             document.documentElement.setAttribute('data-wallet', parentWallet);
         }
+        void persistWalletPreference(parentWallet);
     };
 
     const refreshWallet = useCallback(async () => {
@@ -254,8 +268,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
             });
             if (d.activeWallet === 'crypto' || d.activeWallet === 'fiat') {
                 _setSelectedWallet(d.activeWallet);
+                const nextSubWallet = getWalletTypeFromSubWallet(selectedSubWallet) === d.activeWallet
+                    ? selectedSubWallet
+                    : getMainSubWalletForWallet(d.activeWallet);
+                _setSelectedSubWallet(nextSubWallet);
                 if (typeof window !== 'undefined') {
                     localStorage.setItem(LS_KEY, d.activeWallet);
+                    localStorage.setItem(LS_SUB_KEY, nextSubWallet);
                     document.documentElement.setAttribute('data-wallet', d.activeWallet);
                 }
             }
@@ -264,7 +283,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         } finally {
             setLoading(false);
         }
-    }, [isAuthenticated, token]);
+    }, [isAuthenticated, token, selectedSubWallet]);
 
     useEffect(() => {
         if (isAuthenticated) {

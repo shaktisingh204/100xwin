@@ -10,6 +10,7 @@ export interface Bet {
     marketName: string;
     selectionId: string;
     selectionName: string;
+    selectedTeam?: string;
     odds: number;
     rate?: number;
     gtype?: string;
@@ -19,7 +20,13 @@ export interface Bet {
     potentialWin: number;
     originalPotentialWin?: number;
     status: 'PENDING' | 'WON' | 'LOST' | 'VOID' | 'CASHED_OUT';
-    walletType?: 'fiat' | 'crypto';    // which wallet was debited
+    walletType?: string;               // which wallet was debited
+    provider?: string;
+    srSportId?: string;
+    srMarketFullId?: string;
+    srRunnerId?: string;
+    srMarketName?: string;
+    srRunnerName?: string;
     betType?: string;                  // 'back' | 'lay'
     settledReason?: string;            // human-readable settlement note
     cashoutValue?: number;             // amount received on cash out
@@ -90,6 +97,18 @@ export const betsApi = {
             clientExpectedValue: opts.clientExpectedValue,
             fullRefund: opts.fullRefund ?? false,
         });
+        return response.data;
+    },
+
+    // Book bets (for non-logged in users)
+    bookBets: async (bets: PlaceBetPayload[]): Promise<{ bookingId: string }> => {
+        const response = await api.post('/bets/book', { bets });
+        return response.data;
+    },
+
+    // Retrieve a booked bet
+    getBookedBets: async (bookingId: string): Promise<{ bookingId: string, bets: any[], createdAt: string }> => {
+        const response = await api.get(`/bets/book/${bookingId}`);
         return response.data;
     },
 };

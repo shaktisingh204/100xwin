@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import api from "@/services/api";
 
 interface AuthContextType {
@@ -9,6 +9,7 @@ interface AuthContextType {
     loading: boolean;
     login: (token: string, userData: any) => void;
     logout: () => void;
+    refreshSession: () => Promise<void>;
     isAuthenticated: boolean;
 }
 
@@ -49,43 +50,93 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     useEffect(() => {
+        const handleForcedLogout = () => {
+            performLogout();
+        };
+
+        window.addEventListener('auth:logout', handleForcedLogout);
+        return () => window.removeEventListener('auth:logout', handleForcedLogout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    useEffect(() => {
         const storedToken = localStorage.getItem("token");
 
         if (storedToken && isTokenAlive(storedToken)) {
-            // Token is valid — restore from localStorage without a network call
             setToken(storedToken);
             api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
-
-            const storedUser = localStorage.getItem(AUTH_USER_KEY);
-            if (storedUser) {
-                try {
-                    setUser(JSON.parse(storedUser));
-                } catch {
-                    // Corrupted cache — fetch from server
-                    api.get('/auth/profile')
-                        .then(res => {
-                            setUser(res.data);
-                            localStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.data));
-                        })
-                        .catch(() => { /* keep session alive, just no user details */ });
-                }
-            } else {
-                // No cached user — fetch silently (non-blocking)
-                api.get('/auth/profile')
-                    .then(res => {
-                        setUser(res.data);
-                        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.data));
-                    })
-                    .catch(() => { /* keep session alive */ });
-            }
+            api.get('/auth/profile')
+                .then(res => {
+                    setUser(res.data);
+                    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(res.data));
+                })
+                .catch(() => {
+                    performLogout();
+                })
+                .finally(() => {
+                    setLoading(false);
+                });
+            return;
         } else if (storedToken) {
-            // Token exists but is expired — clear everything
             performLogout();
         }
 
         setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Proactive token refresh: check every 60s if token expires within 2 hours
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const currentToken = localStorage.getItem('token');
+            if (!currentToken) return;
+
+            // If token is already dead, force logout
+            if (!isTokenAlive(currentToken)) {
+                performLogout();
+                return;
+            }
+
+            // If token expires within 2 hours, attempt refresh
+            const payload = decodeJwtPayload(currentToken);
+            if (payload && typeof payload.exp === 'number') {
+                const twoHoursMs = 2 * 60 * 60 * 1000;
+                const expiresAt = payload.exp * 1000;
+                if (expiresAt - Date.now() < twoHoursMs) {
+                    api.post('/auth/refresh')
+                        .then(res => {
+                            const newToken = res.data?.access_token;
+                            if (newToken) {
+                                localStorage.setItem('token', newToken);
+                                setToken(newToken);
+                                api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+                            }
+                        })
+                        .catch(() => {
+                            // Refresh failed — don't force logout yet, token might still be valid
+                        });
+                }
+            }
+        }, 60_000);
+
+        return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const refreshSession = useCallback(async () => {
+        if (!token) return;
+        try {
+            const res = await api.post('/auth/refresh');
+            const newToken = res.data?.access_token;
+            if (newToken) {
+                localStorage.setItem('token', newToken);
+                setToken(newToken);
+                api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+            }
+        } catch {
+            // refresh failed, don't force logout yet — token might still be valid
+        }
+    }, [token]);
 
     const login = (newToken: string, userData: any) => {
         localStorage.setItem("token", newToken);
@@ -100,7 +151,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ user, token, loading, login, logout, isAuthenticated: !!user }}>
+        <AuthContext.Provider value={{ user, token, loading, login, logout, refreshSession, isAuthenticated: !!user }}>
             {children}
         </AuthContext.Provider>
     );
