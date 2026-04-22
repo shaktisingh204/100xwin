@@ -17,6 +17,21 @@ import AuthModal from "@/components/auth/AuthModal";
 import DepositModal from "@/components/deposit/DepositModal";
 import ManualDepositModal from "@/components/deposit/ManualDepositModal";
 import WithdrawModal from "@/components/deposit/WithdrawModal";
+import DepositChooserSheet from "@/components/DepositModal/DepositChooserSheet";
+import { useModal } from "@/context/ModalContext";
+
+function DepositChooserMount() {
+  const { isDepositChooserOpen, closeDeposit, openUPIDeposit, openManualDeposit } = useModal();
+  return (
+    <DepositChooserSheet
+      isOpen={isDepositChooserOpen}
+      onClose={closeDeposit}
+      onChooseDeposit={() => openUPIDeposit()}
+      onChooseCrypto={() => openUPIDeposit({ initialTab: "crypto" })}
+      onChooseManual={() => openManualDeposit()}
+    />
+  );
+}
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -41,6 +56,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                   <MobileBottomNav />
                 </div>
                 <AuthModal />
+                <DepositChooserMount />
                 <DepositModal />
                 <ManualDepositModal />
                 <WithdrawModal />
