@@ -785,9 +785,11 @@ export class SportradarService implements OnModuleInit {
   async syncAllInplayEvents(): Promise<void> {
     if (this.proxyEnabled) {
       try {
-        const redis = this.getRedis();
-        const allInplay = (await this.fetchFromProxy<SportradarEvent[]>('/inplay')) ?? [];
+        const allInplay = await this.fetchFromProxy<SportradarEvent[]>('/inplay');
+        // null = 404 (primary not warm) → preserve existing Redis, don't wipe it
+        if (!allInplay || !Array.isArray(allInplay)) return;
 
+        const redis = this.getRedis();
         const sportIds = Object.keys(SORT_ORDER);
         const bySport = new Map<string, SportradarEvent[]>();
         for (const ev of allInplay) {
@@ -1102,9 +1104,10 @@ export class SportradarService implements OnModuleInit {
   async syncAllUpcomingEvents(): Promise<void> {
     if (this.proxyEnabled) {
       try {
-        const redis = this.getRedis();
-        const allUpcoming = (await this.fetchFromProxy<SportradarEvent[]>('/upcoming')) ?? [];
+        const allUpcoming = await this.fetchFromProxy<SportradarEvent[]>('/upcoming');
+        if (!allUpcoming || !Array.isArray(allUpcoming)) return;
 
+        const redis = this.getRedis();
         const sportIds = Object.keys(SORT_ORDER);
         const bySport = new Map<string, SportradarEvent[]>();
         for (const ev of allUpcoming) {
@@ -1265,8 +1268,11 @@ export class SportradarService implements OnModuleInit {
   }> {
     if (this.proxyEnabled) {
       try {
-        const events = (await this.fetchFromProxy<SportradarEvent[]>(`/events/${sportId}`)) ?? [];
-        if (events.length === 0) return { sportId, eventCount: 0, marketCount: 0 };
+        const events = await this.fetchFromProxy<SportradarEvent[]>(`/events/${sportId}`);
+        // null = 404 (primary hasn't warmed this sport) → preserve existing Redis
+        if (!events || !Array.isArray(events) || events.length === 0) {
+          return { sportId, eventCount: 0, marketCount: 0 };
+        }
 
         const redis = this.getRedis();
         const pipeline = redis.pipeline();
