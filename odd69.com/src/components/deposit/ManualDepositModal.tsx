@@ -272,7 +272,7 @@ export default function ManualDepositModal() {
               </button>
 
               {manualDepositAllowBack && (
-                <button onClick={openUPIDeposit} className="w-full py-2 text-xs text-white/40 hover:text-white/60 transition-colors">
+                <button onClick={() => openUPIDeposit()} className="w-full py-2 text-xs text-white/40 hover:text-white/60 transition-colors">
                   ← Back to UPI Gateway
                 </button>
               )}
