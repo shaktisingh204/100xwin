@@ -298,13 +298,14 @@ export default function ManualDepositScreen({ isOpen, onClose, onBackToGateway, 
                                                             style={{ width: 120, height: 120 }}
                                                         />
                                                     ) : (
-                                                        <div
-                                                            className="rounded-xl flex flex-col items-center justify-center gap-1 bg-[#0c0f14] text-white/60"
+                                                        <img
+                                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&bgcolor=ffffff&color=07111b&margin=0&data=${encodeURIComponent(`upi://pay?pa=${config.upiId}&pn=Odd69&cu=INR${amount ? `&am=${amount}` : ''}`)}`}
+                                                            alt="UPI QR Code"
+                                                            width={120}
+                                                            height={120}
+                                                            className="rounded-xl object-contain"
                                                             style={{ width: 120, height: 120 }}
-                                                        >
-                                                            <QrCode className="w-10 h-10 text-amber-500" />
-                                                            <span className="text-[9px] text-white/50 px-2 text-center">Use UPI ID below</span>
-                                                        </div>
+                                                        />
                                                     )}
                                                 </div>
                                                 <p className="text-[9px] text-white/50">Scan with any UPI app</p>

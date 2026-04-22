@@ -563,13 +563,17 @@ export default function DepositModal() {
                       {timeLeft > 0 && <span className="text-white/50">· {formatTime(timeLeft)} left</span>}
                     </div>
 
-                    {/* QR Code — plain white box since react-qr-code may not be installed */}
+                    {/* QR Code — rendered via qrserver.com (no local dep) */}
                     <div className="mx-auto mb-4 w-40 h-40 bg-white rounded-2xl p-3 flex items-center justify-center">
-                      <div className="w-full h-full flex flex-col items-center justify-center gap-1">
-                        <p className="text-black text-[10px] font-bold text-center break-all leading-tight">{paymentData.payAddress.slice(0, 20)}…</p>
-                        <p className="text-[8px] text-gray-500">Scan with {selectedCoin.label} wallet</p>
-                      </div>
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&bgcolor=ffffff&color=07111b&margin=0&data=${encodeURIComponent(paymentData.payAddress)}`}
+                        alt={`${selectedCoin.label} deposit address QR`}
+                        width={140}
+                        height={140}
+                        className="w-full h-full object-contain"
+                      />
                     </div>
+                    <p className="text-[10px] text-white/40 mb-3">Scan with {selectedCoin.label} wallet</p>
 
                     {/* Amount & network */}
                     <div className="grid grid-cols-2 gap-2 mb-4">
