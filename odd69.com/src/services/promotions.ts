@@ -12,6 +12,8 @@ export interface BonusPromotion {
     amount: number;
     percentage: number;
     minDeposit: number;
+    minDepositFiat?: number;
+    minDepositCrypto?: number;
     maxBonus: number;
     wageringRequirement: number;
     depositWagerMultiplier: number;
