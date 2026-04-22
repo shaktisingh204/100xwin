@@ -497,7 +497,14 @@ export class SportradarService implements OnModuleInit {
     } catch (e: any) {
       const status = e?.response?.status;
       if (status === 404) {
-        console.warn(`[sportradar-proxy] 404 not warm: ${path}`);
+        // Throttle — cold sports would spam every sync tick otherwise
+        const tag = `404:${path}`;
+        const now = Date.now();
+        const last = this.proxyLogTimestamps.get(tag) ?? 0;
+        if (now - last >= 60_000) {
+          this.proxyLogTimestamps.set(tag, now);
+          console.warn(`[sportradar-proxy] 404 not warm: ${path}`);
+        }
         return null;
       }
       const body = e?.response?.data;
