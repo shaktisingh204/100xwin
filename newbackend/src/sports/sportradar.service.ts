@@ -173,6 +173,16 @@ export class SportradarService implements OnModuleInit {
 
   private readonly SPORTS_REDIS_KEY = 'sportradar:sports';
 
+  // Throttled logs for proxy-mode syncs — one line per minute per tag
+  private proxyLogTimestamps = new Map<string, number>();
+  private logProxySync(tag: string, count: number): void {
+    const now = Date.now();
+    const last = this.proxyLogTimestamps.get(tag) ?? 0;
+    if (now - last < 60_000) return;
+    this.proxyLogTimestamps.set(tag, now);
+    console.log(`[sportradar-proxy] ${tag} mirrored ${count} records from primary`);
+  }
+
   private redisClient: Redis | null = null;
 
   private isSyncingEvents = false;
@@ -221,6 +231,19 @@ export class SportradarService implements OnModuleInit {
   // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
   async onModuleInit() {
+    if (this.proxyEnabled) {
+      console.log(
+        `[sportradar] proxy mode ENABLED → ${this.PROXY_URL} ` +
+          `(token ${this.PROXY_TOKEN ? `set, len=${this.PROXY_TOKEN.length}` : 'MISSING — every call will 401'})`,
+      );
+    } else {
+      console.log(
+        `[sportradar] proxy mode DISABLED — polling Sportradar upstream directly ` +
+          `(SPORTRADAR_PROXY_ENABLED=${process.env.SPORTRADAR_PROXY_ENABLED ?? 'unset'}, ` +
+          `URL=${this.PROXY_URL || 'unset'})`,
+      );
+    }
+
     // Step 1: Seed sports if collection is empty
     try {
       const count = await this.betfairSportModel.countDocuments({});
@@ -472,10 +495,18 @@ export class SportradarService implements OnModuleInit {
       );
       return (res.data?.data ?? null) as T | null;
     } catch (e: any) {
-      if (e?.response?.status === 404) {
+      const status = e?.response?.status;
+      if (status === 404) {
         console.warn(`[sportradar-proxy] 404 not warm: ${path}`);
         return null;
       }
+      const body = e?.response?.data;
+      const bodyPreview =
+        typeof body === 'string' ? body.slice(0, 200) : body ? JSON.stringify(body).slice(0, 200) : '';
+      console.error(
+        `[sportradar-proxy] ERROR ${path} — status=${status ?? 'no-response'} ` +
+          `code=${e?.code ?? ''} msg=${e?.message ?? ''} body=${bodyPreview}`,
+      );
       throw e;
     }
   }
@@ -559,10 +590,12 @@ export class SportradarService implements OnModuleInit {
         await this.getRedis()
           .set(this.SPORTS_REDIS_KEY, JSON.stringify(mapped), 'EX', SPORTS_REDIS_TTL)
           .catch(() => {});
+        const n = Array.isArray(mapped) ? mapped.length : 0;
+        this.logProxySync('sports', n);
         return {
           success: true,
-          seeded: Array.isArray(mapped) ? mapped.length : 0,
-          message: `Mirrored ${Array.isArray(mapped) ? mapped.length : 0} sports from primary proxy`,
+          seeded: n,
+          message: `Mirrored ${n} sports from primary proxy`,
         };
       } catch (e: any) {
         return { success: false, seeded: 0, message: e?.message ?? 'proxy fetch failed' };
@@ -772,6 +805,7 @@ export class SportradarService implements OnModuleInit {
         });
         pipeline.set('sportradar:inplay:all', JSON.stringify(allInplay), 'EX', INPLAY_REDIS_TTL);
         await pipeline.exec().catch(() => {});
+        this.logProxySync('inplay', allInplay.length);
       } catch {
         /* ignore proxy errors, next tick retries */
       }
@@ -1084,6 +1118,7 @@ export class SportradarService implements OnModuleInit {
         });
         pipeline.set('sportradar:upcoming:all', JSON.stringify(allUpcoming), 'EX', UPCOMING_REDIS_TTL);
         await pipeline.exec().catch(() => {});
+        this.logProxySync('upcoming', allUpcoming.length);
       } catch {
         /* ignore proxy errors, next tick retries */
       }
