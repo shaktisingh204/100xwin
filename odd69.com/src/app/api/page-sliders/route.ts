@@ -1,27 +1,26 @@
 // GET /api/page-sliders?page=HOME|CASINO|SPORTS
-// Public endpoint — fetches slider config from MongoDB for website hero components
+// Proxy to the backend (which owns the page-slider storage in odd69).
 
 import { NextRequest, NextResponse } from 'next/server';
-import connectMongo from '@/lib/mongo';
-import { PageSlider } from '@/models/PageSlider';
+
+const BACKEND_URL = process.env.API_URL || process.env.NEXT_PUBLIC_API_URL || 'https://api.odd69.com/api';
 
 export async function GET(req: NextRequest) {
     try {
         const page = req.nextUrl.searchParams.get('page')?.toUpperCase();
+        const qs = page ? `?page=${encodeURIComponent(page)}` : '';
 
-        await connectMongo();
+        const res = await fetch(`${BACKEND_URL}/page-sliders${qs}`, {
+            headers: { 'Content-Type': 'application/json' },
+            next: { revalidate: 30 },
+        });
 
-        if (page && ['HOME', 'CASINO', 'SPORTS'].includes(page)) {
-            const doc = await PageSlider.findOne({ page, isActive: true }).lean();
-            if (!doc) return NextResponse.json({ slider: null });
-            return NextResponse.json({ slider: doc }, {
-                headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
-            });
+        if (!res.ok) {
+            return NextResponse.json(page ? { slider: null } : { sliders: [] });
         }
 
-        // Return all active sliders
-        const docs = await PageSlider.find({ isActive: true }).lean();
-        return NextResponse.json({ sliders: docs }, {
+        const data = await res.json();
+        return NextResponse.json(data, {
             headers: { 'Cache-Control': 's-maxage=30, stale-while-revalidate=60' },
         });
     } catch (error) {
