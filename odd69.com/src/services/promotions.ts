@@ -67,6 +67,14 @@ export interface Promotion {
     promoCode?: string;
     minDeposit?: number;
     bonusPercentage?: number;
+    maxBonus?: number;
+    wageringMultiplier?: number;
+    validityDays?: number;
+    currency?: string;
+    targetAudience?: string;
+    claimLimit?: number;
+    claimCount?: number;
+    startDate?: string;
     expiryDate?: string;
     buttonText?: string;
     buttonLink?: string;
