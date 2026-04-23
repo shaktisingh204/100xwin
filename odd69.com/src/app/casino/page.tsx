@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, Suspense, useCallback } from "react";
+import React, { useEffect, useMemo, useState, Suspense, useCallback } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   Search, X, Flame, Star, Sparkles, Rocket, Play, Gamepad2,
-  ChevronLeft, ChevronRight, Loader2, ArrowRight, Trophy, Zap,
-  Grid3x3, LayoutGrid,
+  Loader2, ArrowRight, Zap, LayoutGrid, Dice5, Tickets, CircleDot,
+  Target, Fish, Drama, Trophy, ChevronRight, House,
 } from "lucide-react";
 import { IoGameController } from "react-icons/io5";
 import { BiErrorAlt } from "react-icons/bi";
@@ -13,64 +13,111 @@ import { casinoService } from "@/services/casino";
 import { useAuth } from "@/context/AuthContext";
 import GamePlayInterface from "@/components/casino/GamePlayInterface";
 
-/* ═══ TYPES ═══ */
+/* ═════════════════════════════════════════════════════════════════════
+   TYPES
+   ═════════════════════════════════════════════════════════════════════ */
 interface LaunchableGame {
   id?: string; name?: string; gameName?: string;
   provider?: string; providerCode?: string; gameCode?: string;
   image?: string; banner?: string; url?: string; tag?: string;
 }
 
-/* ═══ CATEGORY TABS ═══ */
-const CATEGORIES = [
-  { key: "all", label: "All Games", icon: LayoutGrid },
-  { key: "popular", label: "Popular", icon: Flame },
-  { key: "new", label: "New", icon: Sparkles },
-  { key: "slots", label: "Slots", icon: Star },
-  { key: "live", label: "Live", icon: Play },
-  { key: "table", label: "Table", icon: Grid3x3 },
-  { key: "crash", label: "Crash", icon: Rocket },
-  { key: "exclusive", label: "Exclusive", icon: Zap },
+/* ═════════════════════════════════════════════════════════════════════
+   CATEGORY RAIL — pulled from newwebsite's richer lobby taxonomy
+   ═════════════════════════════════════════════════════════════════════ */
+const CASINO_RAIL = [
+  { key: "all",       label: "Lobby",       Icon: House },
+  { key: "popular",   label: "Hot Games",   Icon: Flame },
+  { key: "slots",     label: "Slots",       Icon: Tickets },
+  { key: "live",      label: "Live",        Icon: Star },
+  { key: "table",     label: "Table",       Icon: Dice5 },
+  { key: "crash",     label: "Crash",       Icon: Rocket },
+  { key: "new",       label: "New",         Icon: Sparkles },
+  { key: "top-slots", label: "Top Slots",   Icon: Target },
+  { key: "fishing",   label: "Fishing",     Icon: Fish },
+  { key: "blackjack", label: "Blackjack",   Icon: Drama },
+  { key: "roulette",  label: "Roulette",    Icon: CircleDot },
+  { key: "baccarat",  label: "Baccarat",    Icon: Trophy },
+  { key: "exclusive", label: "Exclusive",   Icon: Zap },
 ];
 
-/* ═══ GAME CARD ═══ */
-function GameCard({ game, onPlay }: { game: any; onPlay: (g: any) => void }) {
+/* ═════════════════════════════════════════════════════════════════════
+   GAME CARD — gold-leaf theme
+   ═════════════════════════════════════════════════════════════════════ */
+function GameCard({ game, onPlay }: { game: LaunchableGame; onPlay: (g: LaunchableGame) => void }) {
   const [imgErr, setImgErr] = useState(false);
   const src = game.image || game.banner || "";
 
   return (
-    <div onClick={() => onPlay(game)} className="cursor-pointer group">
-      <div className="relative aspect-[3/4] rounded-xl overflow-hidden border border-white/[0.04] group-hover:border-white/[0.12] transition-all group-hover:-translate-y-1 group-hover:shadow-[0_12px_40px_rgba(0,0,0,0.3)]">
+    <button
+      onClick={() => onPlay(game)}
+      className="group text-left focus:outline-none"
+    >
+      <div className="relative aspect-[3/4] rounded-[16px] overflow-hidden border border-[var(--line-default)] group-hover:border-[var(--line-gold)] transition-all duration-300 group-hover:-translate-y-1 group-hover:shadow-[var(--shadow-lift)] bg-[var(--bg-surface)]">
         {!imgErr && src ? (
-          <img src={src} alt={game.name} onError={() => setImgErr(true)} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="lazy" />
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={src}
+            alt={game.name || "Game"}
+            onError={() => setImgErr(true)}
+            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+            loading="lazy"
+          />
         ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#12151a] to-[#0a0c10] text-3xl"><IoGameController size={28} className="text-white/15" /></div>
+          <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[var(--bg-elevated)] to-[var(--bg-base)]">
+            <IoGameController size={28} className="text-[var(--ink-whisper)]" />
+          </div>
         )}
-        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
-        <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="w-11 h-11 rounded-full bg-[#f59e0b]/20 backdrop-blur flex items-center justify-center border border-[#f59e0b]/30">
-            <Play size={16} className="text-[#f59e0b] ml-0.5" fill="currentColor" />
+
+        {/* Bottom gradient for legibility */}
+        <div className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/90 via-black/45 to-transparent" />
+
+        {/* Hover play token */}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="grid place-items-center w-11 h-11 rounded-full bg-gold-grad shadow-[0_8px_24px_var(--gold-halo)] ring-1 ring-inset ring-white/40">
+            <Play size={15} className="text-[#120c00] ml-0.5" fill="currentColor" />
           </div>
         </div>
-        {game.tag && <div className="absolute top-2 left-2 z-10 bg-[#f59e0b] text-black text-[7px] font-black px-1.5 py-0.5 rounded-md uppercase">{game.tag}</div>}
-        <div className="absolute bottom-0 left-0 right-0 p-2.5 z-10">
-          {game.provider && <span className="text-[7px] font-bold text-white/15 uppercase tracking-wider block mb-0.5">{game.provider?.slice(0, 12)}</span>}
-          <p className="text-[11px] font-bold text-white/80 truncate leading-tight">{game.name || "Game"}</p>
+
+        {/* Tag */}
+        {game.tag && (
+          <div className="absolute top-2 left-2 z-10">
+            <span className="chip chip-gold !py-0.5 !px-2 !text-[9px]">{game.tag}</span>
+          </div>
+        )}
+
+        {/* Meta */}
+        <div className="absolute bottom-0 left-0 right-0 p-3 z-10">
+          {game.provider && (
+            <span className="t-eyebrow !text-[8.5px] !text-[var(--ink-whisper)] block mb-0.5">
+              {(game.provider || "").slice(0, 14)}
+            </span>
+          )}
+          <p className="text-[12px] font-semibold text-[var(--ink)] truncate leading-tight">
+            {game.name || "Game"}
+          </p>
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
-/* ═══ PROVIDER PILL ═══ */
-function ProviderPill({ provider, selected, onClick }: { provider: any; selected: boolean; onClick: () => void }) {
+/* ═════════════════════════════════════════════════════════════════════
+   PROVIDER PILL
+   ═════════════════════════════════════════════════════════════════════ */
+function ProviderPill({ provider, selected, onClick }: { provider: { provider: string; logo?: string }; selected: boolean; onClick: () => void }) {
   return (
-    <button onClick={onClick} className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-bold transition-all flex-shrink-0 whitespace-nowrap ${
-      selected
-        ? "bg-[#f59e0b]/10 border-[#f59e0b]/30 text-[#f59e0b]"
-        : "bg-white/[0.015] border-white/[0.04] text-white/25 hover:text-white/50 hover:border-white/[0.08]"
-    }`}>
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-2 px-3 py-2 rounded-[10px] border text-[11px] font-semibold transition-all flex-shrink-0 whitespace-nowrap ${
+        selected
+          ? "bg-[var(--gold-soft)] border-[var(--gold-line)] text-[var(--gold-bright)]"
+          : "bg-[var(--bg-surface)] border-[var(--line-default)] text-[var(--ink-dim)] hover:text-[var(--ink)] hover:border-[var(--line-strong)]"
+      }`}
+    >
       {provider.logo ? (
-        <img src={provider.logo} alt={provider.provider} className="w-4 h-4 rounded object-contain opacity-50" />
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={provider.logo} alt={provider.provider} className="w-4 h-4 rounded object-contain opacity-70" />
       ) : (
         <Gamepad2 size={12} />
       )}
@@ -79,7 +126,9 @@ function ProviderPill({ provider, selected, onClick }: { provider: any; selected
   );
 }
 
-/* ═══ MAIN CASINO CONTENT ═══ */
+/* ═════════════════════════════════════════════════════════════════════
+   MAIN CONTENT
+   ═════════════════════════════════════════════════════════════════════ */
 function CasinoContent() {
   const router = useRouter();
   const pathname = usePathname();
@@ -88,8 +137,8 @@ function CasinoContent() {
   const providerParam = searchParams.get("provider") || "all";
 
   const { user } = useAuth();
-  const [games, setGames] = useState<any[]>([]);
-  const [providers, setProviders] = useState<any[]>([]);
+  const [games, setGames] = useState<LaunchableGame[]>([]);
+  const [providers, setProviders] = useState<{ provider: string; logo?: string }[]>([]);
   const [selectedCategory, setSelectedCategory] = useState(categoryParam);
   const [selectedProvider, setSelectedProvider] = useState(providerParam);
   const [searchQuery, setSearchQuery] = useState("");
@@ -102,16 +151,18 @@ function CasinoContent() {
   const [launching, setLaunching] = useState(false);
   const [launchError, setLaunchError] = useState<string | null>(null);
 
-  /* ── Sync URL params ── */
+  /* Sync URL params */
   useEffect(() => { setSelectedCategory(categoryParam); setPage(1); }, [categoryParam]);
   useEffect(() => { setSelectedProvider(providerParam); setPage(1); }, [providerParam]);
 
-  /* ── Load providers ── */
+  /* Load providers */
   useEffect(() => {
-    casinoService.getProviders().then((data: any[]) => setProviders(data)).catch(() => {});
+    casinoService.getProviders()
+      .then((data: { provider: string; logo?: string }[]) => setProviders(data))
+      .catch(() => {});
   }, []);
 
-  /* ── Load games ── */
+  /* Load games */
   const loadGames = useCallback(async (p: number, append = false) => {
     setLoading(true);
     try {
@@ -119,7 +170,7 @@ function CasinoContent() {
       const prov = selectedProvider === "all" ? undefined : selectedProvider;
       const search = searchQuery || undefined;
       const res = await casinoService.getGames(prov, cat, search, p, 40);
-      const newGames = res.games || [];
+      const newGames: LaunchableGame[] = res.games || [];
       setGames((prev) => (append ? [...prev, ...newGames] : newGames));
       setTotalGames(res.totalCount || newGames.length);
       setHasMore(newGames.length >= 40);
@@ -135,7 +186,6 @@ function CasinoContent() {
     loadGames(next, true);
   };
 
-  /* ── URL navigation ── */
   const updateURL = (cat: string, prov: string) => {
     const params = new URLSearchParams();
     if (cat !== "all") params.set("category", cat);
@@ -158,10 +208,15 @@ function CasinoContent() {
     updateURL(selectedCategory, prov);
   };
 
-  /* ── Game launch ── */
+  /* Launch */
   const handleGameLaunch = async (gameData: LaunchableGame) => {
     if (gameData.url) {
-      setActiveGame({ id: gameData.gameCode || gameData.id || "", name: gameData.name || gameData.gameName || "", provider: gameData.providerCode || gameData.provider || "", url: gameData.url });
+      setActiveGame({
+        id: gameData.gameCode || gameData.id || "",
+        name: gameData.name || gameData.gameName || "",
+        provider: gameData.providerCode || gameData.provider || "",
+        url: gameData.url,
+      });
       setLaunchError(null);
       return;
     }
@@ -175,175 +230,308 @@ function CasinoContent() {
     try {
       const res = await casinoService.launchGame({ username: user.username, provider: providerCode, gameId, isLobby: false });
       if (res?.url) {
-        setActiveGame({ id: gameId, name: gameData.name || gameData.gameName || "", provider: providerCode, url: res.url });
+        setActiveGame({
+          id: gameId,
+          name: gameData.name || gameData.gameName || "",
+          provider: providerCode,
+          url: res.url,
+        });
       } else { setLaunchError("Could not get game URL."); }
     } catch (error: unknown) {
       setLaunchError(error instanceof Error ? error.message : "Failed to launch game.");
     } finally { setLaunching(false); }
   };
 
+  const activeCat = CASINO_RAIL.find((c) => c.key === selectedCategory);
+  const showingLobby = selectedCategory === "all" && selectedProvider === "all" && !searchQuery;
+
+  /* Feature tiles for hero rail */
+  const featureTiles = useMemo(() => ([
+    { key: "popular", label: "Hot Now",   Icon: Flame,     chip: "chip-crimson" },
+    { key: "slots",   label: "Slot Floor",Icon: Tickets,   chip: "chip-gold" },
+    { key: "live",    label: "Live Room", Icon: Star,      chip: "chip-emerald" },
+    { key: "crash",   label: "Crash Pit", Icon: Rocket,    chip: "chip-violet" },
+  ]), []);
+
   return (
     <>
-      {/* ── Launching Overlay ── */}
+      {/* ── Launching overlay ── */}
       {launching && (
         <div className="fixed inset-0 z-[600] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center gap-4">
           <div className="relative w-16 h-16">
-            <div className="w-16 h-16 rounded-full border-2 border-[#f59e0b]/20 border-t-[#f59e0b] animate-spin" />
-            <div className="absolute inset-0 flex items-center justify-center text-2xl"><IoGameController size={20} className="text-[#f59e0b]" /></div>
+            <div className="w-16 h-16 rounded-full border-2 border-[var(--gold-line)] border-t-[var(--gold)] animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <IoGameController size={22} className="text-[var(--gold)]" />
+            </div>
           </div>
-          <p className="text-white/60 text-sm font-bold tracking-widest uppercase animate-pulse">Launching game…</p>
+          <p className="t-eyebrow !text-[11px] text-[var(--ink-dim)] animate-pulse">Launching game…</p>
         </div>
       )}
 
-      {/* ── Launch Error Overlay ── */}
+      {/* ── Launch error overlay ── */}
       {launchError && (
         <div className="fixed inset-0 z-[600] bg-black/80 backdrop-blur-md flex flex-col items-center justify-center gap-5 px-6">
-          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-3xl"><BiErrorAlt size={28} className="text-red-400" /></div>
-          <div className="text-center">
-            <h2 className="text-white font-bold text-lg mb-1">Unable to Launch</h2>
-            <p className="text-white/40 text-sm">{launchError}</p>
+          <div className="w-16 h-16 rounded-[16px] bg-[var(--crimson-soft)] border border-[color:var(--crimson)]/25 flex items-center justify-center">
+            <BiErrorAlt size={28} className="text-[var(--crimson)]" />
           </div>
-          <button onClick={() => setLaunchError(null)} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white/10 border border-white/10 text-white font-bold text-sm">
-            <X size={16} /> Close
+          <div className="text-center">
+            <h2 className="font-display text-[18px] font-bold text-[var(--ink)] mb-1">Unable to Launch</h2>
+            <p className="text-[13px] text-[var(--ink-faint)]">{launchError}</p>
+          </div>
+          <button
+            onClick={() => setLaunchError(null)}
+            className="btn btn-ghost h-9 uppercase tracking-[0.06em] text-[11px]"
+          >
+            <X size={14} /> Close
           </button>
         </div>
       )}
 
-      {/* ── Game Overlay ── */}
+      {/* ── Game overlay ── */}
       {activeGame && (
-        <div className="fixed inset-0 z-[500] bg-[#06080c] flex flex-col">
+        <div className="fixed inset-0 z-[500] bg-[var(--bg-base)] flex flex-col">
           <GamePlayInterface game={activeGame} onClose={() => setActiveGame(null)} isEmbedded={false} key={activeGame.id} />
         </div>
       )}
 
       {/* ── MAIN LAYOUT ── */}
-      <div className="max-w-[1600px] mx-auto px-3 md:px-5 py-4 space-y-5">
+      <div className="max-w-[1680px] mx-auto py-6 space-y-10 md:space-y-12">
 
-        {/* Search bar */}
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/15" size={16} />
-          <input
-            type="text"
-            placeholder="Search 1200+ games..."
-            value={searchQuery}
-            onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
-            className="w-full bg-white/[0.02] border border-white/[0.04] text-white rounded-xl py-3 pl-10 pr-10 outline-none text-[13px] placeholder:text-white/15 focus:border-white/[0.1] transition-colors"
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/20 hover:text-white/50">
-              <X size={14} />
-            </button>
-          )}
-        </div>
+        {/* ── HERO ── */}
+        {showingLobby && (
+          <section className="page-x">
+            <div className="relative overflow-hidden rounded-[22px] border border-[var(--gold-line)] bg-gold-soft grain dotgrid p-6 md:p-10">
+              <div className="relative z-10 max-w-2xl">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="chip chip-gold">
+                    <Sparkles size={10} /> Casino Floor
+                  </span>
+                  <span className="chip chip-emerald">
+                    <span className="num">1200+</span> Games
+                  </span>
+                </div>
+                <h1 className="font-display text-[34px] md:text-[52px] font-extrabold leading-[0.95] tracking-[-0.03em] text-[var(--ink)] mb-3">
+                  The <span className="text-gold-grad">Gold Room</span>.<br />
+                  Spin, deal, crash.
+                </h1>
+                <p className="text-[14px] text-[var(--ink-dim)] max-w-lg mb-5">
+                  Slots, live tables, crash rails and originals — every tile audited, every payout instant.
+                </p>
 
-        {/* Category tabs */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-          {CATEGORIES.map((cat) => {
-            const Icon = cat.icon;
-            const active = selectedCategory === cat.key;
-            return (
-              <button key={cat.key} onClick={() => handleCategoryChange(cat.key)}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg border text-[11px] font-bold transition-all flex-shrink-0 ${
-                  active
-                    ? "bg-[#f59e0b]/10 border-[#f59e0b]/25 text-[#f59e0b]"
-                    : "bg-white/[0.01] border-white/[0.04] text-white/25 hover:text-white/50 hover:bg-white/[0.03]"
-                }`}>
-                <Icon size={13} />
-                {cat.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Provider strip */}
-        {providers.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-[10px] font-black text-white/10 uppercase tracking-[0.15em]">Filter by Provider</h3>
+                <div className="flex flex-wrap gap-2">
+                  {featureTiles.map(({ key, label, Icon, chip }) => (
+                    <button
+                      key={key}
+                      onClick={() => handleCategoryChange(key)}
+                      className={`chip ${chip} !py-2 !px-3 hover:opacity-90 transition-opacity`}
+                    >
+                      <Icon size={11} /> {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* floating glint */}
+              <div className="hidden md:block absolute right-8 top-1/2 -translate-y-1/2 w-40 h-40 rounded-full bg-[radial-gradient(circle,var(--gold-halo),transparent_70%)] blur-2xl pointer-events-none" />
             </div>
-            <div className="flex gap-1.5 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
-              <button onClick={() => handleProviderSelect("all")} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-[10px] font-bold transition-all flex-shrink-0 ${
-                selectedProvider === "all" ? "bg-[#f59e0b]/10 border-[#f59e0b]/25 text-[#f59e0b]" : "bg-white/[0.015] border-white/[0.04] text-white/25 hover:text-white/50"
-              }`}>
+          </section>
+        )}
+
+        {/* ── SEARCH ── */}
+        <section className="page-x">
+          <div className="relative">
+            <Search
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--ink-faint)]"
+              size={16}
+            />
+            <input
+              type="text"
+              placeholder="Search 1200+ games…"
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+              className="w-full bg-[var(--bg-surface)] border border-[var(--line-default)] focus:border-[var(--line-gold)] text-[var(--ink)] rounded-[14px] py-3 pl-11 pr-10 outline-none text-[14px] placeholder:text-[var(--ink-faint)] transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] hover:text-[var(--ink)]"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </section>
+
+        {/* ── CATEGORY RAIL ── */}
+        <section className="page-x">
+          <div className="mb-3 rail-gold">
+            <span className="t-eyebrow">Browse</span>
+            <h2 className="t-section mt-1">Categories</h2>
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+            {CASINO_RAIL.map(({ key, label, Icon }) => {
+              const active = selectedCategory === key;
+              return (
+                <button
+                  key={key}
+                  onClick={() => handleCategoryChange(key)}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-[10px] px-3.5 py-2 text-[11px] font-semibold transition-all border ${
+                    active
+                      ? "bg-[var(--gold-soft)] border-[var(--gold-line)] text-[var(--gold-bright)]"
+                      : "bg-[var(--bg-surface)] border-[var(--line-default)] text-[var(--ink-dim)] hover:text-[var(--ink)] hover:border-[var(--line-strong)]"
+                  }`}
+                >
+                  <Icon size={13} className={active ? "text-[var(--gold-bright)]" : "text-[var(--ink-faint)]"} />
+                  {label}
+                </button>
+              );
+            })}
+            <div className="ml-auto hidden md:flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[var(--bg-surface)] border border-[var(--line-default)] text-[var(--ink-faint)]">
+              <ChevronRight size={15} />
+            </div>
+          </div>
+        </section>
+
+        {/* ── PROVIDER STRIP ── */}
+        {providers.length > 0 && (
+          <section className="page-x">
+            <div className="flex items-end justify-between mb-3">
+              <div className="rail-gold">
+                <span className="t-eyebrow">Studios</span>
+                <h2 className="t-section mt-1">By Provider</h2>
+              </div>
+              {selectedProvider !== "all" && (
+                <button
+                  onClick={() => handleProviderSelect("all")}
+                  className="chip !py-1.5 !px-3 hover:border-[var(--line-strong)]"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+              <button
+                onClick={() => handleProviderSelect("all")}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-[10px] border text-[11px] font-semibold transition-all flex-shrink-0 ${
+                  selectedProvider === "all"
+                    ? "bg-[var(--gold-soft)] border-[var(--gold-line)] text-[var(--gold-bright)]"
+                    : "bg-[var(--bg-surface)] border-[var(--line-default)] text-[var(--ink-dim)] hover:text-[var(--ink)]"
+                }`}
+              >
                 <LayoutGrid size={12} /> All
               </button>
-              {providers.slice(0, 20).map((p) => (
-                <ProviderPill key={p.provider} provider={p} selected={selectedProvider === p.provider} onClick={() => handleProviderSelect(p.provider)} />
+              {providers.slice(0, 24).map((p) => (
+                <ProviderPill
+                  key={p.provider}
+                  provider={p}
+                  selected={selectedProvider === p.provider}
+                  onClick={() => handleProviderSelect(p.provider)}
+                />
               ))}
             </div>
-          </div>
+          </section>
         )}
 
-        {/* Results header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h2 className="text-[15px] font-black text-white/80">
-              {searchQuery ? `Results for "${searchQuery}"` : CATEGORIES.find((c) => c.key === selectedCategory)?.label || "All Games"}
-            </h2>
-            {!loading && <span className="text-[10px] font-bold text-white/15 bg-white/[0.03] px-2 py-0.5 rounded-full">{totalGames} games</span>}
-          </div>
-        </div>
-
-        {/* Loading skeleton */}
-        {loading && games.length === 0 && (
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2.5">
-            {Array.from({ length: 24 }).map((_, i) => (
-              <div key={i} className="aspect-[3/4] rounded-xl skeleton" />
-            ))}
-          </div>
-        )}
-
-        {/* Game grid */}
-        {games.length > 0 && (
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2.5">
-            {games.map((game, i) => (
-              <GameCard key={game.id || game.gameCode || i} game={game} onPlay={handleGameLaunch} />
-            ))}
-          </div>
-        )}
-
-        {/* Empty state */}
-        {!loading && games.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-white/[0.02] border border-white/[0.04] flex items-center justify-center text-3xl"><IoGameController size={28} className="text-white/15" /></div>
-            <div className="text-center">
-              <p className="text-white/50 font-bold text-sm">No games found</p>
-              <p className="text-white/15 text-xs mt-1">Try adjusting your filters or search term</p>
+        {/* ── RESULTS HEADER ── */}
+        <section className="page-x">
+          <div className="flex items-end justify-between mb-4">
+            <div className="rail-gold">
+              <span className="t-eyebrow">Games</span>
+              <h2 className="t-section mt-1">
+                {searchQuery
+                  ? `Results for "${searchQuery}"`
+                  : activeCat?.label || "All Games"}
+              </h2>
+              <p className="t-section-sub">
+                <span className="num">{totalGames}</span> tiles ready to play
+              </p>
             </div>
-            <button onClick={() => { setSearchQuery(""); handleCategoryChange("all"); handleProviderSelect("all"); }}
-              className="text-[10px] font-bold text-[#f59e0b] hover:text-[#f59e0b]/80 transition-colors">
-              Clear all filters
-            </button>
+            {!loading && totalGames > 0 && (
+              <span className="chip chip-gold">
+                <span className="num">{totalGames}</span> games
+              </span>
+            )}
           </div>
-        )}
 
-        {/* Load more */}
-        {hasMore && games.length > 0 && !loading && (
-          <div className="flex justify-center pt-4">
-            <button onClick={loadMore} className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.04] text-white/30 hover:text-white/60 hover:bg-white/[0.05] text-[12px] font-bold transition-all">
-              Load more games <ArrowRight size={12} />
-            </button>
-          </div>
-        )}
+          {/* Loading skeleton */}
+          {loading && games.length === 0 && (
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2.5">
+              {Array.from({ length: 24 }).map((_, i) => (
+                <div key={i} className="aspect-[3/4] rounded-[16px] skeleton" />
+              ))}
+            </div>
+          )}
 
-        {loading && games.length > 0 && (
-          <div className="flex justify-center py-4">
-            <Loader2 size={20} className="text-[#f59e0b] animate-spin" />
-          </div>
-        )}
+          {/* Game grid */}
+          {games.length > 0 && (
+            <div className="stagger grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2.5">
+              {games.map((game, i) => (
+                <GameCard
+                  key={(game.id || game.gameCode || "g") + i}
+                  game={game}
+                  onPlay={handleGameLaunch}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Empty state */}
+          {!loading && games.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 gap-4 rounded-[16px] border border-[var(--line-default)] bg-[var(--bg-surface)]">
+              <div className="w-16 h-16 rounded-[16px] bg-[var(--bg-elevated)] border border-[var(--line-default)] flex items-center justify-center">
+                <IoGameController size={28} className="text-[var(--ink-faint)]" />
+              </div>
+              <div className="text-center">
+                <p className="font-display text-[16px] font-semibold text-[var(--ink)]">No games found</p>
+                <p className="text-[12px] text-[var(--ink-faint)] mt-1">Try adjusting your filters or search term</p>
+              </div>
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  handleCategoryChange("all");
+                  handleProviderSelect("all");
+                }}
+                className="chip chip-gold !py-1.5 !px-3"
+              >
+                Clear all filters
+              </button>
+            </div>
+          )}
+
+          {/* Load more */}
+          {hasMore && games.length > 0 && !loading && (
+            <div className="flex justify-center pt-6">
+              <button
+                onClick={loadMore}
+                className="btn btn-ghost h-10 uppercase tracking-[0.06em] text-[11px]"
+              >
+                Load more games <ArrowRight size={12} />
+              </button>
+            </div>
+          )}
+
+          {loading && games.length > 0 && (
+            <div className="flex justify-center py-4">
+              <Loader2 size={20} className="text-[var(--gold)] animate-spin" />
+            </div>
+          )}
+        </section>
       </div>
     </>
   );
 }
 
-/* ═══ EXPORT ═══ */
+/* ═════════════════════════════════════════════════════════════════════
+   EXPORT
+   ═════════════════════════════════════════════════════════════════════ */
 export default function CasinoPage() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#f59e0b]" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--gold)]" />
+        </div>
+      }
+    >
       <CasinoContent />
     </Suspense>
   );

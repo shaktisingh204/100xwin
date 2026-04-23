@@ -1,7 +1,15 @@
 import SportsPageClient from "@/components/sports/SportsPageClient";
 import { fetchSportsLobbyInitialData } from "@/lib/sportsLobbyData";
 
-export const dynamic = 'force-dynamic';
+// ════════════════════════════════════════════════════════════════════════════
+// /sports — thin themed wrapper
+// The entire sports lobby chrome (hero, live strip, league cards, markets)
+// is rendered inside <SportsPageClient> which owns its own gold-leaf theming.
+// This wrapper only resolves search params + fetches initial lobby data so
+// the client shell hydrates instantly.
+// ════════════════════════════════════════════════════════════════════════════
+
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type SportsPageSearchParams =
@@ -19,6 +27,7 @@ export default async function SportsPage({
   const initialSelectedSport = Array.isArray(selectedSportRaw)
     ? selectedSportRaw[0] ?? null
     : selectedSportRaw ?? null;
+
   const initialData = await fetchSportsLobbyInitialData();
 
   return (

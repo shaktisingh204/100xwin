@@ -1,205 +1,456 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Mail, Phone, ArrowRight, ArrowLeft, Loader2, Shield, CheckCircle, Lock, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import {
+  Mail, Phone, ArrowRight, ArrowLeft, Loader2, CheckCircle, AlertCircle,
+  Lock, Eye, EyeOff, ShieldCheck, KeyRound,
+} from "lucide-react";
 import api from "@/services/api";
 import toast from "react-hot-toast";
 
+type Mode = "phone" | "email";
+type PhoneStep = "enter_phone" | "verify_otp" | "new_password" | "done";
+
 export default function ForgotPasswordPage() {
   const router = useRouter();
-  const [tab, setTab] = useState<"email" | "phone">("phone");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  // Phone OTP flow
-  const [otpSent, setOtpSent] = useState(false);
-  const [otp, setOtp] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [showPw, setShowPw] = useState(false);
-  const [resetDone, setResetDone] = useState(false);
+  // Shared
+  const [mode, setMode] = useState<Mode>("phone");
 
   // Email flow
+  const [email, setEmail] = useState("");
+  const [emailLoading, setEmailLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [emailError, setEmailError] = useState("");
 
-  // ─── Email flow ────────────────────────────────────────────────────────
+  // Phone flow
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [confirmPass, setConfirmPass] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [phoneStep, setPhoneStep] = useState<PhoneStep>("enter_phone");
+  const [phoneLoading, setPhoneLoading] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
+
+  // ── Email submit (keeps current odd69 wiring with x-frontend-url header) ─
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return toast.error("Enter your email");
-    setLoading(true);
+    setEmailError("");
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setEmailError("Please enter a valid email address.");
+      return;
+    }
+    setEmailLoading(true);
     try {
-      await api.post("/auth/forgot-password", { email: email.trim() }, {
-        headers: { "x-frontend-url": window.location.origin },
-      });
+      await api.post(
+        "/auth/forgot-password",
+        { email: email.trim() },
+        { headers: { "x-frontend-url": window.location.origin } }
+      );
       setEmailSent(true);
       toast.success("Reset link sent! Check your inbox.");
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Something went wrong.");
+      const msg = err?.response?.data?.message || "Something went wrong.";
+      setEmailError(typeof msg === "string" ? msg : "Something went wrong.");
+      toast.error(typeof msg === "string" ? msg : "Something went wrong.");
     } finally {
-      setLoading(false);
+      setEmailLoading(false);
     }
   };
 
-  // ─── Phone OTP flow: Step 1 — send OTP ────────────────────────────────
+  // ── Phone: send OTP (same endpoint as current odd69) ──────────────────
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phone.trim() || phone.trim().length < 10) return toast.error("Enter a valid phone number");
-    setLoading(true);
+    setPhoneError("");
+    if (!phone.trim() || phone.trim().length < 10) {
+      setPhoneError("Enter a valid phone number.");
+      return;
+    }
+    setPhoneLoading(true);
     try {
       await api.post("/auth/forgot-password-phone", { phoneNumber: phone.trim() });
-      setOtpSent(true);
+      setPhoneStep("verify_otp");
       toast.success("OTP sent to your phone!");
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Could not send OTP.");
+      const msg = err?.response?.data?.message || "Could not send OTP.";
+      setPhoneError(typeof msg === "string" ? msg : "Could not send OTP.");
     } finally {
-      setLoading(false);
+      setPhoneLoading(false);
     }
   };
 
-  // ─── Phone OTP flow: Step 2 — verify OTP + set new password ───────────
+  // ── Phone: verify OTP + new password (single-call endpoint per odd69) ──
   const handlePhoneReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp.length < 4) return toast.error("Enter the OTP");
-    if (newPassword.length < 6) return toast.error("Password must be at least 6 characters");
-    setLoading(true);
+    setPhoneError("");
+    if (otp.length < 4) {
+      setPhoneError("Enter the OTP code.");
+      return;
+    }
+    if (newPass.length < 6) {
+      setPhoneError("Password must be at least 6 characters.");
+      return;
+    }
+    if (newPass !== confirmPass) {
+      setPhoneError("Passwords do not match.");
+      return;
+    }
+    setPhoneLoading(true);
     try {
       await api.post("/auth/reset-password-phone", {
         phoneNumber: phone.trim(),
         code: otp.trim(),
-        newPassword,
+        newPassword: newPass,
       });
-      setResetDone(true);
+      setPhoneStep("done");
       toast.success("Password reset successfully!");
       setTimeout(() => router.push("/"), 3000);
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Invalid OTP or link expired.");
+      const msg = err?.response?.data?.message || "Invalid OTP or link expired.";
+      setPhoneError(typeof msg === "string" ? msg : "Invalid OTP.");
     } finally {
-      setLoading(false);
+      setPhoneLoading(false);
     }
   };
 
+  const stepIndex = ["enter_phone", "verify_otp", "new_password", "done"].indexOf(phoneStep);
+
   return (
-    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        <Link href="/" className="inline-flex items-center gap-2 text-white/30 hover:text-white/60 text-sm font-medium mb-8 transition-colors">
-          <ArrowLeft size={16} /> Back to Home
+    <div className="min-h-[calc(100vh-64px)] flex items-center justify-center px-4 py-12 bg-gold-soft relative overflow-hidden">
+      {/* atmospheric halo */}
+      <div className="pointer-events-none absolute inset-0 dotgrid opacity-40" />
+      <div className="pointer-events-none absolute -top-24 -right-24 w-[360px] h-[360px] rounded-full blur-[120px]"
+           style={{ background: "var(--gold-halo)" }} />
+
+      <div className="w-full max-w-[440px] relative z-10">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-[var(--ink-faint)] hover:text-[var(--gold-bright)] text-[13px] font-medium mb-6 transition-colors"
+        >
+          <ArrowLeft size={15} /> Back to home
         </Link>
 
-        <div className="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-8 relative overflow-hidden">
-          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-48 h-48 rounded-full bg-[#f59e0b]/8 blur-[60px] pointer-events-none" />
-
-          <div className="text-center mb-6">
-            <span className="text-2xl font-black text-white tracking-tight">odd<span className="text-[#f59e0b]">69</span></span>
-          </div>
-
-          {resetDone ? (
-            <div className="text-center py-4">
-              <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                <CheckCircle size={28} className="text-emerald-400" />
-              </div>
-              <h2 className="text-lg font-black text-white mb-2">Password Reset!</h2>
-              <p className="text-sm text-white/30 mb-4">Your password has been changed successfully. Redirecting to login...</p>
+        <div className="relative rounded-[22px] border border-[var(--line-gold)] bg-[var(--bg-surface)] p-8 shadow-[var(--shadow-lift)] grain overflow-hidden">
+          <div className="relative z-10">
+            {/* Logo */}
+            <div className="text-center mb-6">
+              <span className="font-display text-[28px] font-bold text-[var(--ink)] tracking-tight">
+                odd<span className="text-gold-grad">69</span>
+              </span>
             </div>
-          ) : emailSent ? (
-            <div className="text-center py-4">
-              <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                <CheckCircle size={28} className="text-emerald-400" />
+
+            {/* Gold lock icon */}
+            <div className="text-center mb-5">
+              <div className="w-14 h-14 mx-auto rounded-[14px] bg-[var(--gold-soft)] border border-[var(--line-gold)] grid place-items-center animate-pulse-gold">
+                <KeyRound size={22} className="text-[var(--gold-bright)]" />
               </div>
-              <h2 className="text-lg font-black text-white mb-2">Check Your Inbox</h2>
-              <p className="text-sm text-white/30 mb-6 leading-relaxed">
-                We&apos;ve sent a password reset link to <span className="text-white/60 font-semibold">{email}</span>. It may take a minute to arrive.
-              </p>
-              <button onClick={() => setEmailSent(false)} className="text-[#f59e0b] text-sm font-bold hover:text-[#d97706] transition-colors">
-                Didn&apos;t receive it? Try again
-              </button>
             </div>
-          ) : (
-            <>
-              <div className="text-center mb-6">
-                <div className="w-14 h-14 mx-auto mb-4 rounded-2xl bg-[#f59e0b]/10 border border-[#f59e0b]/20 flex items-center justify-center">
-                  <Shield size={24} className="text-[#f59e0b]" />
+
+            {/* ── DONE STATE ─────────────────────────────────────────── */}
+            {phoneStep === "done" ? (
+              <div className="text-center py-2">
+                <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-[var(--emerald-soft)] border border-[rgba(0,216,123,0.25)] grid place-items-center">
+                  <CheckCircle size={28} className="text-[var(--emerald)]" />
                 </div>
-                <h1 className="text-xl font-black text-white">Reset Your Password</h1>
-                <p className="text-sm text-white/30 mt-2">
-                  {tab === "email"
-                    ? "Enter your email and we'll send a reset link."
-                    : otpSent
-                      ? "Enter the OTP and your new password."
-                      : "Enter your phone number to receive an OTP."}
+                <h1 className="t-section text-center !text-[20px]">Password reset</h1>
+                <p className="text-[13px] text-[var(--ink-dim)] mt-2 leading-relaxed">
+                  Your password has been changed successfully. Redirecting to home…
                 </p>
-              </div>
-
-              {/* Tab switcher */}
-              {!otpSent && (
-                <div className="flex gap-1 p-1 bg-white/[0.03] border border-white/[0.05] rounded-xl mb-6">
-                  <button onClick={() => setTab("email")} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${tab === "email" ? "bg-white/[0.08] text-white border border-white/10" : "text-white/25 hover:text-white/40"}`}>
-                    <Mail size={13} /> Email
-                  </button>
-                  <button onClick={() => setTab("phone")} className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${tab === "phone" ? "bg-white/[0.08] text-white border border-white/10" : "text-white/25 hover:text-white/40"}`}>
-                    <Phone size={13} /> Phone
+                <div className="mt-5">
+                  <button onClick={() => router.push("/")} className="btn btn-gold sweep h-11 w-full uppercase tracking-[0.06em] text-[12px]">
+                    Go to home
                   </button>
                 </div>
-              )}
+              </div>
+            ) : emailSent ? (
+              <div className="text-center py-2">
+                <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-[var(--emerald-soft)] border border-[rgba(0,216,123,0.25)] grid place-items-center">
+                  <Mail size={28} className="text-[var(--emerald)]" />
+                </div>
+                <h1 className="t-section text-center !text-[20px]">Check your inbox</h1>
+                <p className="text-[13px] text-[var(--ink-dim)] mt-2 mb-5 leading-relaxed">
+                  We&rsquo;ve sent a password reset link to{" "}
+                  <span className="text-[var(--ink)] font-semibold">{email}</span>. It may take a minute to arrive.
+                </p>
+                <button
+                  onClick={() => { setEmailSent(false); setEmail(""); }}
+                  className="text-[var(--gold-bright)] text-[13px] font-semibold hover:underline"
+                >
+                  Try a different email
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Title */}
+                <div className="text-center mb-5">
+                  <h1 className="t-section !text-[20px]">Reset your password</h1>
+                  <p className="text-[13px] text-[var(--ink-dim)] mt-2">
+                    {mode === "email"
+                      ? "We&rsquo;ll email you a secure reset link."
+                      : phoneStep === "verify_otp" || phoneStep === "new_password"
+                      ? "Enter the OTP and set a new password."
+                      : "Reset via email link or phone OTP."}
+                  </p>
+                </div>
 
-              {tab === "email" ? (
-                <form onSubmit={handleEmailSubmit} className="space-y-4">
-                  <div className="relative">
-                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/15"><Mail size={16} /></div>
-                    <input type="email" placeholder="Enter your email" value={email} onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl pl-11 pr-4 py-3.5 text-sm text-white placeholder:text-white/20 outline-none focus:border-[#f59e0b]/30 transition-colors" autoFocus />
+                {/* Mode toggle — hide once OTP flow begins */}
+                {phoneStep === "enter_phone" && (
+                  <div className="flex gap-1 p-1 bg-[var(--bg-inlay)] border border-[var(--line-default)] rounded-[12px] mb-6">
+                    {(["phone", "email"] as Mode[]).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => { setMode(m); setPhoneError(""); setEmailError(""); }}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-[10px] text-[11px] font-bold uppercase tracking-[0.1em] transition-all ${
+                          mode === m
+                            ? "bg-[var(--gold-soft)] text-[var(--gold-bright)] border border-[var(--line-gold)]"
+                            : "text-[var(--ink-faint)] hover:text-[var(--ink-dim)]"
+                        }`}
+                      >
+                        {m === "phone" ? <Phone size={12} /> : <Mail size={12} />}
+                        {m === "phone" ? "Phone OTP" : "Email"}
+                      </button>
+                    ))}
                   </div>
-                  <button type="submit" disabled={loading || !email.trim()}
-                    className="w-full bg-gradient-to-r from-[#f59e0b] to-[#d97706] text-black font-black text-sm uppercase tracking-wider py-3.5 rounded-xl flex items-center justify-center gap-2 hover:shadow-[0_0_30px_-5px_rgba(245,158,11,0.3)] transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                    {loading ? <Loader2 size={16} className="animate-spin" /> : <><span>Send Reset Link</span> <ArrowRight size={14} /></>}
-                  </button>
-                </form>
-              ) : !otpSent ? (
-                <form onSubmit={handleSendOtp} className="space-y-4">
-                  <div className="relative">
-                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/15"><Phone size={16} /></div>
-                    <input type="tel" placeholder="Enter your phone number" value={phone} onChange={(e) => setPhone(e.target.value)}
-                      className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl pl-11 pr-4 py-3.5 text-sm text-white placeholder:text-white/20 outline-none focus:border-[#f59e0b]/30 transition-colors" autoFocus />
-                  </div>
-                  <button type="submit" disabled={loading || phone.trim().length < 10}
-                    className="w-full bg-gradient-to-r from-[#f59e0b] to-[#d97706] text-black font-black text-sm uppercase tracking-wider py-3.5 rounded-xl flex items-center justify-center gap-2 hover:shadow-[0_0_30px_-5px_rgba(245,158,11,0.3)] transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                    {loading ? <Loader2 size={16} className="animate-spin" /> : <><span>Send OTP</span> <ArrowRight size={14} /></>}
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handlePhoneReset} className="space-y-4">
-                  <p className="text-xs text-white/30 text-center mb-2">OTP sent to <span className="text-white/60 font-bold">{phone}</span></p>
-                  <div className="relative">
-                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/15"><ShieldCheck size={16} /></div>
-                    <input type="text" placeholder="Enter OTP" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                      className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl pl-11 pr-4 py-3.5 text-sm text-white placeholder:text-white/20 outline-none focus:border-[#f59e0b]/30 transition-colors tracking-[0.3em] text-center font-mono" autoFocus />
-                  </div>
-                  <div className="relative">
-                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/15"><Lock size={16} /></div>
-                    <input type={showPw ? "text" : "password"} placeholder="New password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl pl-11 pr-11 py-3.5 text-sm text-white placeholder:text-white/20 outline-none focus:border-[#f59e0b]/30 transition-colors" />
-                    <button type="button" onClick={() => setShowPw(!showPw)} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-white/15 hover:text-white/40 transition-colors">
-                      {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                )}
+
+                {/* ── EMAIL FLOW ─────────────────────────────────────── */}
+                {mode === "email" && phoneStep === "enter_phone" && (
+                  <form onSubmit={handleEmailSubmit} className="space-y-4">
+                    <label className="block">
+                      <span className="text-[11.5px] font-medium text-[var(--ink-dim)] mb-1.5 block">Email address</span>
+                      <div className="relative">
+                        <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
+                        <input
+                          type="email"
+                          autoComplete="email"
+                          placeholder="you@example.com"
+                          value={email}
+                          onChange={(e) => { setEmail(e.target.value); setEmailError(""); }}
+                          autoFocus
+                          className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
+                            emailError ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
+                          }`}
+                        />
+                      </div>
+                      {emailError && (
+                        <p className="text-[var(--crimson)] text-[11.5px] mt-1.5 flex items-center gap-1">
+                          <AlertCircle size={11} /> {emailError}
+                        </p>
+                      )}
+                    </label>
+
+                    <button
+                      type="submit"
+                      disabled={emailLoading || !email.trim()}
+                      className="btn btn-gold sweep h-11 w-full uppercase tracking-[0.06em] text-[12px] disabled:opacity-40"
+                    >
+                      {emailLoading ? (
+                        <><Loader2 size={14} className="animate-spin" /> Sending</>
+                      ) : (
+                        <>Send reset link <ArrowRight size={13} /></>
+                      )}
                     </button>
-                  </div>
-                  <button type="submit" disabled={loading || otp.length < 4 || newPassword.length < 6}
-                    className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-black text-sm uppercase tracking-wider py-3.5 rounded-xl flex items-center justify-center gap-2 hover:shadow-[0_0_30px_-5px_rgba(16,185,129,0.3)] transition-all disabled:opacity-40 disabled:cursor-not-allowed">
-                    {loading ? <Loader2 size={16} className="animate-spin" /> : "Reset Password"}
-                  </button>
-                  <button type="button" onClick={() => { setOtpSent(false); setOtp(""); setNewPassword(""); }} className="w-full text-xs text-white/20 hover:text-white/40 transition-colors py-1">
-                    ← Change phone number
-                  </button>
-                </form>
-              )}
-            </>
-          )}
+                  </form>
+                )}
 
-          <div className="mt-6 pt-5 border-t border-white/[0.04] text-center">
-            <p className="text-xs text-white/20">
-              Remember your password?{" "}
-              <Link href="/" className="text-[#f59e0b] font-bold hover:text-[#d97706] transition-colors">Log in</Link>
-            </p>
+                {/* ── PHONE FLOW ─────────────────────────────────────── */}
+                {mode === "phone" && (
+                  <>
+                    {/* Step indicator */}
+                    <div className="flex items-center gap-2 mb-5">
+                      {["enter_phone", "verify_otp", "new_password"].map((s, i) => {
+                        const done = stepIndex > i;
+                        const active = phoneStep === s;
+                        return (
+                          <React.Fragment key={s}>
+                            <div
+                              className={`w-7 h-7 rounded-full grid place-items-center text-[11px] font-bold border transition-all ${
+                                active
+                                  ? "bg-[var(--gold-soft)] border-[var(--line-gold)] text-[var(--gold-bright)]"
+                                  : done
+                                  ? "bg-[var(--emerald-soft)] border-[rgba(0,216,123,0.35)] text-[var(--emerald)]"
+                                  : "bg-[var(--bg-inlay)] border-[var(--line-default)] text-[var(--ink-whisper)]"
+                              }`}
+                            >
+                              {done ? <CheckCircle size={13} /> : <span className="num">{i + 1}</span>}
+                            </div>
+                            {i < 2 && (
+                              <div className="flex-1 h-px" style={{ background: done ? "var(--emerald)" : "var(--line-default)" }} />
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+
+                    {/* Step 1 — phone */}
+                    {phoneStep === "enter_phone" && (
+                      <form onSubmit={handleSendOtp} className="space-y-4">
+                        <label className="block">
+                          <span className="text-[11.5px] font-medium text-[var(--ink-dim)] mb-1.5 block">Phone number</span>
+                          <div className="relative">
+                            <Phone size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
+                            <input
+                              type="tel"
+                              inputMode="numeric"
+                              placeholder="+91 98xxxxxxxx"
+                              value={phone}
+                              onChange={(e) => { setPhone(e.target.value); setPhoneError(""); }}
+                              autoFocus
+                              className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors num ${
+                                phoneError ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
+                              }`}
+                            />
+                          </div>
+                          {phoneError && (
+                            <p className="text-[var(--crimson)] text-[11.5px] mt-1.5 flex items-center gap-1">
+                              <AlertCircle size={11} /> {phoneError}
+                            </p>
+                          )}
+                        </label>
+
+                        <button
+                          type="submit"
+                          disabled={phoneLoading || phone.trim().length < 10}
+                          className="btn btn-gold sweep h-11 w-full uppercase tracking-[0.06em] text-[12px] disabled:opacity-40"
+                        >
+                          {phoneLoading ? (
+                            <><Loader2 size={14} className="animate-spin" /> Sending OTP</>
+                          ) : (
+                            <>Send OTP <ArrowRight size={13} /></>
+                          )}
+                        </button>
+                      </form>
+                    )}
+
+                    {/* Step 2 — OTP */}
+                    {phoneStep === "verify_otp" && (
+                      <form
+                        onSubmit={(e) => { e.preventDefault(); if (otp.length >= 4) setPhoneStep("new_password"); else setPhoneError("Enter the OTP code."); }}
+                        className="space-y-4"
+                      >
+                        <p className="text-[12.5px] text-[var(--ink-dim)] text-center">
+                          OTP sent to <span className="text-[var(--ink)] font-semibold num">{phone}</span>
+                        </p>
+                        <label className="block">
+                          <span className="text-[11.5px] font-medium text-[var(--ink-dim)] mb-1.5 block">OTP code</span>
+                          <div className="relative">
+                            <ShieldCheck size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              maxLength={6}
+                              placeholder="000000"
+                              value={otp}
+                              onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setPhoneError(""); }}
+                              autoFocus
+                              className={`w-full h-12 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-center tracking-[0.4em] text-[18px] font-bold text-[var(--ink)] placeholder:text-[var(--ink-whisper)] placeholder:tracking-normal placeholder:font-normal focus:outline-none transition-colors num ${
+                                phoneError ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
+                              }`}
+                            />
+                          </div>
+                          {phoneError && (
+                            <p className="text-[var(--crimson)] text-[11.5px] mt-1.5 flex items-center gap-1">
+                              <AlertCircle size={11} /> {phoneError}
+                            </p>
+                          )}
+                        </label>
+
+                        <button
+                          type="submit"
+                          disabled={otp.length < 4}
+                          className="btn btn-gold sweep h-11 w-full uppercase tracking-[0.06em] text-[12px] disabled:opacity-40"
+                        >
+                          Continue <ArrowRight size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setPhoneStep("enter_phone"); setOtp(""); }}
+                          className="w-full text-[11.5px] text-[var(--ink-faint)] hover:text-[var(--ink-dim)] transition-colors py-1"
+                        >
+                          ← Change phone / resend OTP
+                        </button>
+                      </form>
+                    )}
+
+                    {/* Step 3 — new password */}
+                    {phoneStep === "new_password" && (
+                      <form onSubmit={handlePhoneReset} className="space-y-4">
+                        <label className="block">
+                          <span className="text-[11.5px] font-medium text-[var(--ink-dim)] mb-1.5 block">New password</span>
+                          <div className="relative">
+                            <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
+                            <input
+                              type={showPass ? "text" : "password"}
+                              placeholder="Min. 6 characters"
+                              value={newPass}
+                              onChange={(e) => { setNewPass(e.target.value); setPhoneError(""); }}
+                              autoFocus
+                              className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
+                                phoneError ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
+                              }`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPass(!showPass)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] hover:text-[var(--ink)] transition-colors"
+                              aria-label={showPass ? "Hide password" : "Show password"}
+                            >
+                              {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                            </button>
+                          </div>
+                        </label>
+
+                        <label className="block">
+                          <span className="text-[11.5px] font-medium text-[var(--ink-dim)] mb-1.5 block">Confirm password</span>
+                          <div className="relative">
+                            <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
+                            <input
+                              type={showPass ? "text" : "password"}
+                              placeholder="Repeat new password"
+                              value={confirmPass}
+                              onChange={(e) => { setConfirmPass(e.target.value); setPhoneError(""); }}
+                              className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
+                                phoneError ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
+                              }`}
+                            />
+                          </div>
+                          {phoneError && (
+                            <p className="text-[var(--crimson)] text-[11.5px] mt-1.5 flex items-center gap-1">
+                              <AlertCircle size={11} /> {phoneError}
+                            </p>
+                          )}
+                        </label>
+
+                        <button
+                          type="submit"
+                          disabled={phoneLoading || newPass.length < 6 || newPass !== confirmPass}
+                          className="btn btn-gold sweep h-11 w-full uppercase tracking-[0.06em] text-[12px] disabled:opacity-40"
+                        >
+                          {phoneLoading ? (
+                            <><Loader2 size={14} className="animate-spin" /> Resetting</>
+                          ) : (
+                            "Reset password"
+                          )}
+                        </button>
+                      </form>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
+            <div className="mt-6 pt-5 border-t border-[var(--line-default)] text-center">
+              <p className="text-[12px] text-[var(--ink-faint)]">
+                Remember your password?{" "}
+                <Link href="/" className="text-[var(--gold-bright)] font-semibold hover:underline">
+                  Log in
+                </Link>
+              </p>
+            </div>
           </div>
         </div>
       </div>

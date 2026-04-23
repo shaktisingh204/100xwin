@@ -1,23 +1,38 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Bricolage_Grotesque, DM_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import ClientLayout from "@/components/layout/ClientLayout";
 
-const inter = Inter({
-  variable: "--font-inter",
+const bricolage = Bricolage_Grotesque({
+  variable: "--font-bricolage",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+});
+
+const dm = DM_Sans({
+  variable: "--font-dm",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
+const mono = JetBrains_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Odd69 — Premium Sports Betting & Casino",
-  description: "India's fastest-growing betting platform. Live sports, casino, crash games, and instant payouts.",
+  title: "odd69 — Sports Betting & Casino",
+  description: "India's fastest-growing betting floor. Live sports, casino, crash games, instant payouts.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full`}>
-      <body className="min-h-full bg-[#06080c] text-white antialiased font-[family-name:var(--font-inter)]">
+    <html lang="en" className={`${bricolage.variable} ${dm.variable} ${mono.variable} h-full`}>
+      <body className="min-h-full antialiased">
         <ClientLayout>{children}</ClientLayout>
       </body>
     </html>

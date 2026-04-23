@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Home, Gamepad2, Trophy, Play, Rocket, Star, Gift, Crown,
+  Home, Gamepad2, Trophy, Rocket, Star, Gift, Crown,
   Headphones, BookOpen, Shield, ChevronDown, Search, Sparkles,
   Tv, Dice1, Dice3, Target, Gem, Flame, Zap, Settings, Ticket,
 } from "lucide-react";
@@ -19,24 +19,13 @@ interface NavItem {
   accent?: string;
 }
 
-interface NavSection {
-  title: string;
-  items: NavItem[];
-  collapsible?: boolean;
-  defaultOpen?: boolean;
-}
-
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [providers, setProviders] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
-    main: true,
-    casino: true,
-    sports: true,
-    providers: false,
-    support: false,
+    main: true, casino: true, sports: true, providers: false, support: false,
   });
 
   useEffect(() => {
@@ -45,36 +34,34 @@ export default function Sidebar() {
       .catch(() => {});
   }, []);
 
-  const toggle = (key: string) =>
-    setOpenSections((p) => ({ ...p, [key]: !p[key] }));
+  const toggle = (key: string) => setOpenSections((p) => ({ ...p, [key]: !p[key] }));
 
-  const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname?.startsWith(href);
+  const isActive = (href: string) => href === "/" ? pathname === "/" : pathname?.startsWith(href);
 
   const mainNav: NavItem[] = [
-    { label: "Home", href: "/", icon: Home },
-    { label: "Casino", href: "/casino", icon: Gamepad2, accent: "text-amber-400" },
-    { label: "Live Casino", href: "/live-dealers", icon: Tv, accent: "text-red-400" },
-    { label: "Sports", href: "/sports", icon: Trophy, accent: "text-teal-400" },
-    { label: "Originals", href: "/zeero-games", icon: Sparkles, accent: "text-emerald-400" },
-    { label: "Promotions", href: "/promotions", icon: Gift, badge: "HOT", accent: "text-[#f59e0b]" },
-    { label: "VIP Club", href: "/vip", icon: Crown, accent: "text-purple-400" },
+    { label: "Home",        href: "/",              icon: Home,      accent: "text-[var(--ink)]" },
+    { label: "Casino",      href: "/casino",        icon: Gamepad2,  accent: "text-[var(--gold)]" },
+    { label: "Live Casino", href: "/live-dealers",  icon: Tv,        accent: "text-[var(--crimson)]" },
+    { label: "Sports",      href: "/sports",        icon: Trophy,    accent: "text-[var(--emerald)]" },
+    { label: "Originals",   href: "/zeero-games",   icon: Sparkles,  accent: "text-[var(--violet)]" },
+    { label: "Promotions",  href: "/promotions",    icon: Gift,      accent: "text-[var(--rose)]", badge: "HOT" },
+    { label: "VIP Club",    href: "/vip",           icon: Crown,     accent: "text-[var(--gold-bright)]" },
   ];
 
   const casinoGames: NavItem[] = [
-    { label: "Slots", href: "/casino?category=slots", icon: Star },
-    { label: "Crash", href: "/casino?category=crash", icon: Rocket },
-    { label: "Table Games", href: "/casino?category=table", icon: Dice3 },
-    { label: "Live Roulette", href: "/casino?category=live", icon: Target },
-    { label: "Card Games", href: "/casino?category=card", icon: Dice1 },
-    { label: "New Releases", href: "/casino?category=new", icon: Gem },
+    { label: "Slots",         href: "/casino?category=slots", icon: Star },
+    { label: "Crash",         href: "/casino?category=crash", icon: Rocket },
+    { label: "Table games",   href: "/casino?category=table", icon: Dice3 },
+    { label: "Live roulette", href: "/casino?category=live",  icon: Target },
+    { label: "Card games",    href: "/casino?category=card",  icon: Dice1 },
+    { label: "New releases",  href: "/casino?category=new",   icon: Gem },
   ];
 
   const supportNav: NavItem[] = [
-    { label: "Help Center", href: "/support/help-center", icon: Headphones },
-    { label: "Fairness", href: "/fairness", icon: Shield },
-    { label: "Rules", href: "/legal/rules", icon: BookOpen },
-    { label: "Settings", href: "/settings", icon: Settings },
+    { label: "Help center", href: "/support/help-center", icon: Headphones },
+    { label: "Fairness",    href: "/fairness",            icon: Shield },
+    { label: "Rules",       href: "/legal/rules",         icon: BookOpen },
+    { label: "Settings",    href: "/settings",            icon: Settings },
   ];
 
   const renderItem = (item: NavItem) => {
@@ -84,69 +71,59 @@ export default function Sidebar() {
       <Link
         key={item.label}
         href={item.href}
-        className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] font-semibold transition-all group relative ${
+        className={`relative flex items-center gap-3 pl-4 pr-3 py-2 rounded-[10px] text-[12.5px] font-semibold transition-all group ${
           active
-            ? "bg-white/[0.06] text-white"
-            : "text-white/30 hover:text-white/60 hover:bg-white/[0.02]"
+            ? "bg-white/[0.045] text-[var(--ink)]"
+            : "text-[var(--ink-faint)] hover:text-[var(--ink)] hover:bg-white/[0.025]"
         }`}
       >
         {active && (
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-4 rounded-r-full bg-[#f59e0b]" />
+          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-gold-grad shadow-[0_0_8px_var(--gold-halo)]" />
         )}
         <Icon
           size={15}
-          className={`flex-shrink-0 ${active ? (item.accent || "text-[#f59e0b]") : "text-white/20 group-hover:text-white/40"} transition-colors`}
+          strokeWidth={active ? 2.25 : 1.75}
+          className={`flex-shrink-0 transition-colors ${
+            active ? (item.accent || "text-[var(--gold)]") : "text-[var(--ink-whisper)] group-hover:text-[var(--ink-dim)]"
+          }`}
         />
         <span className="truncate">{item.label}</span>
         {item.badge && (
-          <span className="ml-auto text-[7px] font-black bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">
-            {item.badge}
-          </span>
+          <span className="ml-auto chip chip-crimson !py-[2px] !px-1.5 !text-[8.5px]">{item.badge}</span>
         )}
       </Link>
     );
   };
 
-  const renderSection = (
-    key: string,
-    title: string,
-    items: NavItem[],
-    collapsible = true
-  ) => (
+  const renderSection = (key: string, title: string, items: NavItem[]) => (
     <div key={key}>
       <button
-        onClick={() => collapsible && toggle(key)}
-        className="flex items-center justify-between w-full px-3 py-2 group"
+        onClick={() => toggle(key)}
+        className="flex items-center justify-between w-full px-4 py-2 group"
       >
-        <span className="text-[9px] font-black text-white/10 uppercase tracking-[0.15em]">
-          {title}
-        </span>
-        {collapsible && (
-          <ChevronDown
-            size={10}
-            className={`text-white/10 transition-transform ${
-              openSections[key] ? "rotate-0" : "-rotate-90"
-            }`}
-          />
-        )}
+        <span className="t-eyebrow !text-[9px]">{title}</span>
+        <ChevronDown
+          size={11}
+          className={`text-[var(--ink-whisper)] group-hover:text-[var(--ink-faint)] transition-transform ${
+            openSections[key] ? "rotate-0" : "-rotate-90"
+          }`}
+        />
       </button>
-      {openSections[key] && (
-        <div className="space-y-0.5">{items.map(renderItem)}</div>
-      )}
+      {openSections[key] && <div className="space-y-0.5 px-1.5">{items.map(renderItem)}</div>}
     </div>
   );
 
   return (
-    <aside className="hidden md:flex flex-col w-[200px] flex-shrink-0 h-[calc(100vh-56px)] bg-[#080b10]/80 border-r border-white/[0.03] overflow-y-auto overflow-x-hidden"
-      style={{ scrollbarWidth: "none" }}
+    <aside
+      className="hidden md:flex flex-col w-[224px] flex-shrink-0 h-[calc(100vh-64px)] bg-[var(--bg-base)]/85 border-r border-[var(--line-default)] overflow-y-auto overflow-x-hidden no-scrollbar"
     >
       {/* Search */}
       <div className="p-3">
-        <div className="flex items-center gap-2 bg-white/[0.02] border border-white/[0.04] rounded-lg px-2.5 py-2">
-          <Search size={12} className="text-white/15 flex-shrink-0" />
+        <label className="group flex items-center gap-2 bg-[var(--bg-surface)] border border-[var(--line-default)] rounded-[10px] pl-3 pr-2 h-9 focus-within:border-[var(--line-gold)] transition-colors">
+          <Search size={13} className="text-[var(--ink-whisper)] group-focus-within:text-[var(--gold)] transition-colors" />
           <input
             type="text"
-            placeholder="Search games..."
+            placeholder="Search games, markets, teams…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -155,37 +132,32 @@ export default function Sidebar() {
                 setSearchQuery("");
               }
             }}
-            className="bg-transparent text-[11px] text-white/60 placeholder:text-white/15 outline-none w-full"
+            className="bg-transparent text-[12px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] outline-none w-full"
           />
-        </div>
+          <span className="font-mono text-[9.5px] text-[var(--ink-whisper)] border border-[var(--line-default)] rounded px-1">⌘K</span>
+        </label>
       </div>
 
       {/* Main nav */}
-      <div className="px-1.5 space-y-0.5">
-        {mainNav.map(renderItem)}
-      </div>
+      <div className="px-1.5 space-y-0.5">{mainNav.map(renderItem)}</div>
 
-      <div className="my-2 mx-3 h-px bg-white/[0.03]" />
+      <div className="my-3 mx-4 hairline" />
 
       {/* Casino categories */}
-      {renderSection("casino", "Casino Games", casinoGames)}
+      {renderSection("casino", "Casino", casinoGames)}
 
-      <div className="my-2 mx-3 h-px bg-white/[0.03]" />
+      <div className="my-3 mx-4 hairline" />
 
       {/* Providers */}
       <div>
         <button
           onClick={() => toggle("providers")}
-          className="flex items-center justify-between w-full px-3 py-2 group"
+          className="flex items-center justify-between w-full px-4 py-2 group"
         >
-          <span className="text-[9px] font-black text-white/10 uppercase tracking-[0.15em]">
-            Providers
-          </span>
+          <span className="t-eyebrow !text-[9px]">Providers</span>
           <ChevronDown
-            size={10}
-            className={`text-white/10 transition-transform ${
-              openSections.providers ? "rotate-0" : "-rotate-90"
-            }`}
+            size={11}
+            className={`text-[var(--ink-whisper)] transition-transform ${openSections.providers ? "rotate-0" : "-rotate-90"}`}
           />
         </button>
         {openSections.providers && (
@@ -194,28 +166,22 @@ export default function Sidebar() {
               <Link
                 key={p.provider}
                 href={`/casino?provider=${p.provider}`}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] text-white/25 hover:text-white/50 hover:bg-white/[0.02] transition-all"
+                className="flex items-center gap-2.5 pl-4 pr-3 py-1.5 rounded-[10px] text-[11.5px] font-medium text-[var(--ink-faint)] hover:text-[var(--ink)] hover:bg-white/[0.025] transition-all"
               >
                 {p.logo ? (
-                  <img
-                    src={p.logo}
-                    alt={p.provider}
-                    className="w-4 h-4 rounded object-contain opacity-40"
-                  />
+                  <img src={p.logo} alt={p.provider} className="w-4 h-4 rounded object-contain opacity-60" />
                 ) : (
-                  <Flame size={12} className="text-white/15" />
+                  <Flame size={12} className="text-[var(--ink-whisper)]" />
                 )}
                 <span className="truncate capitalize">{p.provider}</span>
                 {p.gameCount && (
-                  <span className="ml-auto text-[8px] text-white/10">
-                    {p.gameCount}
-                  </span>
+                  <span className="ml-auto num text-[9.5px] text-[var(--ink-whisper)]">{p.gameCount}</span>
                 )}
               </Link>
             ))}
             <Link
               href="/casino/providers"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-[#f59e0b]/40 hover:text-[#f59e0b]/70 transition-colors"
+              className="flex items-center gap-1.5 pl-4 pr-3 py-1.5 text-[10.5px] font-bold text-[var(--gold)] hover:text-[var(--gold-bright)] transition-colors uppercase tracking-wider"
             >
               <Zap size={10} /> All providers →
             </Link>
@@ -223,36 +189,40 @@ export default function Sidebar() {
         )}
       </div>
 
-      <div className="my-2 mx-3 h-px bg-white/[0.03]" />
+      <div className="my-3 mx-4 hairline" />
 
       {/* Sports */}
       {renderSection("sports", "Sports", [
-        { label: "Cricket", href: "/sports?sport=cricket", icon: Trophy },
-        { label: "Football", href: "/sports?sport=football", icon: Trophy },
-        { label: "Tennis", href: "/sports?sport=tennis", icon: Ticket },
-        { label: "All Sports", href: "/sports", icon: Star },
+        { label: "Cricket",    href: "/sports?sport=cricket",  icon: Trophy },
+        { label: "Football",   href: "/sports?sport=football", icon: Trophy },
+        { label: "Tennis",     href: "/sports?sport=tennis",   icon: Ticket },
+        { label: "All sports", href: "/sports",                icon: Star },
       ])}
 
-      <div className="my-2 mx-3 h-px bg-white/[0.03]" />
+      <div className="my-3 mx-4 hairline" />
 
-      {/* Support & Legal */}
+      {/* Support */}
       {renderSection("support", "Support", supportNav)}
 
-      {/* Bottom spacer */}
+      {/* Refer block */}
       <div className="mt-auto p-3">
-        <div className="bg-gradient-to-br from-[#f59e0b]/8 to-transparent border border-[#f59e0b]/10 rounded-xl p-3">
-          <p className="text-[10px] font-bold text-[#f59e0b]/60">
-            <span className="flex items-center gap-1.5"><HiOutlineGift size={13} className="text-[#f59e0b]/60" /> Refer & Earn</span>
-          </p>
-          <p className="text-[8px] text-white/15 mt-1 leading-relaxed">
-            Invite friends, earn 5% of their wagers forever
-          </p>
-          <Link
-            href="/referral"
-            className="mt-2 block text-center text-[9px] font-black uppercase tracking-wider bg-[#f59e0b]/10 text-[#f59e0b]/60 hover:text-[#f59e0b] px-2 py-1.5 rounded-lg transition-colors"
-          >
-            Get link
-          </Link>
+        <div className="relative overflow-hidden rounded-[14px] bg-[linear-gradient(140deg,rgba(245,183,10,0.14)_0%,rgba(245,183,10,0.02)_60%)] border border-[var(--line-gold)] p-3.5">
+          <div className="absolute -right-6 -top-6 w-20 h-20 rounded-full bg-[var(--gold)]/15 blur-xl" />
+          <div className="relative">
+            <div className="flex items-center gap-1.5">
+              <HiOutlineGift size={14} className="text-[var(--gold-bright)]" />
+              <span className="t-eyebrow !text-[9px] !text-[var(--gold-bright)]">Refer & earn</span>
+            </div>
+            <p className="mt-1.5 text-[11px] font-medium text-[var(--ink-dim)] leading-snug">
+              Invite friends, earn <span className="num text-[var(--gold-bright)] font-semibold">5%</span> of their wagers forever.
+            </p>
+            <Link
+              href="/referral"
+              className="mt-2.5 inline-flex items-center gap-1 btn btn-gold !py-1.5 !px-3 !text-[10px] uppercase tracking-[0.1em]"
+            >
+              Get link
+            </Link>
+          </div>
         </div>
       </div>
     </aside>
