@@ -4,8 +4,14 @@ export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
 
-        // Forward request to kuberexchange.com
-        const backendRes = await fetch("https://zeero.bet/api/auth/login", {
+        const backendBase = (
+            process.env.NEXT_PUBLIC_API_PROXY_URL ||
+            process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/api\/?$/, '') ||
+            process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') ||
+            'http://127.0.0.1:9828'
+        ).replace(/\/+$/, '');
+
+        const backendRes = await fetch(`${backendBase}/api/auth/login`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
