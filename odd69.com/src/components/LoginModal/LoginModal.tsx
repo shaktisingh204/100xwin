@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { X, Eye, EyeOff, AlertCircle, Mail, Lock, Loader2 } from "lucide-react";
+import { X, Eye, EyeOff, AlertCircle, Mail, Lock, Loader2, ShieldCheck } from "lucide-react";
 import api from "@/services/api";
 import toast from "react-hot-toast";
 import { useAuth } from "@/context/AuthContext";
@@ -83,11 +83,9 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
         clearErrors();
     };
 
-    // Auto-detect if identifier looks like purely digits - then show Country Code selector safely
     const handleIdentifierChange = (val: string) => {
         setIdentifier(val);
         clearErrors();
-        // If it starts with digits, we can optionally show the country code selector to help them
         if (/^\d+$/.test(val)) {
             setShowCountryCode(true);
         } else {
@@ -119,9 +117,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
 
     const getResolvedIdentifier = () => {
         const raw = identifier.trim();
-        // If they left the country code visible and it's purely digits, assume phone
         if (showCountryCode && /^\d+$/.test(raw)) {
-            // Strip any leading + from country code and merge
             return `${selectedCountry.code.replace(/-/g, '')}${raw}`;
         }
         return raw;
@@ -143,7 +139,6 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
             if (isEmail) {
                 await api.post('/auth/send-email-otp', { email: resolvedIdentifier, purpose: 'LOGIN' });
             } else {
-                // Determine raw phone format
                 const phonePayload = resolvedIdentifier.startsWith('+') ? resolvedIdentifier : `+${resolvedIdentifier}`;
                 await api.post('/auth/send-otp', { phoneNumber: phonePayload, purpose: 'LOGIN' });
             }
@@ -151,7 +146,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
             setOtpStep("verify");
             setOtpCode('');
             startCooldown();
-            startExpiryTimer(isEmail ? 600 : 120); // email: 10min, phone: 2min
+            startExpiryTimer(isEmail ? 600 : 120);
             toast.success("OTP sent successfully");
         } catch (err: any) {
             const status = err.response?.status;
@@ -204,61 +199,69 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-md" onClick={(e) => { if (e.target === e.currentTarget && onClose) onClose(); }}>
-
-            {/* Fixed-width modal — bottom sheet on mobile, centred card on sm+ */}
+        <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-md animate-fade-in"
+            onClick={(e) => { if (e.target === e.currentTarget && onClose) onClose(); }}
+        >
             <div
-                className="relative w-full sm:w-[440px] bg-gradient-to-br from-[#12161e] to-[#0c0f14] rounded-t-3xl sm:rounded-2xl border border-white/[0.06] shadow-[0_24px_80px_rgba(0,0,0,0.7)] flex flex-col flex-shrink-0 overflow-hidden sm:min-h-[560px]"
+                className="relative w-full sm:w-[440px] bg-[var(--bg-surface)] rounded-t-[22px] sm:rounded-[22px] border border-[var(--line-gold)] shadow-[var(--shadow-lift)] flex flex-col flex-shrink-0 overflow-hidden grain sm:min-h-[560px]"
                 style={{ maxHeight: '92dvh' }}
             >
-                {/* Decorative glow */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-36 bg-amber-500/10 blur-[60px] rounded-full pointer-events-none" />
+                {/* Atmospheric halo */}
+                <div
+                    className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[360px] h-[200px] rounded-full blur-[110px]"
+                    style={{ background: "var(--gold-halo)" }}
+                />
 
                 {/* Close */}
                 <button
                     onClick={onClose}
-                    className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06] hover:bg-white/[0.12] transition-colors text-white/50 hover:text-white"
+                    className="absolute top-4 right-4 z-20 w-8 h-8 grid place-items-center rounded-full bg-[var(--bg-inlay)] border border-[var(--line-default)] text-[var(--ink-faint)] hover:text-[var(--ink)] hover:border-[var(--line-strong)] transition-colors"
                     aria-label="Close"
                 >
-                    <X size={16} />
+                    <X size={15} />
                 </button>
 
                 {/* ── Non-scrolling header ── */}
                 <div className="relative z-10 flex-shrink-0 px-6 pt-6 pb-0 sm:px-8 sm:pt-8">
                     {/* Mobile drag handle */}
-                    <div className="sm:hidden w-10 h-1 bg-white/[0.16] rounded-full mx-auto mb-5" />
+                    <div className="sm:hidden w-10 h-1 bg-[var(--line-strong)] rounded-full mx-auto mb-5" />
 
                     {/* Logo */}
-                    <div className="text-center mb-6">
-                        <span className="text-3xl font-black italic tracking-[-0.04em]">
-                            <span className="text-amber-500">Odd</span><span className="text-white">69</span>
+                    <div className="text-center mb-5">
+                        <span className="font-display text-[28px] font-bold text-[var(--ink)] tracking-tight">
+                            odd<span className="text-gold-grad">69</span>
                         </span>
-                        <p className="text-xs text-white/35 mt-1 font-medium tracking-wide">SPORTS · CASINO · ORIGINALS</p>
+                        <p className="t-eyebrow mt-1.5">Sports · Casino · Originals</p>
                     </div>
 
                     {/* Heading */}
-                    <h2 className="text-xl font-black text-white uppercase tracking-wide mb-0.5">Welcome Back</h2>
-                    <p className="text-[13px] text-white/50 mb-4">
+                    <h2 className="t-section !text-[20px] mb-1">Welcome back</h2>
+                    <p className="text-[12.5px] text-[var(--ink-dim)] mb-4">
                         New here?{' '}
-                        <button type="button" onClick={onRegisterClick} className="text-amber-500 font-bold hover:underline">
+                        <button
+                            type="button"
+                            onClick={onRegisterClick}
+                            className="text-[var(--gold-bright)] font-semibold hover:underline"
+                        >
                             Create an account
                         </button>
                     </p>
 
                     {/* Tab toggle */}
-                    <div className="flex bg-white/[0.03] border border-white/[0.08] rounded-xl p-1 mb-0 gap-1">
+                    <div className="flex gap-1 p-1 bg-[var(--bg-inlay)] border border-[var(--line-default)] rounded-[12px]">
                         {(["password", "otp"] as const).map(tab => (
                             <button
                                 key={tab}
                                 type="button"
                                 onClick={() => handleModeChange(tab)}
-                                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[13px] font-bold rounded-lg transition-all ${
+                                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-[10px] text-[11px] font-bold uppercase tracking-[0.1em] transition-all ${
                                     loginMode === tab
-                                        ? "bg-gradient-to-r from-amber-500 to-orange-600 text-[#1a1208] shadow-md shadow-amber-500/25"
-                                        : "text-white/50 hover:text-white/70"
+                                        ? "bg-[var(--gold-soft)] text-[var(--gold-bright)] border border-[var(--line-gold)]"
+                                        : "text-[var(--ink-faint)] hover:text-[var(--ink-dim)]"
                                 }`}
                             >
-                                {tab === "password" ? <Lock size={13} /> : <Mail size={13} />}
+                                {tab === "password" ? <Lock size={12} /> : <Mail size={12} />}
                                 {tab === "password" ? "Password" : "OTP"}
                             </button>
                         ))}
@@ -271,25 +274,27 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
 
                         {/* Identifier */}
                         <div className="flex flex-col gap-1">
-                            <div className="flex gap-2 h-[50px]">
+                            <div className="flex gap-2 h-11">
                                 {showCountryCode && (
-                                    <div className="flex-shrink-0 h-[50px]">
+                                    <div className="flex-shrink-0 h-11">
                                         <CountryCodeSelector
                                             value={selectedCountry}
                                             onChange={setSelectedCountry}
                                         />
                                     </div>
                                 )}
-                                <div className="relative flex-1 h-[50px]">
-                                    {!showCountryCode && <Mail size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />}
+                                <div className="relative flex-1 h-11">
+                                    {!showCountryCode && (
+                                        <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
+                                    )}
                                     <input
                                         type="text"
-                                        placeholder="Email / Phone Number / Username"
+                                        placeholder="Email / Phone / Username"
                                         autoComplete="username"
-                                        className={`w-full h-[50px] bg-white/[0.03] border rounded-xl ${showCountryCode ? 'px-4' : 'pl-10 pr-4'} text-white text-[15px] font-medium outline-none transition-all focus:ring-[1.5px] placeholder-white/20 ${
+                                        className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] ${showCountryCode ? 'px-3.5' : 'pl-9 pr-3.5'} text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
                                             fieldErrors.identifier
-                                                ? 'border-red-500/70 focus:border-red-500 focus:ring-red-500/20'
-                                                : 'border-white/[0.08] focus:border-amber-500/60 focus:ring-amber-500/20'
+                                                ? 'border-[var(--crimson)]'
+                                                : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
                                         }`}
                                         value={identifier}
                                         onChange={e => handleIdentifierChange(e.target.value)}
@@ -298,27 +303,26 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
                                 </div>
                             </div>
                             {fieldErrors.identifier && (
-                                <p className="text-red-400 text-[11px] flex items-center gap-1 ml-1">
-                                    <AlertCircle size={10} /> {fieldErrors.identifier}
+                                <p className="text-[var(--crimson)] text-[11.5px] flex items-center gap-1 ml-1">
+                                    <AlertCircle size={11} /> {fieldErrors.identifier}
                                 </p>
                             )}
                         </div>
 
-                        {/* Conditional fields based on Mode and Step */}
+                        {/* Password mode */}
                         {loginMode === 'password' && (
                             <>
-                                {/* Password */}
                                 <div className="flex flex-col gap-1">
-                                    <div className="relative h-[50px]">
-                                        <Lock size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+                                    <div className="relative h-11">
+                                        <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
                                         <input
                                             type={showPassword ? "text" : "password"}
                                             placeholder="Password"
                                             autoComplete="current-password"
-                                            className={`w-full h-[50px] bg-white/[0.03] border rounded-xl pl-10 pr-12 text-white text-[15px] font-medium outline-none transition-all focus:ring-[1.5px] placeholder-white/20 ${
+                                            className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
                                                 fieldErrors.password
-                                                    ? 'border-red-500/70 focus:border-red-500 focus:ring-red-500/20'
-                                                    : 'border-white/[0.08] focus:border-amber-500/60 focus:ring-amber-500/20'
+                                                    ? 'border-[var(--crimson)]'
+                                                    : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
                                             }`}
                                             value={password}
                                             onChange={e => {
@@ -330,25 +334,25 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
                                         <button
                                             type="button"
                                             onClick={() => setShowPassword(v => !v)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-white/30 hover:text-white/70 transition-colors"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] hover:text-[var(--ink)] transition-colors"
                                             tabIndex={-1}
+                                            aria-label={showPassword ? "Hide password" : "Show password"}
                                         >
-                                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                            {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
                                         </button>
                                     </div>
                                     {fieldErrors.password && (
-                                        <p className="text-red-400 text-[11px] flex items-center gap-1 ml-1">
-                                            <AlertCircle size={10} /> {fieldErrors.password}
+                                        <p className="text-[var(--crimson)] text-[11.5px] flex items-center gap-1 ml-1">
+                                            <AlertCircle size={11} /> {fieldErrors.password}
                                         </p>
                                     )}
                                 </div>
 
-                                {/* Forgot password */}
-                                <div className="flex justify-end -mt-0.5">
+                                <div className="flex justify-end">
                                     <button
                                         type="button"
                                         onClick={() => { if (onClose) onClose(); router.push('/forgot-password'); }}
-                                        className="text-[12px] text-amber-500/80 font-semibold hover:text-amber-500 transition-colors"
+                                        className="text-[11.5px] text-[var(--gold-bright)]/80 font-semibold hover:text-[var(--gold-bright)] transition-colors"
                                     >
                                         Forgot password?
                                     </button>
@@ -356,18 +360,24 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
                             </>
                         )}
 
+                        {/* OTP verify */}
                         {loginMode === 'otp' && otpStep === 'verify' && (
-                            <div className="flex flex-col gap-1 mt-2">
-                                <label className="text-xs text-white/70 mb-1 ml-1">Enter 6-digit OTP Code</label>
+                            <div className="flex flex-col gap-1.5 mt-1">
+                                <div className="flex items-center gap-2 mb-0.5">
+                                    <ShieldCheck size={13} className="text-[var(--gold-bright)]" />
+                                    <label className="text-[11.5px] font-medium text-[var(--ink-dim)]">
+                                        Enter the 6-digit code we just sent
+                                    </label>
+                                </div>
                                 <input
                                     type="text"
                                     inputMode="numeric"
                                     maxLength={6}
-                                    placeholder="—— —— ——"
-                                    className={`w-full h-[50px] bg-white/[0.03] border rounded-xl px-4 text-white text-[20px] tracking-[0.5em] text-center font-bold outline-none transition-all focus:ring-[1.5px] placeholder-white/20 placeholder:tracking-normal ${
+                                    placeholder="000000"
+                                    className={`w-full h-12 bg-[var(--bg-inlay)] border rounded-[10px] px-4 text-[var(--ink)] text-[20px] tracking-[0.45em] text-center font-bold num focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] placeholder:tracking-normal placeholder:font-normal ${
                                         fieldErrors.otpCode
-                                            ? 'border-red-500/70 focus:border-red-500 focus:ring-red-500/20'
-                                            : 'border-white/[0.08] focus:border-amber-500/60 focus:ring-amber-500/20'
+                                            ? 'border-[var(--crimson)]'
+                                            : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
                                     }`}
                                     value={otpCode}
                                     onChange={e => {
@@ -379,31 +389,31 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
                                     autoFocus
                                 />
                                 {fieldErrors.otpCode && (
-                                    <p className="text-red-400 text-[11px] flex items-center gap-1 ml-1 mt-1">
-                                        <AlertCircle size={10} /> {fieldErrors.otpCode}
+                                    <p className="text-[var(--crimson)] text-[11.5px] flex items-center gap-1 ml-1 mt-1">
+                                        <AlertCircle size={11} /> {fieldErrors.otpCode}
                                     </p>
                                 )}
-                                <div className="flex items-center justify-between mt-2">
-                                    <span className="text-[12px] text-white/50">Didn&apos;t receive the code?</span>
+                                <div className="flex items-center justify-between mt-1.5">
+                                    <span className="text-[11.5px] text-[var(--ink-faint)]">Didn&apos;t receive the code?</span>
                                     <button
                                         type="button"
                                         onClick={handleSendOtp}
                                         disabled={resendCooldown > 0 || loading}
-                                        className={`text-[12px] font-semibold transition-colors ${
+                                        className={`text-[11.5px] font-semibold transition-colors ${
                                             resendCooldown > 0 || loading
-                                                ? 'text-white/25 cursor-not-allowed'
-                                                : 'text-amber-500 hover:text-amber-400'
+                                                ? 'text-[var(--ink-whisper)] cursor-not-allowed'
+                                                : 'text-[var(--gold-bright)] hover:text-[var(--gold)]'
                                         }`}
                                     >
                                         {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
                                     </button>
                                 </div>
                                 {otpExpiresIn > 0 ? (
-                                    <p className={`text-center text-[11px] mt-1.5 ${otpExpiresIn <= 30 ? 'text-red-400' : 'text-white/50'}`}>
+                                    <p className={`text-center text-[11px] mt-1 num ${otpExpiresIn <= 30 ? 'text-[var(--crimson)]' : 'text-[var(--ink-faint)]'}`}>
                                         OTP expires in {Math.floor(otpExpiresIn / 60)}:{String(otpExpiresIn % 60).padStart(2, '0')}
                                     </p>
-                                ) : otpStep === 'verify' && (
-                                    <p className="text-center text-[11px] mt-1.5 text-red-400 font-medium">
+                                ) : (
+                                    <p className="text-center text-[11px] mt-1 text-[var(--crimson)] font-medium">
                                         OTP expired — please resend
                                     </p>
                                 )}
@@ -412,28 +422,28 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
 
                         {/* Global error */}
                         {error && (
-                            <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/25 rounded-xl px-4 py-3 mt-2">
-                                <AlertCircle size={14} className="text-red-400 shrink-0 mt-0.5" />
-                                <p className="text-red-400 text-[12px] font-medium leading-snug">{error}</p>
+                            <div className="flex items-start gap-2.5 bg-[var(--crimson-soft)] border border-[rgba(255,46,76,0.25)] rounded-[10px] px-4 py-3 mt-1">
+                                <AlertCircle size={14} className="text-[var(--crimson)] shrink-0 mt-0.5" />
+                                <p className="text-[var(--crimson)] text-[12.5px] font-medium leading-snug">{error}</p>
                             </div>
                         )}
                     </form>
-                </div>{/* end scrollable body */}
+                </div>
 
-                {/* ── Sticky footer — Log In always visible ── */}
-                <div className="relative z-10 flex-shrink-0 px-6 pb-6 pt-3 sm:px-8 border-t border-white/[0.05] bg-gradient-to-b from-transparent to-[#0c0f14]">
+                {/* ── Sticky footer ── */}
+                <div className="relative z-10 flex-shrink-0 px-6 pb-6 pt-3 sm:px-8 border-t border-[var(--line-default)] bg-[var(--bg-surface)]">
                     <button
                         type="button"
                         onClick={handleLogin}
                         disabled={loading}
-                        className="w-full h-[52px] bg-gradient-to-r from-amber-500 to-orange-600 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed text-[#1a1208] font-black text-[14px] uppercase tracking-widest rounded-xl transition-all hover:-translate-y-0.5 active:translate-y-0 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
+                        className="btn btn-gold sweep h-12 w-full uppercase tracking-[0.08em] text-[12px] disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                         {loading ? (
-                            <><Loader2 size={16} className="animate-spin" /> Please wait...</>
+                            <><Loader2 size={14} className="animate-spin" /> Please wait…</>
                         ) : loginMode === 'otp' && otpStep === 'form' ? (
-                            'Get OTP Code'
+                            'Get OTP code'
                         ) : (
-                            'Log In'
+                            'Log in'
                         )}
                     </button>
                 </div>

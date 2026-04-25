@@ -80,9 +80,9 @@ export default function Header() {
           {isAuthenticated ? (
             <>
               {/* Balance pill — bordered with gold accent */}
-              <div className="hidden sm:flex items-center gap-2 h-9 pl-3 pr-3 rounded-[10px] bg-[var(--bg-surface)] border border-[var(--line-gold)]">
+              <div className="flex items-center gap-1.5 sm:gap-2 h-9 px-2.5 sm:px-3 rounded-[10px] bg-[var(--bg-surface)] border border-[var(--line-gold)]">
                 <Wallet size={13} className="text-[var(--gold)]" />
-                <span className="num text-[13px] font-semibold text-[var(--ink)] tracking-tight">
+                <span className="num text-[12px] sm:text-[13px] font-semibold text-[var(--ink)] tracking-tight whitespace-nowrap">
                   {activeSymbol}{activeBalance.toFixed(2)}
                 </span>
               </div>

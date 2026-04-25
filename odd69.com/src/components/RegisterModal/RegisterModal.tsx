@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { User, X, Check, Trophy, Smartphone, Mail, Eye, EyeOff, AlertCircle, Lock, Gift, Sparkles, ChevronDown, Search, Globe, ShieldCheck, Loader2 } from "lucide-react";
+import {
+    User, X, Check, Trophy, Smartphone, Mail, Eye, EyeOff, AlertCircle, Lock,
+    Gift, Sparkles, ChevronDown, Search, Globe, ShieldCheck, Loader2,
+} from "lucide-react";
 import api from "@/services/api";
 import toast from "react-hot-toast";
 import { useAuth } from "@/context/AuthContext";
@@ -14,7 +17,6 @@ interface RegisterModalProps {
     onLoginClick?: () => void;
 }
 
-// Map ISO-2 → currency code for all 195 countries
 const COUNTRY_CURRENCY_MAP: Record<string, { currency: string; name: string; flag: string }> = {
     AF: { currency: 'AFN', name: 'Afghanistan', flag: '🇦🇫' }, AL: { currency: 'ALL', name: 'Albania', flag: '🇦🇱' }, DZ: { currency: 'DZD', name: 'Algeria', flag: '🇩🇿' },
     AD: { currency: 'EUR', name: 'Andorra', flag: '🇦🇩' }, AO: { currency: 'AOA', name: 'Angola', flag: '🇦🇴' }, AG: { currency: 'XCD', name: 'Antigua & Barbuda', flag: '🇦🇬' },
@@ -97,7 +99,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
         currency: 'INR',
         promoCode: '',
     });
-    const [referralCode, setReferralCode] = useState(''); // from ?ref= URL, kept separate from promoCode
+    const [referralCode, setReferralCode] = useState('');
     const [isPhone, setIsPhone] = useState(true);
     const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES.find(c => c.iso === 'IN')!);
     const [showPassword, setShowPassword] = useState(false);
@@ -107,12 +109,10 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
     const [termsAccepted, setTermsAccepted] = useState(true);
     const [hasPromo, setHasPromo] = useState(false);
     const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
-    // Registration country — required, null until user picks
     const [registrationCountry, setRegistrationCountry] = useState<string | null>(null);
     const [showCountryDropdown, setShowCountryDropdown] = useState(false);
     const [countrySearch, setCountrySearch] = useState('');
 
-    // OTP step (phone AND email registration)
     type RegStep = 'form' | 'verify_otp';
     const [regStep, setRegStep] = useState<RegStep>('form');
     const [otpCode, setOtpCode] = useState('');
@@ -121,20 +121,17 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
     const [resendLoading, setResendLoading] = useState(false);
     const [otpExpiresIn, setOtpExpiresIn] = useState(0);
 
-    // Welcome bonus state
     const [signupBonuses, setSignupBonuses] = useState<any[]>([]);
-    const [selectedBonusCode, setSelectedBonusCode] = useState<string | null>(null); // null = no bonus
+    const [selectedBonusCode, setSelectedBonusCode] = useState<string | null>(null);
 
     const { login } = useAuth();
 
-    // Resend cooldown timer
     React.useEffect(() => {
         if (resendCooldown <= 0) return;
         const t = setTimeout(() => setResendCooldown(c => c - 1), 1000);
         return () => clearTimeout(t);
     }, [resendCooldown]);
 
-    // OTP expiry countdown timer
     React.useEffect(() => {
         if (otpExpiresIn <= 0) return;
         const t = setTimeout(() => setOtpExpiresIn(c => c - 1), 1000);
@@ -169,16 +166,14 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
         }
     };
 
-    // Pre-fill referral code from localStorage — keep SEPARATE from promoCode
     React.useEffect(() => {
         const storedRefCode = localStorage.getItem('referralCode');
         if (storedRefCode) {
             setReferralCode(storedRefCode.trim().toUpperCase());
         }
-        // Fetch available signup bonuses
         api.get('/bonus/signup-options')
             .then(res => setSignupBonuses(res.data || []))
-            .catch(() => { }); // fail silently
+            .catch(() => { });
     }, []);
 
     const handleTabChange = (phone: boolean) => {
@@ -192,7 +187,6 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
         if (!info) return;
         setRegistrationCountry(iso);
         setFormData(prev => ({ ...prev, currency: info.currency }));
-        // Also sync the phone dial-code selector to match
         const phoneCountry = COUNTRIES.find(c => c.iso === iso);
         if (phoneCountry) setSelectedCountry(phoneCountry);
         setShowCountryDropdown(false);
@@ -262,7 +256,6 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
             return;
         }
 
-        // ── Send OTP first (both phone and email) ─────────────────────────
         if (regStep === 'form') {
             setLoading(true);
             try {
@@ -281,7 +274,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                 setRegStep('verify_otp');
                 setOtpCode('');
                 setResendCooldown(60);
-                setOtpExpiresIn(isPhone ? 120 : 600); // phone: 2min, email: 10min
+                setOtpExpiresIn(isPhone ? 120 : 600);
             } catch (err: any) {
                 const msg = err.response?.data?.message;
                 setError(typeof msg === 'string' ? msg : 'Failed to send OTP. Please try again.');
@@ -292,13 +285,11 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
         }
     };
 
-    // ── Verify OTP then finalize registration ─────────────────────────────────
     const handleVerifyOtpAndRegister = async () => {
         setError('');
         if (otpCode.length !== 6) { setError('Enter the 6-digit OTP.'); return; }
         setOtpLoading(true);
         try {
-            // 1. Verify OTP (phone or email)
             if (isPhone) {
                 const fullPhone = `${selectedCountry.code.replace(/-/g, '')}${formData.phoneNumber.trim()}`;
                 const phoneNumber = fullPhone.startsWith('+') ? fullPhone : `+${fullPhone}`;
@@ -306,7 +297,6 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
             } else {
                 await api.post('/auth/verify-email-otp', { email: formData.email.trim(), code: otpCode, purpose: 'REGISTER' });
             }
-            // 2. Proceed with signup
             const utmData = getStoredUtm();
             const fullPhone = isPhone ? `${selectedCountry.code.replace(/-/g, '')}${formData.phoneNumber.trim()}` : '';
             const phoneNumber = fullPhone.startsWith('+') ? fullPhone : `+${fullPhone}`;
@@ -328,7 +318,6 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
             };
             const res = await api.post('/auth/signup', payload);
             login(res.data.access_token, res.data.user);
-            // Bonus
             if (selectedBonusCode) {
                 const selectedBonus = signupBonuses.find((b: any) => b.code === selectedBonusCode);
                 if (selectedBonus) {
@@ -343,7 +332,6 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
             clearStoredUtm();
             toast.success('Registration successful! Welcome to Odd69.');
             if (onClose) onClose();
-            // Show deposit prompt after successful signup
             setTimeout(() => {
                 window.dispatchEvent(new CustomEvent('show-signup-deposit-prompt'));
             }, 500);
@@ -356,519 +344,570 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
-            {/*
-              Mobile: bottom sheet — fills width, max 90vh, flex-col with sticky footer
-              Desktop: centered card — max 860px wide, two-column layout
-            */}
-            <div className="relative w-full md:max-w-[860px] md:max-h-[92vh] bg-gradient-to-br from-[#12161e] to-[#0c0f14] rounded-t-2xl md:rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.7)] flex flex-col md:flex-row border border-white/[0.06] overflow-hidden"
-                style={{ maxHeight: '92dvh' }}>
-
-                {/* Close Button */}
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/70 backdrop-blur-md animate-fade-in">
+            <div
+                className="relative w-full md:max-w-[860px] md:max-h-[92vh] bg-[var(--bg-surface)] rounded-t-[22px] md:rounded-[22px] shadow-[var(--shadow-lift)] flex flex-col md:flex-row border border-[var(--line-gold)] overflow-hidden grain"
+                style={{ maxHeight: '92dvh' }}
+            >
+                {/* Close */}
                 <button
                     onClick={onClose}
-                    className="absolute top-4 right-4 z-20 w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.06] hover:bg-white/[0.12] transition-colors text-white/50 hover:text-white"
+                    className="absolute top-4 right-4 z-20 w-8 h-8 grid place-items-center rounded-full bg-[var(--bg-inlay)] border border-[var(--line-default)] text-[var(--ink-faint)] hover:text-[var(--ink)] hover:border-[var(--line-strong)] transition-colors"
                     aria-label="Close"
                 >
-                    <X size={18} />
+                    <X size={15} />
                 </button>
 
-                {/* Left Column: Banner — desktop only */}
-                <div className="hidden md:flex flex-col w-[38%] bg-white/[0.02] relative items-center justify-center p-8 text-center border-r border-white/[0.06] flex-shrink-0">
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-40 bg-amber-500/10 blur-[60px] rounded-full pointer-events-none" />
+                {/* Left banner — desktop only */}
+                <div className="hidden md:flex flex-col w-[38%] relative items-center justify-center p-8 text-center border-r border-[var(--line-default)] flex-shrink-0 bg-gold-soft">
+                    <div className="pointer-events-none absolute inset-0 dotgrid opacity-40" />
+                    <div
+                        className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[280px] h-[200px] rounded-full blur-[110px]"
+                        style={{ background: "var(--gold-halo)" }}
+                    />
                     <div className="relative z-10 flex flex-col items-center gap-4">
-                        <div className="w-32 h-32 rounded-full bg-black/30 flex items-center justify-center border border-amber-500/20">
-                            <Trophy size={64} className="text-amber-500 opacity-80" />
+                        <div className="w-28 h-28 rounded-full bg-[var(--bg-inlay)] grid place-items-center border border-[var(--line-gold)] animate-pulse-gold">
+                            <Trophy size={52} className="text-[var(--gold-bright)]" />
                         </div>
-                        <div className="text-4xl font-black italic tracking-tight mt-2">
-                            <span className="text-amber-500">Odd</span><span className="text-white">69</span>
+                        <div className="font-display text-[40px] font-bold tracking-tight mt-2">
+                            <span className="text-[var(--ink)]">odd</span>
+                            <span className="text-gold-grad">69</span>
                         </div>
-                        <h2 className="text-3xl font-black text-white italic uppercase tracking-tighter">
-                            JOIN NOW
+                        <h2 className="t-display text-[28px] text-[var(--ink)] uppercase">
+                            Join the floor
                         </h2>
-                        <p className="text-white/50 text-sm leading-relaxed max-w-[180px]">
-                            The best sportsbook &amp; casino experience awaits you
+                        <p className="text-[13px] text-[var(--ink-dim)] leading-relaxed max-w-[200px]">
+                            The richest sportsbook &amp; casino room — built for serious play.
                         </p>
+                        <div className="flex flex-col gap-2 mt-2 text-left w-full max-w-[200px]">
+                            {[
+                                "Welcome bonuses on first deposit",
+                                "Sports · Casino · Originals",
+                                "Instant withdrawals",
+                            ].map((b, i) => (
+                                <div key={i} className="flex items-center gap-2 text-[12px] text-[var(--ink-dim)]">
+                                    <Check size={12} className="text-[var(--emerald)] shrink-0" />
+                                    <span>{b}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
 
-                {/* Right Column: Form — full width on mobile, flex-1 on desktop */}
-                {/* CRITICAL: flex-col with overflow-hidden so we can scroll inside */}
-                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                {/* Right column — form */}
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
+                    {/* Atmospheric halo on mobile */}
+                    <div
+                        className="md:hidden pointer-events-none absolute -top-20 left-1/2 -translate-x-1/2 w-[340px] h-[180px] rounded-full blur-[110px]"
+                        style={{ background: "var(--gold-halo)" }}
+                    />
 
-                    {/* ── Non-scrolling header ── */}
-                    <div className="flex-shrink-0 px-6 pt-6 pb-0 md:px-10 md:pt-10">
+                    {/* Header */}
+                    <div className="relative z-10 flex-shrink-0 px-6 pt-6 pb-0 md:px-9 md:pt-9">
                         {/* Mobile drag handle */}
-                        <div className="md:hidden w-10 h-1 bg-white/[0.16] rounded-full mx-auto mb-4" />
+                        <div className="md:hidden w-10 h-1 bg-[var(--line-strong)] rounded-full mx-auto mb-4" />
 
                         {/* Mobile logo */}
                         <div className="md:hidden text-center mb-4">
-                            <span className="text-3xl font-black italic tracking-tight">
-                                <span className="text-amber-500">Odd</span><span className="text-white">69</span>
+                            <span className="font-display text-[26px] font-bold text-[var(--ink)] tracking-tight">
+                                odd<span className="text-gold-grad">69</span>
                             </span>
-                            <p className="text-xs text-white/35 mt-1 font-medium tracking-wide">SPORTS · CASINO · ORIGINALS</p>
+                            <p className="t-eyebrow mt-1.5">Sports · Casino · Originals</p>
                         </div>
 
-                        <h3 className="text-white text-xl font-black uppercase tracking-wide mb-0.5">
-                            Create Account
+                        <h3 className="t-section !text-[20px] mb-1">
+                            {regStep === 'verify_otp' ? 'Verify your account' : 'Create account'}
                         </h3>
-                        <p className="text-sm text-white/50 mb-4">
+                        <p className="text-[12.5px] text-[var(--ink-dim)] mb-4">
                             Already have an account?{' '}
-                            <button onClick={onLoginClick} className="text-amber-500 font-bold hover:underline">
-                                Log In
+                            <button onClick={onLoginClick} className="text-[var(--gold-bright)] font-semibold hover:underline">
+                                Log in
                             </button>
                         </p>
                     </div>
 
-                    {/* ── Scrollable body ── */}
-                    <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 px-6 pb-2 md:px-10">
-
-                    {/* Form fields — hidden during OTP step */}
-                    {regStep === 'verify_otp' ? (
-                        <div className="flex flex-col gap-5 pb-4">
-                            {/* OTP Screen */}
-                            <div className="text-center">
-                                <div className="w-16 h-16 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mx-auto mb-3">
-                                    <ShieldCheck size={30} className="text-amber-500" />
+                    {/* Scrollable body */}
+                    <div className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden min-h-0 px-6 pb-2 md:px-9">
+                        {regStep === 'verify_otp' ? (
+                            <div className="flex flex-col gap-5 pb-4 pt-2">
+                                <div className="text-center">
+                                    <div className="w-16 h-16 rounded-full bg-[var(--gold-soft)] border border-[var(--line-gold)] grid place-items-center mx-auto mb-3 animate-pulse-gold">
+                                        <ShieldCheck size={26} className="text-[var(--gold-bright)]" />
+                                    </div>
+                                    <h4 className="t-section !text-[18px]">{isPhone ? 'Verify your number' : 'Verify your email'}</h4>
+                                    <p className="text-[12.5px] text-[var(--ink-dim)] mt-2">
+                                        Enter the 6-digit code we sent to{' '}
+                                        {isPhone ? (
+                                            <strong className="text-[var(--ink)] num">+{selectedCountry.code.replace(/-/g, '').replace('+', '')}{formData.phoneNumber}</strong>
+                                        ) : (
+                                            <strong className="text-[var(--ink)]">{formData.email}</strong>
+                                        )}
+                                    </p>
                                 </div>
-                                <h4 className="text-white font-black text-lg">{isPhone ? 'Verify Your Number' : 'Verify Your Email'}</h4>
-                                <p className="text-white/50 text-sm mt-1">
-                                    Enter the 6-digit OTP sent to{' '}
-                                    {isPhone ? (
-                                        <strong className="text-white">+{selectedCountry.code.replace(/-/g, '').replace('+', '')}{formData.phoneNumber}</strong>
-                                    ) : (
-                                        <strong className="text-white">{formData.email}</strong>
-                                    )}
-                                </p>
-                            </div>
-                            <div>
-                                <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    maxLength={6}
-                                    placeholder="— — — — — —"
-                                    value={otpCode}
-                                    onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}
-                                    className={`w-full h-[60px] bg-white/[0.03] border-2 rounded-xl px-4 text-white text-[28px] font-bold tracking-[0.5em] text-center outline-none transition-all focus:ring-[1.5px] placeholder-white/20 placeholder:text-2xl placeholder:tracking-[0.3em] ${error ? 'border-red-500' : 'border-white/[0.08] focus:border-amber-500/60 focus:ring-amber-500/40'}`}
-                                />
-                                {error && <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1"><AlertCircle size={11} />{error}</p>}
-                            </div>
-                        </div>
-                    ) : (
-                    <div className="flex flex-col gap-4 pb-4">
-
-                        {/* Country Selector (required) — FIRST */}
-                        <div>
-                            <div className="relative">
-                                <button
-                                    type="button"
-                                    onClick={() => { setShowCountryDropdown(!showCountryDropdown); setCountrySearch(''); }}
-                                    className={`w-full h-[50px] bg-white/[0.03] border rounded-xl px-4 flex items-center gap-3 text-left transition-all ${fieldErrors.registrationCountry
-                                        ? 'border-red-500'
-                                        : registrationCountry
-                                            ? 'border-white/[0.08] hover:border-amber-500/60'
-                                            : 'border-dashed border-amber-500/40 hover:border-amber-500'
+                                <div>
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        maxLength={6}
+                                        placeholder="000000"
+                                        value={otpCode}
+                                        onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}
+                                        autoFocus
+                                        className={`w-full h-14 bg-[var(--bg-inlay)] border rounded-[10px] px-4 text-[var(--ink)] text-[26px] font-bold tracking-[0.5em] text-center num focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] placeholder:tracking-[0.3em] placeholder:font-normal ${
+                                            error ? 'border-[var(--crimson)]' : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
                                         }`}
-                                >
-                                    <Globe size={16} className="text-white/50 shrink-0" />
-                                    {registrationCountry ? (
-                                        <>
-                                            <span className="text-lg leading-none">{COUNTRY_CURRENCY_MAP[registrationCountry]?.flag}</span>
-                                            <span className="flex-1 font-semibold text-white text-sm">{COUNTRY_CURRENCY_MAP[registrationCountry]?.name}</span>
-                                            <span className="text-xs text-white/50 font-mono">{COUNTRY_CURRENCY_MAP[registrationCountry]?.currency}</span>
-                                        </>
-                                    ) : (
-                                        <span className="flex-1 text-white/50 text-sm">Select your country <span className="text-red-400">*</span></span>
+                                    />
+                                    {error && (
+                                        <p className="text-[var(--crimson)] text-[11.5px] mt-1.5 ml-1 flex items-center gap-1">
+                                            <AlertCircle size={11} />{error}
+                                        </p>
                                     )}
-                                    <ChevronDown size={14} className={`text-white/50 transition-transform shrink-0 ${showCountryDropdown ? 'rotate-180' : ''}`} />
-                                </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-3.5 pb-4 pt-2">
 
-                                {showCountryDropdown && (
-                                    <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 bg-[#12161e] border border-white/[0.08] rounded-xl shadow-xl overflow-hidden">
-                                        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.06]">
-                                            <Search size={14} className="text-white/50 shrink-0" />
+                                {/* Registration country */}
+                                <div>
+                                    <span className="text-[11.5px] font-medium text-[var(--ink-dim)] mb-1.5 block">
+                                        Country <span className="text-[var(--crimson)]">*</span>
+                                    </span>
+                                    <div className="relative">
+                                        <button
+                                            type="button"
+                                            onClick={() => { setShowCountryDropdown(!showCountryDropdown); setCountrySearch(''); }}
+                                            className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] px-3.5 flex items-center gap-3 text-left transition-colors ${
+                                                fieldErrors.registrationCountry
+                                                    ? 'border-[var(--crimson)]'
+                                                    : registrationCountry
+                                                        ? 'border-[var(--line-default)] hover:border-[var(--line-gold)]'
+                                                        : 'border-dashed border-[var(--line-gold)] hover:border-[var(--gold-bright)]'
+                                            }`}
+                                        >
+                                            <Globe size={15} className="text-[var(--ink-faint)] shrink-0" />
+                                            {registrationCountry ? (
+                                                <>
+                                                    <span className="text-base leading-none">{COUNTRY_CURRENCY_MAP[registrationCountry]?.flag}</span>
+                                                    <span className="flex-1 font-semibold text-[var(--ink)] text-[13px]">{COUNTRY_CURRENCY_MAP[registrationCountry]?.name}</span>
+                                                    <span className="text-[11px] text-[var(--ink-faint)] num">{COUNTRY_CURRENCY_MAP[registrationCountry]?.currency}</span>
+                                                </>
+                                            ) : (
+                                                <span className="flex-1 text-[var(--ink-faint)] text-[13px]">Select your country</span>
+                                            )}
+                                            <ChevronDown size={13} className={`text-[var(--ink-faint)] transition-transform shrink-0 ${showCountryDropdown ? 'rotate-180' : ''}`} />
+                                        </button>
+
+                                        {showCountryDropdown && (
+                                            <div className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 bg-[var(--bg-elevated)] border border-[var(--line-strong)] rounded-[12px] shadow-[var(--shadow-lift)] overflow-hidden">
+                                                <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--line-default)]">
+                                                    <Search size={13} className="text-[var(--ink-faint)] shrink-0" />
+                                                    <input
+                                                        type="text"
+                                                        autoFocus
+                                                        placeholder="Search country or currency…"
+                                                        className="flex-1 bg-transparent text-[var(--ink)] text-[13px] outline-none placeholder:text-[var(--ink-whisper)]"
+                                                        value={countrySearch}
+                                                        onChange={(e) => setCountrySearch(e.target.value)}
+                                                    />
+                                                </div>
+                                                <div className="max-h-[200px] overflow-y-auto">
+                                                    {filteredCountries.length === 0 ? (
+                                                        <div className="px-4 py-3 text-[var(--ink-faint)] text-[13px] text-center">No results</div>
+                                                    ) : filteredCountries.map((c) => (
+                                                        <button
+                                                            key={c.iso}
+                                                            type="button"
+                                                            onClick={() => handleRegistrationCountrySelect(c.iso)}
+                                                            className={`w-full flex items-center gap-3 px-3 py-2.5 text-[13px] text-left transition-colors hover:bg-[var(--bg-inlay)] ${
+                                                                registrationCountry === c.iso ? 'bg-[var(--gold-soft)] text-[var(--gold-bright)]' : 'text-[var(--ink)]'
+                                                            }`}
+                                                        >
+                                                            <span className="text-base leading-none">{c.flag}</span>
+                                                            <span className="flex-1 truncate">{c.name}</span>
+                                                            <span className="text-[var(--ink-faint)] num text-[11px] shrink-0">{c.currency}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {fieldErrors.registrationCountry && (
+                                        <p className="text-[var(--crimson)] text-[11.5px] mt-1.5 ml-1 flex items-center gap-1">
+                                            <AlertCircle size={11} /> {fieldErrors.registrationCountry}
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Phone / Email toggle */}
+                                <div className="flex gap-1 p-1 bg-[var(--bg-inlay)] border border-[var(--line-default)] rounded-[12px]">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleTabChange(true)}
+                                        className={`flex-1 py-2.5 rounded-[10px] flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-[0.1em] transition-all ${
+                                            isPhone
+                                                ? 'bg-[var(--gold-soft)] text-[var(--gold-bright)] border border-[var(--line-gold)]'
+                                                : 'text-[var(--ink-faint)] hover:text-[var(--ink-dim)]'
+                                        }`}
+                                    >
+                                        <Smartphone size={13} /> Phone
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleTabChange(false)}
+                                        className={`flex-1 py-2.5 rounded-[10px] flex items-center justify-center gap-2 text-[11px] font-bold uppercase tracking-[0.1em] transition-all ${
+                                            !isPhone
+                                                ? 'bg-[var(--gold-soft)] text-[var(--gold-bright)] border border-[var(--line-gold)]'
+                                                : 'text-[var(--ink-faint)] hover:text-[var(--ink-dim)]'
+                                        }`}
+                                    >
+                                        <Mail size={13} /> Email
+                                    </button>
+                                </div>
+
+                                {/* Phone / Email field */}
+                                <div>
+                                    {isPhone ? (
+                                        <div className="flex gap-2">
+                                            <CountryCodeSelector
+                                                value={selectedCountry}
+                                                onChange={setSelectedCountry}
+                                            />
                                             <input
-                                                type="text"
+                                                type="tel"
+                                                inputMode="numeric"
+                                                placeholder="Phone number"
                                                 autoFocus
-                                                placeholder="Search country or currency..."
-                                                className="flex-1 bg-transparent text-white text-sm outline-none placeholder-white/30"
-                                                value={countrySearch}
-                                                onChange={(e) => setCountrySearch(e.target.value)}
+                                                className={`flex-1 h-11 bg-[var(--bg-inlay)] border rounded-[10px] px-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] num ${
+                                                    fieldErrors.phoneNumber
+                                                        ? 'border-[var(--crimson)]'
+                                                        : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
+                                                }`}
+                                                value={formData.phoneNumber}
+                                                onChange={(e) => {
+                                                    const val = e.target.value.replace(/\D/g, '');
+                                                    setFormData({ ...formData, phoneNumber: val });
+                                                    setFieldErrors(prev => ({ ...prev, phoneNumber: '' }));
+                                                }}
                                             />
                                         </div>
-                                        <div className="max-h-[200px] overflow-y-auto">
-                                            {filteredCountries.length === 0 ? (
-                                                <div className="px-4 py-3 text-white/50 text-sm text-center">No results</div>
-                                            ) : filteredCountries.map((c) => (
-                                                <button
-                                                    key={c.iso}
-                                                    type="button"
-                                                    onClick={() => handleRegistrationCountrySelect(c.iso)}
-                                                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left transition-colors hover:bg-white/[0.04] ${registrationCountry === c.iso ? 'bg-amber-500/10 text-amber-500' : 'text-white'
+                                    ) : (
+                                        <div className="relative">
+                                            <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
+                                            <input
+                                                type="email"
+                                                placeholder="Email address"
+                                                autoFocus
+                                                autoComplete="email"
+                                                className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
+                                                    fieldErrors.email
+                                                        ? 'border-[var(--crimson)]'
+                                                        : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
+                                                }`}
+                                                value={formData.email}
+                                                onChange={(e) => {
+                                                    setFormData({ ...formData, email: e.target.value });
+                                                    setFieldErrors(prev => ({ ...prev, email: '' }));
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                    {fieldErrors.phoneNumber && isPhone && (
+                                        <p className="text-[var(--crimson)] text-[11.5px] mt-1.5 ml-1 flex items-center gap-1">
+                                            <AlertCircle size={11} /> {fieldErrors.phoneNumber}
+                                        </p>
+                                    )}
+                                    {fieldErrors.email && !isPhone && (
+                                        <p className="text-[var(--crimson)] text-[11.5px] mt-1.5 ml-1 flex items-center gap-1">
+                                            <AlertCircle size={11} /> {fieldErrors.email}
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Username (optional) */}
+                                <div>
+                                    <div className="relative">
+                                        <User size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
+                                        <input
+                                            type="text"
+                                            placeholder="Username (optional)"
+                                            autoComplete="username"
+                                            className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
+                                                fieldErrors.username
+                                                    ? 'border-[var(--crimson)]'
+                                                    : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
+                                            }`}
+                                            value={formData.username}
+                                            onChange={(e) => {
+                                                setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') });
+                                                setFieldErrors(prev => ({ ...prev, username: '' }));
+                                            }}
+                                        />
+                                    </div>
+                                    {fieldErrors.username && (
+                                        <p className="text-[var(--crimson)] text-[11.5px] mt-1.5 ml-1 flex items-center gap-1">
+                                            <AlertCircle size={11} /> {fieldErrors.username}
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Password */}
+                                <div>
+                                    <div className="relative">
+                                        <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
+                                        <input
+                                            type={showPassword ? "text" : "password"}
+                                            placeholder="Password (min. 8 characters)"
+                                            autoComplete="new-password"
+                                            className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
+                                                fieldErrors.password
+                                                    ? 'border-[var(--crimson)]'
+                                                    : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
+                                            }`}
+                                            value={formData.password}
+                                            onChange={(e) => {
+                                                setFormData({ ...formData, password: e.target.value });
+                                                setFieldErrors(prev => ({ ...prev, password: '' }));
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowPassword(!showPassword)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] hover:text-[var(--ink)] transition-colors"
+                                            aria-label={showPassword ? "Hide password" : "Show password"}
+                                        >
+                                            {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                                        </button>
+                                    </div>
+                                    {fieldErrors.password && (
+                                        <p className="text-[var(--crimson)] text-[11.5px] mt-1.5 ml-1 flex items-center gap-1">
+                                            <AlertCircle size={11} /> {fieldErrors.password}
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Confirm Password */}
+                                <div>
+                                    <div className="relative">
+                                        <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
+                                        <input
+                                            type={showConfirmPassword ? "text" : "password"}
+                                            placeholder="Confirm password"
+                                            autoComplete="new-password"
+                                            className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
+                                                fieldErrors.confirmPassword
+                                                    ? 'border-[var(--crimson)]'
+                                                    : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
+                                            }`}
+                                            value={formData.confirmPassword}
+                                            onChange={(e) => {
+                                                setFormData({ ...formData, confirmPassword: e.target.value });
+                                                setFieldErrors(prev => ({ ...prev, confirmPassword: '' }));
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] hover:text-[var(--ink)] transition-colors"
+                                            aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                                        >
+                                            {showConfirmPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                                        </button>
+                                    </div>
+                                    {fieldErrors.confirmPassword && (
+                                        <p className="text-[var(--crimson)] text-[11.5px] mt-1.5 ml-1 flex items-center gap-1">
+                                            <AlertCircle size={11} /> {fieldErrors.confirmPassword}
+                                        </p>
+                                    )}
+                                </div>
+
+                                {/* Welcome Bonus selector */}
+                                {signupBonuses.length > 0 && (
+                                    <div className="mt-1">
+                                        <label className="flex items-center gap-2 text-[12px] font-bold text-[var(--ink)] mb-2 uppercase tracking-[0.08em]">
+                                            <Gift size={13} className="text-[var(--gold-bright)]" />
+                                            Welcome bonus
+                                        </label>
+                                        <div className="grid gap-2">
+                                            {[null, ...signupBonuses].map((bonus: any) => {
+                                                const isNone = bonus === null;
+                                                const isSelected = isNone ? selectedBonusCode === null : selectedBonusCode === bonus.code;
+                                                return (
+                                                    <button
+                                                        key={isNone ? 'none' : bonus.code}
+                                                        type="button"
+                                                        onClick={() => setSelectedBonusCode(isNone ? null : bonus.code)}
+                                                        className={`w-full flex items-center gap-3 rounded-[10px] px-3.5 py-3 border transition-all text-left ${
+                                                            isSelected
+                                                                ? 'border-[var(--line-gold)] bg-[var(--gold-soft)]'
+                                                                : 'border-[var(--line-default)] bg-[var(--bg-inlay)] hover:border-[var(--line-strong)]'
                                                         }`}
-                                                >
-                                                    <span className="text-base leading-none">{c.flag}</span>
-                                                    <span className="flex-1 truncate">{c.name}</span>
-                                                    <span className="text-white/50 font-mono text-xs shrink-0">{c.currency}</span>
-                                                </button>
-                                            ))}
+                                                    >
+                                                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                                                            isSelected ? 'border-[var(--gold-bright)]' : 'border-[var(--line-strong)]'
+                                                        }`}>
+                                                            {isSelected && <div className="w-2 h-2 rounded-full bg-[var(--gold-bright)]" />}
+                                                        </div>
+
+                                                        {isNone ? (
+                                                            <span className="text-[12.5px] text-[var(--ink-dim)] font-medium">No bonus — I&apos;ll decide later</span>
+                                                        ) : (
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <span className="text-[13px] font-bold text-[var(--ink)]">{bonus.title}</span>
+                                                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-[0.1em] ${
+                                                                        bonus.forFirstDepositOnly
+                                                                            ? 'bg-[var(--gold-soft)] text-[var(--gold-bright)]'
+                                                                            : 'bg-[var(--emerald-soft)] text-[var(--emerald)]'
+                                                                    }`}>
+                                                                        {bonus.forFirstDepositOnly ? 'On deposit' : 'Instant'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="text-[11.5px] text-[var(--ink-faint)] mt-0.5 leading-relaxed">
+                                                                    {(() => {
+                                                                        const bonusSymbol = getCurrencySymbol(COUNTRY_CURRENCY_MAP[registrationCountry || 'IN']?.currency || 'INR');
+                                                                        const fiatMinimum = bonus.minDepositFiat ?? bonus.minDeposit ?? 0;
+                                                                        const cryptoMinimum = bonus.minDepositCrypto ?? bonus.minDeposit ?? 0;
+                                                                        const minimumLabel = bonus.currency === 'CRYPTO'
+                                                                            ? (cryptoMinimum > 0 ? ` (min $${cryptoMinimum})` : '')
+                                                                            : bonus.currency === 'BOTH'
+                                                                                ? ((fiatMinimum > 0 || cryptoMinimum > 0)
+                                                                                    ? ` (min ${fiatMinimum > 0 ? `${bonusSymbol}${fiatMinimum} fiat` : 'no fiat min'} / ${cryptoMinimum > 0 ? `$${cryptoMinimum} crypto` : 'no crypto min'})`
+                                                                                    : '')
+                                                                                : (fiatMinimum > 0 ? ` (min ${bonusSymbol}${fiatMinimum})` : '');
+                                                                        return bonus.percentage > 0
+                                                                            ? `${bonus.percentage}% match${bonus.maxBonus > 0 ? ` up to ${bonusSymbol}${bonus.maxBonus}` : ''}${minimumLabel}`
+                                                                            : `${bonusSymbol}${bonus.amount} bonus`;
+                                                                    })()} &bull; <span className="num">{bonus.wageringRequirement}x</span> wagering
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {isSelected && !isNone && (
+                                                            <Sparkles size={14} className="text-[var(--gold-bright)] shrink-0" />
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}
-                            </div>
-                            {fieldErrors.registrationCountry && (
-                                <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1">
-                                    <AlertCircle size={11} /> {fieldErrors.registrationCountry}
-                                </p>
-                            )}
-                        </div>
 
-                        {/* Phone / Email Toggle */}
-                        <div className="flex bg-white/[0.03] p-1 rounded-xl border border-white/[0.08]">
-                            <button
-                                type="button"
-                                onClick={() => handleTabChange(true)}
-                                className={`flex-1 py-2.5 text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-all ${isPhone ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-[#1a1208] shadow-sm' : 'text-white/50 hover:text-white'}`}
-                            >
-                                <Smartphone size={15} /> Phone
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => handleTabChange(false)}
-                                className={`flex-1 py-2.5 text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-all ${!isPhone ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-[#1a1208] shadow-sm' : 'text-white/50 hover:text-white'}`}
-                            >
-                                <Mail size={15} /> Email
-                            </button>
-                        </div>
-
-                        {/* Phone / Email Field */}
-                        <div>
-                            {isPhone ? (
-                                <div className="flex gap-2">
-                                    <CountryCodeSelector
-                                        value={selectedCountry}
-                                        onChange={setSelectedCountry}
-                                    />
-                                    <input
-                                        type="tel"
-                                        inputMode="numeric"
-                                        placeholder="Phone number"
-                                        autoFocus
-                                        className={`flex-1 h-[50px] bg-white/[0.03] border rounded-xl px-4 text-white outline-none transition-all focus:ring-[1.5px] placeholder-white/20 font-medium ${fieldErrors.phoneNumber
-                                            ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30'
-                                            : 'border-white/[0.08] focus:border-amber-500/60 focus:ring-amber-500/40'
-                                            }`}
-                                        value={formData.phoneNumber}
-                                        onChange={(e) => {
-                                            const val = e.target.value.replace(/\D/g, '');
-                                            setFormData({ ...formData, phoneNumber: val });
-                                            setFieldErrors(prev => ({ ...prev, phoneNumber: '' }));
-                                        }}
-                                    />
-                                </div>
-                            ) : (
-                                <div className="relative">
-                                    <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                                    <input
-                                        type="email"
-                                        placeholder="Email address"
-                                        autoFocus
-                                        autoComplete="email"
-                                        className={`w-full h-[50px] bg-white/[0.03] border rounded-xl pl-11 pr-4 text-white outline-none transition-all focus:ring-[1.5px] placeholder-white/20 font-medium ${fieldErrors.email
-                                            ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30'
-                                            : 'border-white/[0.08] focus:border-amber-500/60 focus:ring-amber-500/40'
-                                            }`}
-                                        value={formData.email}
-                                        onChange={(e) => {
-                                            setFormData({ ...formData, email: e.target.value });
-                                            setFieldErrors(prev => ({ ...prev, email: '' }));
-                                        }}
-                                    />
-                                </div>
-                            )}
-                            {fieldErrors.phoneNumber && isPhone && (
-                                <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1">
-                                    <AlertCircle size={11} /> {fieldErrors.phoneNumber}
-                                </p>
-                            )}
-                            {fieldErrors.email && !isPhone && (
-                                <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1">
-                                    <AlertCircle size={11} /> {fieldErrors.email}
-                                </p>
-                            )}
-                        </div>
-
-                        {/* Username Field */}
-                        <div>
-                            <div className="relative">
-                                <User size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                                <input
-                                    type="text"
-                                    placeholder="Username (Optional)"
-                                    autoComplete="username"
-                                    className={`w-full h-[50px] bg-white/[0.03] border rounded-xl pl-11 pr-4 text-white outline-none transition-all focus:ring-[1.5px] placeholder-white/20 font-medium ${fieldErrors.username
-                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30'
-                                        : 'border-white/[0.08] focus:border-amber-500/60 focus:ring-amber-500/40'
-                                        }`}
-                                    value={formData.username}
-                                    onChange={(e) => {
-                                        setFormData({ ...formData, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') });
-                                        setFieldErrors(prev => ({ ...prev, username: '' }));
-                                    }}
-                                />
-                            </div>
-                            {fieldErrors.username && (
-                                <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1">
-                                    <AlertCircle size={11} /> {fieldErrors.username}
-                                </p>
-                            )}
-                        </div>
-
-                        {/* Password Field */}
-                        <div>
-                            <div className="relative">
-                                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                                <input
-                                    type={showPassword ? "text" : "password"}
-                                    placeholder="Password (min. 8 characters)"
-                                    autoComplete="new-password"
-                                    className={`w-full h-[50px] bg-white/[0.03] border rounded-xl pl-11 pr-12 text-white outline-none transition-all focus:ring-[1.5px] placeholder-white/20 font-medium ${fieldErrors.password
-                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30'
-                                        : 'border-white/[0.08] focus:border-amber-500/60 focus:ring-amber-500/40'
-                                        }`}
-                                    value={formData.password}
-                                    onChange={(e) => {
-                                        setFormData({ ...formData, password: e.target.value });
-                                        setFieldErrors(prev => ({ ...prev, password: '' }));
-                                    }}
-                                />
+                                {/* Promo toggle */}
                                 <button
                                     type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-white/30 hover:text-white/70 transition-colors"
-                                >
-                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                </button>
-                            </div>
-                            {fieldErrors.password && (
-                                <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1">
-                                    <AlertCircle size={11} /> {fieldErrors.password}
-                                </p>
-                            )}
-                        </div>
-
-                        {/* Confirm Password Field */}
-                        <div>
-                            <div className="relative">
-                                <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-                                <input
-                                    type={showConfirmPassword ? "text" : "password"}
-                                    placeholder="Confirm password"
-                                    autoComplete="new-password"
-                                    className={`w-full h-[50px] bg-white/[0.03] border rounded-xl pl-11 pr-12 text-white outline-none transition-all focus:ring-[1.5px] placeholder-white/20 font-medium ${fieldErrors.confirmPassword
-                                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500/30'
-                                        : 'border-white/[0.08] focus:border-amber-500/60 focus:ring-amber-500/40'
-                                        }`}
-                                    value={formData.confirmPassword}
-                                    onChange={(e) => {
-                                        setFormData({ ...formData, confirmPassword: e.target.value });
-                                        setFieldErrors(prev => ({ ...prev, confirmPassword: '' }));
-                                    }}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-white/30 hover:text-white/70 transition-colors"
-                                >
-                                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                                </button>
-                            </div>
-                            {fieldErrors.confirmPassword && (
-                                <p className="text-red-400 text-xs mt-1.5 ml-1 flex items-center gap-1">
-                                    <AlertCircle size={11} /> {fieldErrors.confirmPassword}
-                                </p>
-                            )}
-                        </div>
-
-                        {/* ── Welcome Bonus Selector ── */}
-                        {signupBonuses.length > 0 && (
-                            <div>
-                                <label className="flex items-center gap-2 text-sm font-bold text-white mb-2">
-                                    <Gift size={15} className="text-amber-500" />
-                                    Choose Your Welcome Bonus
-                                </label>
-                                <div className="grid gap-2">
-                                    {[null, ...signupBonuses].map((bonus: any) => {
-                                        const isNone = bonus === null;
-                                        const isSelected = isNone ? selectedBonusCode === null : selectedBonusCode === bonus.code;
-                                        return (
-                                            <button
-                                                key={isNone ? 'none' : bonus.code}
-                                                type="button"
-                                                onClick={() => setSelectedBonusCode(isNone ? null : bonus.code)}
-                                                className={`w-full flex items-center gap-3 rounded-xl px-4 py-3 border transition-all text-left ${isSelected
-                                                    ? 'border-amber-500 bg-amber-500/10'
-                                                    : 'border-white/[0.08] bg-white/[0.03] hover:border-white/20'
-                                                    }`}
-                                            >
-                                                {/* Radio circle */}
-                                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected ? 'border-amber-500' : 'border-white/30'
-                                                    }`}>
-                                                    {isSelected && <div className="w-2 h-2 rounded-full bg-amber-500" />}
-                                                </div>
-
-                                                {isNone ? (
-                                                    <span className="text-sm text-white/50 font-medium">No Bonus — I&apos;ll decide later</span>
-                                                ) : (
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2 flex-wrap">
-                                                            <span className="text-sm font-bold text-white">{bonus.title}</span>
-                                                            <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${bonus.forFirstDepositOnly
-                                                                ? 'bg-amber-500/15 text-amber-500'
-                                                                : 'bg-emerald-500/15 text-emerald-400'
-                                                                }`}>
-                                                                {bonus.forFirstDepositOnly ? 'On Deposit' : 'Instant'}
-                                                            </span>
-                                                        </div>
-                                                        <div className="text-xs text-white/50 mt-0.5 whitespace-break-spaces leading-relaxed">
-                                                            {(() => {
-                                                                const bonusSymbol = getCurrencySymbol(COUNTRY_CURRENCY_MAP[registrationCountry || 'IN']?.currency || 'INR');
-                                                                const fiatMinimum = bonus.minDepositFiat ?? bonus.minDeposit ?? 0;
-                                                                const cryptoMinimum = bonus.minDepositCrypto ?? bonus.minDeposit ?? 0;
-                                                                const minimumLabel = bonus.currency === 'CRYPTO'
-                                                                    ? (cryptoMinimum > 0 ? ` (min $${cryptoMinimum})` : '')
-                                                                    : bonus.currency === 'BOTH'
-                                                                        ? ((fiatMinimum > 0 || cryptoMinimum > 0)
-                                                                            ? ` (min ${fiatMinimum > 0 ? `${bonusSymbol}${fiatMinimum} fiat` : 'no fiat min'} / ${cryptoMinimum > 0 ? `$${cryptoMinimum} crypto` : 'no crypto min'})`
-                                                                            : '')
-                                                                        : (fiatMinimum > 0 ? ` (min ${bonusSymbol}${fiatMinimum})` : '');
-                                                                return bonus.percentage > 0
-                                                                    ? `${bonus.percentage}% match${bonus.maxBonus > 0 ? ` up to ${bonusSymbol}${bonus.maxBonus}` : ''}${minimumLabel}`
-                                                                    : `${bonusSymbol}${bonus.amount} bonus`;
-                                                            })()} &bull; {bonus.wageringRequirement}x wagering
-                                                        </div>
-                                                    </div>
-                                                )}
-
-                                                {isSelected && !isNone && (
-                                                    <Sparkles size={14} className="text-amber-500 shrink-0" />
-                                                )}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-
-
-                        {/* Promo Toggle */}
-                        <button
-                            type="button"
-                            onClick={() => setHasPromo(!hasPromo)}
-                            className={`w-full h-[50px] border rounded-xl px-4 flex items-center justify-center font-semibold text-sm transition-all ${hasPromo
-                                ? 'border-amber-500 text-amber-500 bg-amber-500/10'
-                                : 'border-white/[0.08] text-white/50 hover:text-white bg-white/[0.03] hover:border-white/20'
-                                }`}
-                        >
-                            {hasPromo ? '✓ Promo Code' : '+ Promo Code'}
-                        </button>
-
-                        {/* Referral Code Indicator — shown only when a ref code was applied from URL */}
-                        {referralCode && (
-                            <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2 text-xs">
-                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                <span className="text-emerald-400 font-medium">Referral code applied:</span>
-                                <span className="text-white font-mono font-bold tracking-widest">{referralCode}</span>
-                                <button
-                                    type="button"
-                                    onClick={() => { setReferralCode(''); localStorage.removeItem('referralCode'); }}
-                                    className="ml-auto text-emerald-400/60 hover:text-red-400 transition-colors text-[10px]"
-                                    title="Remove referral"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Promo Code Input */}
-                        {hasPromo && (
-                            <input
-                                type="text"
-                                placeholder="Enter promo code"
-                                className="w-full h-[50px] bg-white/[0.03] border-2 border-dashed border-amber-500/50 rounded-xl px-4 text-amber-500 outline-none focus:border-amber-500 transition-all placeholder-amber-500/30 font-bold uppercase tracking-wider animate-in fade-in slide-in-from-top-2 duration-200"
-                                value={formData.promoCode}
-                                onChange={(e) => setFormData({ ...formData, promoCode: e.target.value })}
-                            />
-                        )}
-
-                        {/* Terms */}
-                        <label className="flex items-start gap-3 cursor-pointer group mt-1">
-                            <div
-                                className={`w-5 h-5 rounded border flex items-center justify-center transition-all mt-0.5 shrink-0 ${termsAccepted ? 'bg-emerald-500 border-emerald-500' : 'border-white/30 bg-transparent'
+                                    onClick={() => setHasPromo(!hasPromo)}
+                                    className={`w-full h-11 border rounded-[10px] px-4 flex items-center justify-center font-semibold text-[12px] uppercase tracking-[0.08em] transition-all ${
+                                        hasPromo
+                                            ? 'border-[var(--line-gold)] text-[var(--gold-bright)] bg-[var(--gold-soft)]'
+                                            : 'border-[var(--line-default)] text-[var(--ink-faint)] hover:text-[var(--ink)] bg-[var(--bg-inlay)] hover:border-[var(--line-strong)]'
                                     }`}
-                            >
-                                <input
-                                    type="checkbox"
-                                    className="hidden"
-                                    checked={termsAccepted}
-                                    onChange={(e) => setTermsAccepted(e.target.checked)}
-                                />
-                                {termsAccepted && <Check size={13} className="text-white stroke-[3px]" />}
-                            </div>
-                            <span className="text-xs text-white/50 leading-tight group-hover:text-white/70 transition-colors">
-                                I confirm all the{' '}
-                                <span className="text-white font-bold underline decoration-dotted">Terms of user agreement</span>{' '}
-                                and that I am over 18 years of age.
-                            </span>
-                        </label>
+                                >
+                                    {hasPromo ? '✓ Promo code' : '+ Promo code'}
+                                </button>
 
-                        {/* Error Message */}
-                        {error && (
-                            <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 animate-in slide-in-from-top-1 duration-200">
-                                <AlertCircle size={15} className="text-red-400 shrink-0 mt-0.5" />
-                                <p className="text-red-400 text-[13px] font-medium leading-snug">{error}</p>
+                                {/* Referral code chip */}
+                                {referralCode && (
+                                    <div className="flex items-center gap-2 bg-[var(--emerald-soft)] border border-[rgba(0,216,123,0.25)] rounded-[10px] px-3 py-2 text-[11.5px]">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-[var(--emerald)] animate-pulse" />
+                                        <span className="text-[var(--emerald)] font-medium">Referral code applied:</span>
+                                        <span className="text-[var(--ink)] num font-bold tracking-widest">{referralCode}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setReferralCode(''); localStorage.removeItem('referralCode'); }}
+                                            className="ml-auto text-[var(--ink-faint)] hover:text-[var(--crimson)] transition-colors"
+                                            title="Remove referral"
+                                            aria-label="Remove referral"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Promo code input */}
+                                {hasPromo && (
+                                    <input
+                                        type="text"
+                                        placeholder="Enter promo code"
+                                        className="w-full h-11 bg-[var(--bg-inlay)] border-2 border-dashed border-[var(--line-gold)] rounded-[10px] px-3.5 text-[var(--gold-bright)] text-[13.5px] focus:outline-none focus:border-[var(--gold-bright)] transition-colors placeholder:text-[rgba(255,204,51,0.35)] font-bold uppercase tracking-[0.12em]"
+                                        value={formData.promoCode}
+                                        onChange={(e) => setFormData({ ...formData, promoCode: e.target.value })}
+                                    />
+                                )}
+
+                                {/* Terms */}
+                                <label className="flex items-start gap-3 cursor-pointer group mt-1">
+                                    <div
+                                        className={`w-5 h-5 rounded border flex items-center justify-center transition-colors mt-0.5 shrink-0 ${
+                                            termsAccepted
+                                                ? 'bg-[var(--emerald)] border-[var(--emerald)]'
+                                                : 'border-[var(--line-strong)] bg-transparent'
+                                        }`}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            className="hidden"
+                                            checked={termsAccepted}
+                                            onChange={(e) => setTermsAccepted(e.target.checked)}
+                                        />
+                                        {termsAccepted && <Check size={13} className="text-[#0a0b0f] stroke-[3px]" />}
+                                    </div>
+                                    <span className="text-[11.5px] text-[var(--ink-faint)] leading-snug group-hover:text-[var(--ink-dim)] transition-colors">
+                                        I confirm all the{' '}
+                                        <span className="text-[var(--ink)] font-semibold underline decoration-dotted">Terms of user agreement</span>{' '}
+                                        and that I am over 18 years of age.
+                                    </span>
+                                </label>
+
+                                {/* Error message */}
+                                {error && (
+                                    <div className="flex items-start gap-2.5 bg-[var(--crimson-soft)] border border-[rgba(255,46,76,0.25)] rounded-[10px] px-4 py-3">
+                                        <AlertCircle size={14} className="text-[var(--crimson)] shrink-0 mt-0.5" />
+                                        <p className="text-[var(--crimson)] text-[12.5px] font-medium leading-snug">{error}</p>
+                                    </div>
+                                )}
                             </div>
                         )}
-                        </div>
-                    )} {/* end OTP conditional */}
-                    </div>{/* end scrollable body */}
+                    </div>
 
-                    {/* ── Sticky footer — submit button always visible ── */}
-                    <div className="flex-shrink-0 px-6 pt-3 pb-6 md:px-10 md:pb-6 border-t border-white/[0.05] bg-gradient-to-b from-transparent to-[#0c0f14]">
+                    {/* Sticky footer */}
+                    <div className="relative z-10 flex-shrink-0 px-6 pt-3 pb-6 md:px-9 border-t border-[var(--line-default)] bg-[var(--bg-surface)]">
                         {regStep === 'verify_otp' ? (
                             <>
                                 <button
                                     onClick={handleVerifyOtpAndRegister}
                                     disabled={otpLoading || otpCode.length !== 6}
-                                    className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed text-[#1a1208] h-[52px] rounded-xl font-black uppercase tracking-wider text-sm transition-all shadow-lg shadow-amber-500/20 hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2"
+                                    className="btn btn-gold sweep h-12 w-full uppercase tracking-[0.08em] text-[12px] disabled:opacity-40 disabled:cursor-not-allowed"
                                 >
-                                    {otpLoading ? <><Loader2 size={16} className="animate-spin" />Verifying &amp; Creating...</> : 'Verify & Create Account'}
+                                    {otpLoading ? <><Loader2 size={14} className="animate-spin" />Verifying &amp; creating…</> : 'Verify & create account'}
                                 </button>
-                                <div className="flex items-center justify-center gap-4 mt-3 pb-1">
+                                <div className="flex items-center justify-center gap-3 mt-3">
                                     <button
                                         type="button"
                                         onClick={() => { setRegStep('form'); setOtpCode(''); setError(''); setResendCooldown(0); }}
-                                        className="text-white/50 text-sm hover:text-amber-500 transition-colors"
+                                        className="text-[11.5px] text-[var(--ink-faint)] hover:text-[var(--gold-bright)] transition-colors"
                                     >
-                                        ← Edit {isPhone ? 'Number' : 'Email'}
+                                        ← Edit {isPhone ? 'number' : 'email'}
                                     </button>
-                                    <span className="text-white/25">|</span>
+                                    <span className="text-[var(--line-strong)]">|</span>
                                     <button
                                         type="button"
                                         onClick={handleResendOtp}
                                         disabled={resendCooldown > 0 || resendLoading}
-                                        className={`text-sm transition-colors ${resendCooldown > 0 || resendLoading ? 'text-white/25 cursor-not-allowed' : 'text-white/50 hover:text-amber-500'}`}
+                                        className={`text-[11.5px] transition-colors ${
+                                            resendCooldown > 0 || resendLoading
+                                                ? 'text-[var(--ink-whisper)] cursor-not-allowed'
+                                                : 'text-[var(--ink-faint)] hover:text-[var(--gold-bright)]'
+                                        }`}
                                     >
-                                        {resendLoading ? 'Sending...' : resendCooldown > 0 ? `Resend OTP (${resendCooldown}s)` : 'Resend OTP'}
+                                        {resendLoading ? 'Sending…' : resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend OTP'}
                                     </button>
                                 </div>
                                 {otpExpiresIn > 0 ? (
-                                    <p className={`text-center text-[11px] mt-1 ${otpExpiresIn <= 30 ? 'text-red-400' : 'text-white/50'}`}>
+                                    <p className={`text-center text-[11px] mt-1.5 num ${otpExpiresIn <= 30 ? 'text-[var(--crimson)]' : 'text-[var(--ink-faint)]'}`}>
                                         OTP expires in {Math.floor(otpExpiresIn / 60)}:{String(otpExpiresIn % 60).padStart(2, '0')}
                                     </p>
-                                ) : regStep === 'verify_otp' && (
-                                    <p className="text-center text-[11px] mt-1 text-red-400 font-medium">
+                                ) : (
+                                    <p className="text-center text-[11px] mt-1.5 text-[var(--crimson)] font-medium">
                                         OTP expired — please resend
                                     </p>
                                 )}
@@ -877,16 +916,15 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                             <button
                                 onClick={handleSubmit}
                                 disabled={loading || !termsAccepted}
-                                className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed text-[#1a1208] h-[52px] rounded-xl font-black uppercase tracking-wider text-sm transition-all shadow-lg shadow-amber-500/20 hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2"
+                                className="btn btn-gold sweep h-12 w-full uppercase tracking-[0.08em] text-[12px] disabled:opacity-40 disabled:cursor-not-allowed"
                             >
                                 {loading ? (
-                                    <><Loader2 size={16} className="animate-spin" />Sending OTP...</>
+                                    <><Loader2 size={14} className="animate-spin" />Sending OTP…</>
                                 ) : 'Continue with OTP →'}
                             </button>
                         )}
                     </div>
-
-                </div>{/* end right column */}
+                </div>
             </div>
         </div>
     );

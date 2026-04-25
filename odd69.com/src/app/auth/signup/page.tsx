@@ -35,36 +35,42 @@ function SignupContent() {
   }, [loading, isAuthenticated, openRegister, router]);
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-[#12161e] to-[#0c0f14] flex flex-col items-center justify-center gap-6 text-center px-6 overflow-hidden">
-      <div className="absolute w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="relative min-h-[calc(100vh-64px)] flex flex-col items-center justify-center gap-6 text-center px-6 py-12 overflow-hidden bg-gold-soft">
+      <div className="pointer-events-none absolute inset-0 dotgrid opacity-40" />
+      <div
+        className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[420px] h-[300px] rounded-full blur-[120px]"
+        style={{ background: "var(--gold-halo)" }}
+      />
 
       <div className="relative z-10 flex flex-col items-center gap-4">
-        <div className="w-20 h-20 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
-          <Gift size={36} className="text-amber-500" />
+        <div className="w-20 h-20 rounded-[18px] bg-[var(--gold-soft)] border border-[var(--line-gold)] grid place-items-center animate-pulse-gold">
+          <Gift size={32} className="text-[var(--gold-bright)]" />
         </div>
 
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-500 text-xs font-black uppercase tracking-wider">
-          🎁 Referral Invite
+        <div className="chip chip-gold">
+          🎁 Referral invite
         </div>
 
-        <h1 className="text-2xl font-black text-white italic tracking-tight">
+        <h1 className="t-display text-[28px] sm:text-[32px] text-[var(--ink)] tracking-tight">
           You&apos;ve been invited to{" "}
-          <span className="text-amber-500">Odd</span>
-          <span className="text-white">69</span>
+          <span className="font-display">
+            odd<span className="text-gold-grad">69</span>
+          </span>
         </h1>
-        <p className="text-white/50 text-sm max-w-xs leading-relaxed">
+
+        <p className="text-[13px] text-[var(--ink-dim)] max-w-xs leading-relaxed">
           {refCode ? (
             <>
               Your referral code{" "}
-              <span className="text-amber-500 font-mono font-bold">{refCode}</span>{" "}
-              has been saved. Opening sign up for you...
+              <span className="text-[var(--gold-bright)] num font-bold">{refCode}</span>{" "}
+              has been saved. Opening sign up for you…
             </>
           ) : (
-            "Opening sign up for you..."
+            "Opening sign up for you…"
           )}
         </p>
 
-        <Loader2 className="w-6 h-6 text-amber-500 animate-spin mt-2" />
+        <Loader2 className="w-5 h-5 text-[var(--gold-bright)] animate-spin mt-1" />
       </div>
     </div>
   );
@@ -74,8 +80,8 @@ export default function AuthSignupPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-gradient-to-br from-[#12161e] to-[#0c0f14] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+        <div className="min-h-[calc(100vh-64px)] grid place-items-center bg-[var(--bg-base)]">
+          <Loader2 className="w-7 h-7 text-[var(--gold-bright)] animate-spin" />
         </div>
       }
     >

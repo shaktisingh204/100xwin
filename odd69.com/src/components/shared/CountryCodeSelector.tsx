@@ -228,33 +228,33 @@ const CountryCodeSelector: React.FC<CountryCodeSelectorProps> = ({ value, onChan
             <button
                 type="button"
                 onClick={() => { setOpen(!open); setSearch(""); }}
-                className="h-[50px] bg-white/[0.03] border border-white/[0.08] rounded-xl px-3 flex items-center gap-1.5 min-w-[90px] text-white text-sm font-medium hover:border-amber-500/60 transition-all whitespace-nowrap"
+                className="h-11 bg-[var(--bg-inlay)] border border-[var(--line-default)] rounded-[10px] px-3 flex items-center gap-1.5 min-w-[92px] text-[var(--ink)] text-[13px] font-medium hover:border-[var(--line-gold)] transition-colors whitespace-nowrap"
             >
-                <span className="text-lg leading-none">{value.flag}</span>
-                <span className="text-white/70">{value.code}</span>
-                <ChevronDown size={13} className={`text-white/50 transition-transform ${open ? "rotate-180" : ""}`} />
+                <span className="text-base leading-none">{value.flag}</span>
+                <span className="text-[var(--ink-dim)] num">{value.code}</span>
+                <ChevronDown size={12} className={`text-[var(--ink-faint)] transition-transform ${open ? "rotate-180" : ""}`} />
             </button>
 
             {/* Dropdown */}
             {open && (
-                <div className="absolute top-[calc(100%+6px)] left-0 z-[200] w-[260px] bg-[#0c0f14] border border-white/[0.06] rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute top-[calc(100%+6px)] left-0 z-[200] w-[260px] bg-[var(--bg-elevated)] border border-[var(--line-strong)] rounded-[12px] shadow-[var(--shadow-lift)] overflow-hidden">
                     {/* Search */}
-                    <div className="flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.06] bg-white/[0.03]">
-                        <Search size={14} className="text-white/50 shrink-0" />
+                    <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--line-default)]">
+                        <Search size={13} className="text-[var(--ink-faint)] shrink-0" />
                         <input
                             ref={searchRef}
                             type="text"
-                            placeholder="Search country or code..."
-                            className="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-white/25"
+                            placeholder="Search country or code…"
+                            className="flex-1 bg-transparent text-[var(--ink)] text-[13px] outline-none placeholder:text-[var(--ink-whisper)]"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />
                     </div>
 
                     {/* List */}
-                    <div className="max-h-[220px] overflow-y-auto custom-scrollbar">
+                    <div className="max-h-[220px] overflow-y-auto">
                         {filtered.length === 0 ? (
-                            <div className="px-4 py-3 text-white/50 text-sm text-center">No results</div>
+                            <div className="px-4 py-3 text-[var(--ink-faint)] text-[13px] text-center">No results</div>
                         ) : (
                             filtered.map((country) => (
                                 <button
@@ -265,12 +265,15 @@ const CountryCodeSelector: React.FC<CountryCodeSelectorProps> = ({ value, onChan
                                         setOpen(false);
                                         setSearch("");
                                     }}
-                                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left transition-colors hover:bg-white/[0.04] ${value.iso === country.iso ? "bg-amber-500/10 text-amber-500" : "text-white"
-                                        }`}
+                                    className={`w-full flex items-center gap-3 px-3 py-2.5 text-[13px] text-left transition-colors hover:bg-[var(--bg-inlay)] ${
+                                        value.iso === country.iso
+                                            ? "bg-[var(--gold-soft)] text-[var(--gold-bright)]"
+                                            : "text-[var(--ink)]"
+                                    }`}
                                 >
                                     <span className="text-base leading-none">{country.flag}</span>
                                     <span className="flex-1 truncate">{country.name}</span>
-                                    <span className="text-white/50 font-medium shrink-0">{country.code}</span>
+                                    <span className="text-[var(--ink-faint)] num shrink-0">{country.code}</span>
                                 </button>
                             ))
                         )}
