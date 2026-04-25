@@ -25,14 +25,14 @@ export default function OddsChip({ label, value, onClick }: OddsChipProps) {
     <button
       type="button"
       onClick={handleClick}
-      className={`flex items-center justify-between rounded-lg border px-2.5 py-1.5 transition-all active:scale-95 cursor-pointer ${
+      className={`flex items-center justify-between rounded-lg border px-3 min-h-[44px] transition-all active:scale-95 cursor-pointer ${
         pressed
-          ? 'border-amber-500/40 bg-amber-500/20 shadow-[0_0_14px_rgba(245,158,11,0.35)]'
-          : 'border-white/[0.08] bg-white/[0.04] hover:border-amber-500/30 hover:bg-amber-500/10'
+          ? 'border-[var(--gold-line)] bg-[var(--gold-soft)] shadow-[0_0_14px_var(--gold-halo)] ring-1 ring-[var(--gold)]/40'
+          : 'border-[var(--line-default)] bg-white/[0.04] hover:border-[var(--gold-line)] hover:bg-[var(--gold-soft)]'
       }`}
     >
-      <span className="text-[11px] text-white/50">{label}</span>
-      <span className={`text-[13px] font-black transition-colors ${pressed ? 'text-amber-300' : 'text-white/80'}`}>
+      <span className="text-[11px] text-[var(--ink-faint)] font-semibold uppercase tracking-wide">{label}</span>
+      <span className={`num text-[14px] font-black transition-colors ${pressed ? 'text-[var(--gold-bright)]' : 'text-[var(--ink-strong)]'}`}>
         {value}
       </span>
     </button>

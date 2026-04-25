@@ -6,11 +6,13 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ChevronDown,
   ChevronRight,
+  Circle,
   Loader2,
+  MapPin,
   Plus,
+  Trophy,
   Users,
   Award,
-  MapPin,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import FantasyShell from "@/components/fantasy/FantasyShell";
@@ -104,16 +106,17 @@ export default function FantasyMatchPage() {
     if (!authLoading && user) fetchData();
   }, [authLoading, user, fetchData]);
 
-  const joinedContestIds = useMemo(() => new Set(myEntries.map((e) => e.contestId)), [myEntries]);
+  const joinedContestIds = useMemo(
+    () => new Set(myEntries.map((e) => e.contestId)),
+    [myEntries],
+  );
 
   const startDate = match ? new Date(match.startDate) : new Date();
   const diffMs = startDate.getTime() - Date.now();
-  const isLive = match?.status === 3;   // EntitySport: 3=Live
-  const isUpcoming = match?.status === 1; // EntitySport: 1=Upcoming
-  const isCompleted = match?.status === 2; // EntitySport: 2=Result/Completed
+  const isLive = match?.status === 3;
+  const isUpcoming = match?.status === 1;
+  const isCompleted = match?.status === 2;
 
-  // After the match, the Contests tab only shows contests the user joined.
-  // Before/during the match, also filter by the selected phase tab.
   const visibleContests = useMemo(() => {
     const base = isCompleted
       ? contests.filter((c) => joinedContestIds.has(c._id))
@@ -122,7 +125,12 @@ export default function FantasyMatchPage() {
   }, [contests, joinedContestIds, isCompleted, phase]);
 
   const phaseCounts = useMemo(() => {
-    const counts: Record<ContestPhase, number> = { full: 0, innings1: 0, innings2: 0, powerplay: 0 };
+    const counts: Record<ContestPhase, number> = {
+      full: 0,
+      innings1: 0,
+      innings2: 0,
+      powerplay: 0,
+    };
     const base = isCompleted
       ? contests.filter((c) => joinedContestIds.has(c._id))
       : contests;
@@ -155,15 +163,19 @@ export default function FantasyMatchPage() {
 
   if (authLoading || !user || loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center text-white/40 text-sm">Loading...</div>
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-[var(--gold)]" />
+      </div>
     );
   }
 
   if (!match) {
     return (
       <FantasyShell title="Match Not Found" backHref="/fantasy">
-        <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-10 text-center">
-          <p className="text-white/50 text-sm font-semibold">Match not found or not yet synced.</p>
+        <div className="rounded-[16px] border border-[var(--line-default)] bg-[var(--bg-surface)] p-10 text-center">
+          <p className="text-[var(--ink-faint)] text-sm font-semibold">
+            Match not found or not yet synced.
+          </p>
         </div>
       </FantasyShell>
     );
@@ -176,155 +188,188 @@ export default function FantasyMatchPage() {
       backHref="/fantasy"
       hideSubNav
     >
-      {/* Hero — dark navy band with teams + countdown (Dream11 style) */}
-      <div className="bg-gradient-to-br from-[#1a1f3a] via-[#151a32] to-[#0f1428] rounded-2xl p-5 md:p-6 mb-4 text-white shadow-xl shadow-black/10 relative overflow-hidden">
-        {/* subtle stripe pattern */}
+      {/* Sticky hero / score panel — sits under the shell header on mobile */}
+      <div className="sticky top-0 z-30 -mx-4 md:mx-0 px-4 md:px-0 pt-2 pb-3 bg-[var(--bg-base)]/85 backdrop-blur-md">
         <div
-          className="absolute inset-0 opacity-[0.06]"
+          className="relative grain overflow-hidden rounded-[18px] border border-[var(--line-gold)] p-4 md:p-5"
           style={{
-            backgroundImage:
-              "repeating-linear-gradient(115deg, transparent 0 18px, rgba(255,255,255,0.8) 18px 19px)",
+            background:
+              "radial-gradient(ellipse 90% 100% at 0% 0%, rgba(245,183,10,0.18) 0%, rgba(245,183,10,0.02) 60%), linear-gradient(180deg, var(--bg-surface), var(--bg-base))",
           }}
-        />
-        <div className="relative">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-[10px] font-black uppercase tracking-widest text-white/60">
-              {match.competitionTitle}
-            </span>
-            {isLive && (
-              <span className="flex items-center gap-1.5 text-[10px] font-black bg-red-500/20 text-red-300 border border-red-500/30 px-2.5 py-1 rounded-md uppercase tracking-wider animate-pulse">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-                Live
+        >
+          <div className="absolute inset-0 dotgrid opacity-20" />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-3 gap-2">
+              <span className="t-eyebrow truncate">
+                {match.competitionTitle}
               </span>
-            )}
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-            <TeamHero team={match.teamA} score={match.scoreA} />
-
-            <div className="flex flex-col items-center shrink-0">
-              {isUpcoming && typeof countdown !== "string" ? (
-                <>
-                  <span className="text-[9px] font-black uppercase text-white/60 tracking-widest">
-                    Starts in
-                  </span>
-                  <div className="flex items-center gap-1 mt-1.5">
-                    <CountdownBlock label="H" value={countdown.h} />
-                    <span className="text-white/40 font-black">:</span>
-                    <CountdownBlock label="M" value={countdown.m} />
-                    <span className="text-white/40 font-black">:</span>
-                    <CountdownBlock label="S" value={countdown.s} />
-                  </div>
-                </>
-              ) : isLive ? (
-                <>
-                  <span className="text-[9px] font-black uppercase text-white/60 tracking-widest">
-                    Status
-                  </span>
-                  <span className="font-black text-base mt-1 tracking-tight">In Play</span>
-                </>
-              ) : (
-                <>
-                  <span className="text-[9px] font-black uppercase text-white/60 tracking-widest">
-                    Result
-                  </span>
-                  <span className="font-black text-xs mt-1 text-center max-w-[140px] leading-tight">
-                    {match.statusNote || "Completed"}
-                  </span>
-                </>
+              {isLive && (
+                <span className="chip chip-crimson !text-[9px]">
+                  <Circle
+                    size={5}
+                    fill="currentColor"
+                    className="animate-live-dot"
+                  />{" "}
+                  Live
+                </span>
+              )}
+              {isUpcoming && (
+                <span className="chip chip-emerald !text-[9px]">Open</span>
+              )}
+              {isCompleted && (
+                <span className="chip !text-[9px]">Result</span>
               )}
             </div>
 
-            <TeamHero team={match.teamB} score={match.scoreB} />
-          </div>
+            <div className="flex items-center justify-between gap-2">
+              <TeamHero team={match.teamA} score={match.scoreA} />
 
-          <div className="flex items-center justify-center gap-1 text-[10px] text-white/70 font-bold mt-4">
-            <MapPin size={11} strokeWidth={2.5} />
-            <span className="truncate">{match.venue || "TBD"}</span>
+              <div className="flex flex-col items-center shrink-0 px-1">
+                {isUpcoming && typeof countdown !== "string" ? (
+                  <>
+                    <span className="t-eyebrow !text-[8.5px]">Starts in</span>
+                    <div className="flex items-center gap-1 mt-1.5">
+                      <CountdownBlock label="H" value={countdown.h} />
+                      <span className="num text-[var(--ink-faint)] font-extrabold">
+                        :
+                      </span>
+                      <CountdownBlock label="M" value={countdown.m} />
+                      <span className="num text-[var(--ink-faint)] font-extrabold">
+                        :
+                      </span>
+                      <CountdownBlock label="S" value={countdown.s} />
+                    </div>
+                  </>
+                ) : isLive ? (
+                  <>
+                    <span className="t-eyebrow !text-[8.5px] !text-[var(--crimson)]">
+                      Status
+                    </span>
+                    <span className="font-display font-extrabold text-base mt-1 tracking-tight text-[var(--ink)]">
+                      In Play
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="t-eyebrow !text-[8.5px]">Result</span>
+                    <span className="font-display font-extrabold text-[11px] mt-1 text-center max-w-[140px] leading-tight text-[var(--ink-dim)]">
+                      {match.statusNote || "Completed"}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              <TeamHero team={match.teamB} score={match.scoreB} />
+            </div>
+
+            <div className="flex items-center justify-center gap-1 text-[10px] text-[var(--ink-faint)] font-semibold mt-3">
+              <MapPin size={11} strokeWidth={2.5} />
+              <span className="truncate">{match.venue || "TBD"}</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Create-team CTA — shown first when user has no teams and the match
-          is still open. The user must create a team before seeing contests. */}
+      {/* Create-team CTA */}
       {isUpcoming && myTeams.length === 0 && (
-        <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-5 mb-3 text-white shadow-xl shadow-amber-500/15">
+        <div className="rounded-[16px] border border-[var(--line-gold)] bg-gold-soft grain p-4 mb-3">
           <div className="flex items-start gap-3">
-            <div className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center shrink-0">
-              <Users size={20} strokeWidth={2.5} />
+            <div className="grid place-items-center w-11 h-11 rounded-full bg-[var(--gold-soft)] border border-[var(--line-gold)] shrink-0">
+              <Users size={20} strokeWidth={2.5} className="text-[var(--gold-bright)]" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-black text-[15px] tracking-tight">
+              <p className="font-display text-[var(--ink)] font-extrabold text-[15px] tracking-tight">
                 Create your first team
               </p>
-              <p className="text-white/80 text-[11px] font-semibold mt-0.5">
+              <p className="text-[var(--ink-dim)] text-[12px] mt-0.5">
                 Pick 11 players, then choose a contest to join.
               </p>
             </div>
           </div>
           <button
             onClick={() => router.push(`/fantasy/match/${id}/create`)}
-            className="mt-4 w-full bg-white text-amber-600 font-black text-[13px] py-3 rounded-lg uppercase tracking-wide flex items-center justify-center gap-1.5 shadow-sm hover:bg-white/90 transition-colors"
+            className="mt-4 w-full btn btn-gold sweep h-11 uppercase tracking-[0.08em] text-[12px]"
           >
-            <Plus size={15} strokeWidth={3} /> Create Team
+            <Plus size={14} strokeWidth={3} /> Create Team
           </button>
         </div>
       )}
 
       {/* My Teams summary */}
       {myTeams.length > 0 && (
-        <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-3.5 mb-3 flex items-center justify-between">
+        <div className="rounded-[14px] border border-[var(--line-default)] bg-[var(--bg-surface)] p-3 mb-3 flex items-center justify-between">
           <div>
-            <p className="text-white font-black text-sm tracking-tight">
-              {myTeams.length} Team{myTeams.length > 1 ? "s" : ""} Created
+            <p className="font-display text-[var(--ink)] font-extrabold text-sm tracking-tight">
+              <span className="num">{myTeams.length}</span> Team
+              {myTeams.length > 1 ? "s" : ""} created
             </p>
-            <p className="text-white/50 text-[11px] font-semibold">
-              {myEntries.length} contest{myEntries.length !== 1 ? "s" : ""} joined
+            <p className="text-[var(--ink-faint)] text-[11px] font-semibold">
+              <span className="num">{myEntries.length}</span> contest
+              {myEntries.length !== 1 ? "s" : ""} joined
             </p>
           </div>
           <button
             onClick={() => setTab("my-teams")}
-            className="flex items-center gap-1 text-amber-400 font-black text-xs hover:text-amber-300 uppercase tracking-wide"
+            className="inline-flex items-center gap-1 chip chip-gold !py-1.5 !px-3 min-h-9"
           >
-            View <ChevronRight size={14} strokeWidth={2.5} />
+            View <ChevronRight size={12} strokeWidth={2.5} />
           </button>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] px-1 flex items-center mb-3 sticky top-2 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.04)] overflow-hidden">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex-1 text-[13px] font-black py-3 transition-all relative tracking-tight ${
-              tab === t.id ? "text-amber-400" : "text-white/50"
-            }`}
-          >
-            {t.label}
-            {t.id === "my-teams" && myTeams.length > 0 && (
-              <span className={`ml-1 text-[10px] font-black ${tab === t.id ? "text-amber-400" : "text-white/25"}`}>
-                ({myTeams.length})
-              </span>
-            )}
-            {tab === t.id && (
-              <span className="absolute bottom-0 left-1/4 right-1/4 h-[3px] bg-amber-400 rounded-t-full" />
-            )}
-          </button>
-        ))}
+      <div className="rounded-[14px] border border-[var(--line-default)] bg-[var(--bg-surface)] px-1 flex items-center mb-3 overflow-hidden">
+        {TABS.map((t) => {
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex-1 text-[12px] font-bold py-3 transition-all relative uppercase tracking-[0.08em] min-h-[44px] ${
+                active
+                  ? "text-[var(--gold-bright)]"
+                  : "text-[var(--ink-faint)] hover:text-[var(--ink)]"
+              }`}
+            >
+              {t.label}
+              {t.id === "my-teams" && myTeams.length > 0 && (
+                <span
+                  className={`num ml-1 text-[10px] font-extrabold ${
+                    active ? "text-[var(--gold-bright)]" : "text-[var(--ink-whisper)]"
+                  }`}
+                >
+                  ({myTeams.length})
+                </span>
+              )}
+              {active && (
+                <span
+                  className="absolute bottom-0 left-1/4 right-1/4 h-[2.5px] rounded-t-full"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, var(--gold-bright), var(--gold))",
+                    boxShadow: "0 0 10px var(--gold-halo)",
+                  }}
+                />
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {tab === "contests" && (
-        isUpcoming && myTeams.length === 0 ? (
-          <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-10 text-center">
-            <Users size={32} className="text-white/25 mx-auto mb-2" strokeWidth={1.5} />
-            <p className="text-white font-black text-sm mb-1">Create a team to see contests</p>
-            <p className="text-white/50 text-xs">Contests unlock once you&apos;ve built your first team for this match.</p>
+      {tab === "contests" &&
+        (isUpcoming && myTeams.length === 0 ? (
+          <div className="rounded-[16px] border border-[var(--line-default)] bg-[var(--bg-surface)] p-10 text-center">
+            <Users size={32} className="text-[var(--ink-whisper)] mx-auto mb-2" strokeWidth={1.5} />
+            <p className="font-display text-[var(--ink)] font-extrabold text-sm mb-1">
+              Create a team to see contests
+            </p>
+            <p className="text-[var(--ink-faint)] text-xs">
+              Contests unlock once you&apos;ve built your first team for this match.
+            </p>
           </div>
         ) : (
           <>
-            {/* Phase filter pills — full match / innings / powerplay */}
-            <div className="flex items-center gap-2 mb-3 overflow-x-auto -mx-1 px-1 no-scrollbar">
+            <div className="flex items-center gap-2 mb-3 overflow-x-auto no-scrollbar -mx-1 px-1">
               {PHASE_TABS.map((p) => {
                 const active = phase === p.id;
                 const count = phaseCounts[p.id];
@@ -332,16 +377,18 @@ export default function FantasyMatchPage() {
                   <button
                     key={p.id}
                     onClick={() => setPhase(p.id)}
-                    className={`shrink-0 inline-flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wide px-3 py-1.5 rounded-full border transition-all ${
+                    className={`shrink-0 inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] px-3 h-9 rounded-full border transition-all ${
                       active
-                        ? "bg-amber-500/20 border-amber-500/30 text-amber-300 shadow-sm shadow-amber-500/10"
-                        : "bg-white/[0.03] border-white/[0.06] text-white/50 hover:border-amber-500/30"
+                        ? "bg-[var(--gold-soft)] border-[var(--line-gold)] text-[var(--gold-bright)]"
+                        : "bg-[var(--bg-surface)] border-[var(--line-default)] text-[var(--ink-faint)] hover:border-[var(--line-gold)]"
                     }`}
                   >
                     {p.label}
                     <span
-                      className={`text-[10px] font-black ${
-                        active ? "text-amber-300/80" : "text-white/25"
+                      className={`num text-[10px] font-extrabold ${
+                        active
+                          ? "text-[var(--gold-bright)]/80"
+                          : "text-[var(--ink-whisper)]"
                       }`}
                     >
                       {count}
@@ -355,7 +402,7 @@ export default function FantasyMatchPage() {
               contests={visibleContests}
               joined={joinedContestIds}
               expanded={expanded}
-              canJoin={isUpcoming}
+              canJoin={!!isUpcoming}
               onJoin={handleJoin}
               onToggle={toggleExpand}
               matchId={match.externalMatchId}
@@ -366,8 +413,7 @@ export default function FantasyMatchPage() {
               }
             />
           </>
-        )
-      )}
+        ))}
 
       {tab === "my-teams" && (
         <MyTeamsList teams={myTeams} matchId={match.externalMatchId} disabled={!isUpcoming} />
@@ -375,10 +421,9 @@ export default function FantasyMatchPage() {
 
       {tab === "winnings" && <MyWinningsList entries={myEntries} />}
 
-      {/* Sticky helper hint */}
       {isUpcoming && tab === "contests" && (
         <div className="fixed bottom-[80px] md:bottom-6 left-0 right-0 z-40 px-4 md:max-w-sm md:mx-auto md:px-0 pointer-events-none">
-          <div className="flex items-center justify-center gap-2 bg-[#1a1f3a]/95 backdrop-blur-sm text-white rounded-xl py-3 font-black text-[12px] shadow-xl tracking-wide uppercase">
+          <div className="flex items-center justify-center gap-2 glass border border-[var(--line-gold)] text-[var(--gold-bright)] rounded-[14px] py-3 font-bold text-[12px] uppercase tracking-[0.08em] shadow-xl">
             <Plus size={15} strokeWidth={2.75} />
             {myTeams.length === 0 ? "Create a Team to start" : "Pick a Contest to join"}
           </div>
@@ -395,27 +440,35 @@ function TeamHero({ team, score }: { team: any; score: any }) {
       ? score.scores_full || score.scores || ""
       : "";
   return (
-    <div className="flex flex-col items-center gap-2 flex-1">
-      <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center overflow-hidden ring-2 ring-white/20 shadow-lg">
+    <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+      <div className="w-14 h-14 rounded-full bg-[var(--bg-elevated)] border border-[var(--line-default)] flex items-center justify-center overflow-hidden shrink-0">
         {img ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={img}
             alt={team.short}
-            className="w-11 h-11 object-contain"
+            className="w-10 h-10 object-contain"
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = "none";
               if (e.target instanceof HTMLImageElement && e.target.parentElement) {
-                e.target.parentElement.innerHTML = `<span class='text-[#1a1f3a] font-black text-sm'>${team.short}</span>`;
+                e.target.parentElement.innerHTML = `<span class='font-mono font-extrabold text-[11px] text-[var(--ink-dim)]'>${team.short}</span>`;
               }
             }}
           />
         ) : (
-          <span className="text-[#1a1f3a] font-black text-sm">{team.short}</span>
+          <span className="font-mono font-extrabold text-[11px] text-[var(--ink-dim)]">
+            {team.short}
+          </span>
         )}
       </div>
-      <p className="text-white font-black text-base tracking-tight">{team.short}</p>
-      {scoreStr && <p className="text-amber-300 font-black text-[11px]">{scoreStr}</p>}
+      <p className="font-display text-[var(--ink)] font-extrabold text-[14px] tracking-tight truncate max-w-full">
+        {team.short}
+      </p>
+      {scoreStr && (
+        <p className="num text-[var(--gold-bright)] font-bold text-[11px] truncate">
+          {scoreStr}
+        </p>
+      )}
     </div>
   );
 }
@@ -423,14 +476,12 @@ function TeamHero({ team, score }: { team: any; score: any }) {
 function CountdownBlock({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex flex-col items-center">
-      <div className="bg-white/10 backdrop-blur-sm border border-white/15 rounded-md px-2 py-1 min-w-[28px] text-center">
-        <span className="font-black text-base tracking-tight">
+      <div className="bg-[var(--bg-elevated)] border border-[var(--line-default)] rounded-md px-2 py-1 min-w-[28px] text-center">
+        <span className="num font-extrabold text-base tracking-tight text-[var(--ink)]">
           {String(value).padStart(2, "0")}
         </span>
       </div>
-      <span className="text-[8px] font-black text-white/50 uppercase mt-0.5 tracking-widest">
-        {label}
-      </span>
+      <span className="t-eyebrow !text-[8px] mt-0.5">{label}</span>
     </div>
   );
 }
@@ -456,8 +507,8 @@ function ContestsList({
 }) {
   if (contests.length === 0) {
     return (
-      <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-10 text-center">
-        <p className="text-white/50 font-semibold text-sm">{emptyLabel}</p>
+      <div className="rounded-[16px] border border-[var(--line-default)] bg-[var(--bg-surface)] p-10 text-center">
+        <p className="text-[var(--ink-faint)] font-semibold text-sm">{emptyLabel}</p>
       </div>
     );
   }
@@ -466,7 +517,10 @@ function ContestsList({
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-24">
       {contests.map((c) => {
         const isJoined = joined.has(c._id);
-        const pct = c.maxSpots > 0 ? Math.min(100, Math.round((c.filledSpots / c.maxSpots) * 100)) : 0;
+        const pct =
+          c.maxSpots > 0
+            ? Math.min(100, Math.round((c.filledSpots / c.maxSpots) * 100))
+            : 0;
         const firstPrize = c.prizeBreakdown[0]?.prize || c.totalPrize;
         const winnerCount = c.prizeBreakdown.reduce(
           (s, t) => s + (t.rankTo - t.rankFrom + 1),
@@ -478,15 +532,12 @@ function ContestsList({
           <Link
             key={c._id}
             href={`/fantasy/match/${matchId}/contest/${c._id}`}
-            className="block bg-white/[0.03] rounded-xl border border-white/[0.06] overflow-hidden hover:border-amber-500/30 hover:shadow-md transition-all"
+            className="block rounded-[16px] border border-[var(--line-default)] bg-[var(--bg-surface)] overflow-hidden hover:border-[var(--line-gold)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lift)] transition-all"
           >
-            {/* Top: prize pool + entry */}
             <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-black uppercase tracking-widest text-white/50 mb-1">
-                  Prize Pool
-                </p>
-                <p className="text-white font-black text-2xl leading-none tracking-tight">
+                <p className="t-eyebrow !text-[9px] mb-1">Prize Pool</p>
+                <p className="num font-display text-[var(--ink)] font-extrabold text-2xl leading-none tracking-tight">
                   ₹{c.totalPrize.toLocaleString("en-IN")}
                 </p>
               </div>
@@ -497,53 +548,63 @@ function ContestsList({
                   onJoin(c);
                 }}
                 disabled={!canJoin || isJoined}
-                className={`shrink-0 text-[13px] font-black px-5 py-2.5 rounded-lg transition-all min-w-[84px] tracking-wide ${
+                className={`shrink-0 text-[12px] font-extrabold px-4 min-h-[44px] rounded-[10px] transition-all min-w-[88px] uppercase tracking-[0.08em] inline-flex items-center justify-center gap-1.5 ${
                   isJoined
-                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                    ? "bg-[var(--emerald-soft)] border border-[var(--emerald)]/25 text-[var(--emerald)]"
                     : !canJoin
-                      ? "bg-white/[0.04] text-white/25 border border-white/[0.06] cursor-not-allowed"
-                      : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 shadow-sm"
+                      ? "bg-[var(--bg-elevated)] text-[var(--ink-whisper)] border border-[var(--line-default)] cursor-not-allowed"
+                      : "btn btn-gold sweep"
                 }`}
               >
-                {isJoined
-                  ? "View"
-                  : !canJoin
-                    ? "Closed"
-                    : c.entryFee === 0
-                      ? "FREE"
-                      : `₹${c.entryFee}`}
+                {isJoined ? (
+                  "View"
+                ) : !canJoin ? (
+                  "Closed"
+                ) : c.entryFee === 0 ? (
+                  "FREE"
+                ) : (
+                  <span className="num">₹{c.entryFee}</span>
+                )}
               </button>
             </div>
 
-            {/* Progress bar */}
             <div className="px-4 pb-2.5">
-              <div className="w-full h-1.5 rounded-full bg-white/[0.04] overflow-hidden">
+              <div className="w-full h-1.5 rounded-full bg-[var(--ink-ghost)] overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all ${pct >= 90 ? "bg-amber-500" : "bg-amber-400"}`}
+                  className="h-full rounded-full transition-all bg-gold-grad"
                   style={{ width: `${pct}%` }}
                 />
               </div>
-              <div className="flex items-center justify-between mt-1 text-[10px] font-black">
-                <span className="text-amber-400">
-                  {c.maxSpots - c.filledSpots > 0
-                    ? `${(c.maxSpots - c.filledSpots).toLocaleString("en-IN")} spots left`
-                    : "Contest Full"}
+              <div className="flex items-center justify-between mt-1 text-[10px] font-bold">
+                <span className="text-[var(--gold-bright)]">
+                  {c.maxSpots - c.filledSpots > 0 ? (
+                    <>
+                      <span className="num">
+                        {(c.maxSpots - c.filledSpots).toLocaleString("en-IN")}
+                      </span>{" "}
+                      spots left
+                    </>
+                  ) : (
+                    "Contest Full"
+                  )}
                 </span>
-                <span className="text-white/50">
+                <span className="num text-[var(--ink-faint)]">
                   {c.maxSpots.toLocaleString("en-IN")} spots
                 </span>
               </div>
             </div>
 
-            {/* Badges row */}
-            <div className="flex items-center gap-2 px-4 py-2.5 border-t border-white/[0.04] bg-white/[0.04] text-[10px] flex-wrap">
-              <Badge icon="🏆" label={`1st ₹${firstPrize.toLocaleString("en-IN")}`} />
-              <Badge icon="👥" label={`${winnerCount || 1} Winner${winnerCount > 1 ? "s" : ""}`} />
-              {c.maxSpots === 2 && <Badge icon="⚔️" label="H2H" />}
-              {c.entryFee === 0 && <Badge icon="🎁" label="Free" />}
-              {c.phase === "innings1" && <Badge icon="🏏" label="1st Inn" />}
-              {c.phase === "innings2" && <Badge icon="🎯" label="2nd Inn" />}
-              {c.phase === "powerplay" && <Badge icon="⚡" label="Powerplay" />}
+            <div className="flex items-center gap-1.5 px-4 py-2.5 border-t border-[var(--line)] bg-[var(--bg-elevated)] text-[10px] flex-wrap">
+              <Badge label={`1st ₹${firstPrize.toLocaleString("en-IN")}`} icon={<Trophy size={9} className="text-[var(--gold)]" />} />
+              <Badge
+                label={`${winnerCount || 1} Winner${winnerCount > 1 ? "s" : ""}`}
+                icon={<Users size={9} className="text-[var(--ice)]" />}
+              />
+              {c.maxSpots === 2 && <Badge label="H2H" />}
+              {c.entryFee === 0 && <Badge label="Free" />}
+              {c.phase === "innings1" && <Badge label="1st Inn" />}
+              {c.phase === "innings2" && <Badge label="2nd Inn" />}
+              {c.phase === "powerplay" && <Badge label="Powerplay" />}
             </div>
 
             {c.prizeBreakdown.length > 0 && (
@@ -553,7 +614,7 @@ function ContestsList({
                   e.stopPropagation();
                   onToggle(c._id);
                 }}
-                className="w-full flex items-center justify-center gap-1 px-4 py-2.5 border-t border-white/[0.04] text-amber-400 font-black text-[11px] hover:bg-amber-500/10 transition-colors uppercase tracking-wide"
+                className="w-full flex items-center justify-center gap-1 px-4 py-2.5 border-t border-[var(--line)] text-[var(--gold-bright)] font-bold text-[11px] hover:bg-[var(--gold-soft)] transition-colors uppercase tracking-[0.08em] min-h-[44px]"
               >
                 {isExpanded ? "Hide" : "View"} Prize Breakup
                 <ChevronDown
@@ -565,17 +626,17 @@ function ContestsList({
             )}
 
             {isExpanded && c.prizeBreakdown.length > 0 && (
-              <div className="px-4 py-3 border-t border-white/[0.04] bg-amber-500/10">
+              <div className="px-4 py-3 border-t border-[var(--line)] bg-[var(--gold-soft)]">
                 <div className="grid grid-cols-2 gap-y-1.5 gap-x-4 text-[11px]">
-                  <div className="font-black text-white/50 uppercase text-[9px] tracking-widest">Rank</div>
-                  <div className="font-black text-white/50 uppercase text-[9px] text-right tracking-widest">Prize</div>
+                  <div className="t-eyebrow !text-[9px]">Rank</div>
+                  <div className="t-eyebrow !text-[9px] text-right">Prize</div>
                   {c.prizeBreakdown.map((t, i) => (
                     <React.Fragment key={i}>
-                      <div className="text-white/70 font-bold">
+                      <div className="num text-[var(--ink-dim)] font-bold">
                         #{t.rankFrom}
                         {t.rankTo > t.rankFrom ? ` – #${t.rankTo}` : ""}
                       </div>
-                      <div className="text-white font-black text-right">
+                      <div className="num text-[var(--ink)] font-extrabold text-right">
                         ₹{t.prize.toLocaleString("en-IN")}
                       </div>
                     </React.Fragment>
@@ -590,10 +651,10 @@ function ContestsList({
   );
 }
 
-function Badge({ icon, label }: { icon: string; label: string }) {
+function Badge({ label, icon }: { label: string; icon?: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1 bg-white/[0.03] border border-white/[0.06] rounded-md px-2 py-0.5 font-black text-white/70 text-[10px]">
-      <span className="text-[10px]">{icon}</span>
+    <span className="inline-flex items-center gap-1 bg-[var(--bg-surface)] border border-[var(--line-default)] rounded-md px-2 py-0.5 font-bold text-[var(--ink-dim)] text-[10px]">
+      {icon}
       {label}
     </span>
   );
@@ -602,7 +663,6 @@ function Badge({ icon, label }: { icon: string; label: string }) {
 function MyTeamsList({
   teams,
   matchId,
-  disabled,
 }: {
   teams: any[];
   matchId: number;
@@ -610,10 +670,14 @@ function MyTeamsList({
 }) {
   if (teams.length === 0) {
     return (
-      <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-10 text-center">
-        <Users size={32} className="text-white/25 mx-auto mb-2" strokeWidth={1.5} />
-        <p className="text-white font-black text-sm mb-1">No teams created yet</p>
-        <p className="text-white/50 text-xs mb-4">Create your first dream team to start playing</p>
+      <div className="rounded-[16px] border border-[var(--line-default)] bg-[var(--bg-surface)] p-10 text-center">
+        <Users size={32} className="text-[var(--ink-whisper)] mx-auto mb-2" strokeWidth={1.5} />
+        <p className="font-display text-[var(--ink)] font-extrabold text-sm mb-1">
+          No teams created yet
+        </p>
+        <p className="text-[var(--ink-faint)] text-xs mb-4">
+          Create your first dream team to start playing
+        </p>
       </div>
     );
   }
@@ -621,50 +685,53 @@ function MyTeamsList({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-24">
       {teams.map((team) => {
-        const captain = team.players?.find((p: any) => p.playerId === team.captainId);
-        const viceCaptain = team.players?.find((p: any) => p.playerId === team.viceCaptainId);
+        const captain = team.players?.find(
+          (p: any) => p.playerId === team.captainId,
+        );
+        const viceCaptain = team.players?.find(
+          (p: any) => p.playerId === team.viceCaptainId,
+        );
         const roleCounts: Record<string, number> = {};
-        for (const p of team.players || []) roleCounts[p.role] = (roleCounts[p.role] || 0) + 1;
+        for (const p of team.players || [])
+          roleCounts[p.role] = (roleCounts[p.role] || 0) + 1;
 
         return (
           <Link
             key={team._id}
             href={`/fantasy/match/${matchId}/team/${team._id}`}
-            className="block bg-white/[0.03] rounded-xl border border-white/[0.06] hover:border-amber-500/30 transition-all overflow-hidden"
+            className="block rounded-[16px] border border-[var(--line-default)] bg-[var(--bg-surface)] hover:border-[var(--line-gold)] transition-all overflow-hidden"
           >
-            <div className="flex items-center justify-between px-4 py-2.5 bg-white/[0.04] border-b border-white/[0.04]">
-              <span className="text-white font-black text-sm tracking-tight">
+            <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-elevated)] border-b border-[var(--line)]">
+              <span className="font-display text-[var(--ink)] font-extrabold text-sm tracking-tight truncate">
                 {team.teamName}
               </span>
-              <span className="text-[10px] font-black text-amber-300 bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                {team.players?.length || 0} Players
+              <span className="chip chip-gold !text-[9px]">
+                <span className="num">{team.players?.length || 0}</span> Players
               </span>
             </div>
             <div className="px-4 py-3">
               <div className="grid grid-cols-2 gap-2 mb-2.5">
-                <div className="bg-amber-500/15 border border-amber-500/30 rounded-lg p-2">
+                <div className="bg-[var(--gold-soft)] border border-[var(--line-gold)] rounded-[10px] p-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-[8px] font-black uppercase text-amber-300 tracking-widest">
-                      Captain
-                    </p>
-                    <span className="text-[8px] font-black bg-amber-500 text-white px-1 py-[1px] rounded tracking-wide">
+                    <p className="t-eyebrow !text-[8px]">Captain</p>
+                    <span className="num text-[8px] font-extrabold bg-[var(--gold)] text-[var(--bg-base)] px-1 py-[1px] rounded tracking-wide">
                       2x
                     </span>
                   </div>
-                  <p className="text-white font-black text-xs truncate tracking-tight">
+                  <p className="text-[var(--ink)] font-extrabold text-xs truncate tracking-tight">
                     {captain?.name || "—"}
                   </p>
                 </div>
-                <div className="bg-amber-500/15 border border-amber-500/30 rounded-lg p-2">
+                <div className="bg-[var(--ice-soft)] border border-[var(--ice)]/25 rounded-[10px] p-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-[8px] font-black uppercase text-amber-400 tracking-widest">
+                    <p className="t-eyebrow !text-[8px] !text-[var(--ice)]">
                       Vice Captain
                     </p>
-                    <span className="text-[8px] font-black bg-amber-500 text-white px-1 py-[1px] rounded tracking-wide">
+                    <span className="num text-[8px] font-extrabold bg-[var(--ice)] text-[var(--bg-base)] px-1 py-[1px] rounded tracking-wide">
                       1.5x
                     </span>
                   </div>
-                  <p className="text-white font-black text-xs truncate tracking-tight">
+                  <p className="text-[var(--ink)] font-extrabold text-xs truncate tracking-tight">
                     {viceCaptain?.name || "—"}
                   </p>
                 </div>
@@ -676,7 +743,7 @@ function MyTeamsList({
                   <RoleCount label="AR" count={roleCounts.allrounder || 0} />
                   <RoleCount label="BOWL" count={roleCounts.bowler || 0} />
                 </div>
-                <ChevronRight size={15} className="text-white/25" />
+                <ChevronRight size={15} className="text-[var(--ink-whisper)]" />
               </div>
             </div>
           </Link>
@@ -689,8 +756,12 @@ function MyTeamsList({
 function RoleCount({ label, count }: { label: string; count: number }) {
   return (
     <div className="flex items-center gap-1">
-      <span className="text-white/25 font-black text-[9px] tracking-wide">{label}</span>
-      <span className="text-white font-black text-[11px]">{count}</span>
+      <span className="text-[var(--ink-whisper)] font-bold text-[9px] tracking-wide">
+        {label}
+      </span>
+      <span className="num text-[var(--ink)] font-extrabold text-[11px]">
+        {count}
+      </span>
     </div>
   );
 }
@@ -698,10 +769,14 @@ function RoleCount({ label, count }: { label: string; count: number }) {
 function MyWinningsList({ entries }: { entries: any[] }) {
   if (entries.length === 0) {
     return (
-      <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-10 text-center">
-        <Award size={32} className="text-white/25 mx-auto mb-2" strokeWidth={1.5} />
-        <p className="text-white font-black text-sm mb-1">No contests joined yet</p>
-        <p className="text-white/50 text-xs">Your winnings will appear here after you join contests.</p>
+      <div className="rounded-[16px] border border-[var(--line-default)] bg-[var(--bg-surface)] p-10 text-center">
+        <Award size={32} className="text-[var(--ink-whisper)] mx-auto mb-2" strokeWidth={1.5} />
+        <p className="font-display text-[var(--ink)] font-extrabold text-sm mb-1">
+          No contests joined yet
+        </p>
+        <p className="text-[var(--ink-faint)] text-xs">
+          Your winnings will appear here after you join contests.
+        </p>
       </div>
     );
   }
@@ -712,18 +787,21 @@ function MyWinningsList({ entries }: { entries: any[] }) {
         const isWon = e.winnings > 0;
         const isSettled = e.status === "settled";
         return (
-          <div key={e._id} className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-3.5">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-black uppercase text-white/50 truncate tracking-wide">
+          <div
+            key={e._id}
+            className="rounded-[14px] border border-[var(--line-default)] bg-[var(--bg-surface)] p-3.5"
+          >
+            <div className="flex items-center justify-between mb-2 gap-2">
+              <span className="t-eyebrow truncate">
                 {e.contest?.title || "Contest"}
               </span>
               <span
-                className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wide ${
+                className={`chip !text-[9px] ${
                   isWon
-                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                    ? "chip-emerald"
                     : isSettled
-                      ? "bg-red-500/15 text-red-300 border border-red-500/30"
-                      : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                      ? "chip-crimson"
+                      : "chip-gold"
                 }`}
               >
                 {isWon ? "WON" : isSettled ? "LOST" : "LIVE"}
@@ -731,24 +809,28 @@ function MyWinningsList({ entries }: { entries: any[] }) {
             </div>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[10px] text-white/50 font-bold uppercase tracking-wide">Rank</p>
-                <p className="text-white font-black text-sm tracking-tight">
+                <p className="t-eyebrow !text-[10px]">Rank</p>
+                <p className="num font-extrabold text-sm tracking-tight text-[var(--ink)]">
                   {e.rank > 0 ? `#${e.rank.toLocaleString("en-IN")}` : "—"}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-white/50 font-bold uppercase tracking-wide">Entry</p>
-                <p className="text-white font-black text-sm tracking-tight">
+                <p className="t-eyebrow !text-[10px]">Entry</p>
+                <p className="num font-extrabold text-sm tracking-tight text-[var(--ink)]">
                   ₹{e.entryFee}
                 </p>
               </div>
               <div>
-                <p className="text-[10px] text-white/50 text-right font-bold uppercase tracking-wide">
+                <p className="t-eyebrow !text-[10px] text-right">
                   {isWon ? "Winnings" : isSettled ? "Result" : "Status"}
                 </p>
                 <p
-                  className={`font-black text-sm text-right tracking-tight ${
-                    isWon ? "text-emerald-400" : isSettled ? "text-red-400" : "text-amber-400"
+                  className={`num font-extrabold text-sm text-right tracking-tight ${
+                    isWon
+                      ? "text-[var(--emerald)]"
+                      : isSettled
+                        ? "text-[var(--crimson)]"
+                        : "text-[var(--gold-bright)]"
                   }`}
                 >
                   {isWon ? `+₹${e.winnings}` : isSettled ? "No win" : "Live"}

@@ -30,15 +30,15 @@ function TeamAvatar({ name, isLive, score }: { name: string; isLive: boolean; sc
             <div
                 className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-[11px] font-black border transition-all ${
                     isLive
-                        ? 'bg-red-500/15 border-red-500/25 text-red-400'
-                        : 'bg-white/[0.04] border-white/[0.08] text-white/70'
+                        ? 'bg-[var(--crimson-soft)] border-[var(--crimson)]/25 text-[var(--crimson)]'
+                        : 'bg-white/[0.04] border-[var(--line-default)] text-[var(--ink-dim)]'
                 }`}
             >
                 {getInitials(name)}
             </div>
-            <span className="flex-1 text-[13px] font-bold text-white truncate">{name}</span>
+            <span className="flex-1 text-[13px] font-bold text-[var(--ink)] truncate min-w-0">{name}</span>
             {score != null && (
-                <span className={`text-[15px] font-black min-w-[24px] text-right tabular-nums ${isLive ? 'text-red-400' : 'text-white/70'}`}>
+                <span className={`num text-[15px] font-black min-w-[24px] text-right ${isLive ? 'text-[var(--crimson)]' : 'text-[var(--ink-dim)]'}`}>
                     {score}
                 </span>
             )}

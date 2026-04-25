@@ -41,7 +41,7 @@ function SkeletonGrid({ count = 18 }: { count?: number }) {
     return (
         <section className="w-full">
             <div className="mb-3 px-3 h-8 w-40 rounded-md bg-white/[0.04] animate-pulse" />
-            <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
                 {Array.from({ length: count }).map((_, i) => (
                     <div key={i} className="aspect-[3/4] rounded-[10px] bg-white/[0.04] animate-pulse" />
                 ))}
@@ -178,7 +178,7 @@ const GameGrid: React.FC<GameGridProps> = ({ title, icon, category, sectionKey, 
                     <div className="min-w-3 flex-shrink-0" />
                 </div>
             ) : (
-                <div className="grid grid-cols-3 gap-1 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7">
                     {games.map((game, idx) => (
                         <GameCard
                             key={game.id || idx}

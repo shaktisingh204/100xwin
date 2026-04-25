@@ -143,11 +143,11 @@ function MobileCategoryBarInner() {
     if (pathname.includes('/live-dealers')) return null;
 
     return (
-        <div className="md:hidden w-full bg-[#06080c] border-b border-white/[0.06] overflow-x-auto no-scrollbar sticky top-[64px] z-40">
-            <div className="flex items-center gap-2 p-3 min-w-max">
+        <div className="lg:hidden w-full bg-[var(--bg-base)] border-b border-[var(--line-default)] overflow-x-auto no-scrollbar sticky top-[var(--header-height)] z-40">
+            <div className="flex items-center gap-2 p-3 min-w-max snap-x snap-proximity">
                 {loading ? (
                     // Skeletons
-                    [1, 2, 3, 4].map(i => <div key={i} className="h-8 w-24 bg-white/[0.04] rounded-full animate-pulse" />)
+                    [1, 2, 3, 4].map(i => <div key={i} className="h-9 w-24 bg-white/[0.04] rounded-full animate-pulse" />)
                 ) : (
                     categories.map((cat) => {
                         // Active State Logic
@@ -163,10 +163,10 @@ function MobileCategoryBarInner() {
                                 key={cat.id}
                                 href={cat.path}
                                 className={`
-                                    flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black whitespace-nowrap border transition-all
+                                    snap-start flex items-center gap-2 px-4 min-h-[40px] rounded-full text-xs font-black whitespace-nowrap border transition-all
                                     ${isActive
-                                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                                        : 'bg-white/[0.03] text-white/70 border-white/[0.08] hover:bg-white/[0.05] hover:text-white'
+                                        ? 'bg-[var(--gold-soft)] text-[var(--gold-bright)] border-[var(--gold-line)]'
+                                        : 'bg-white/[0.03] text-[var(--ink-dim)] border-[var(--line-default)] hover:bg-white/[0.05] hover:text-[var(--ink)]'
                                     }
                                 `}
                             >

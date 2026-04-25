@@ -454,7 +454,7 @@ function CasinoContent() {
 
           {/* Loading skeleton */}
           {loading && games.length === 0 && (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2.5">
               {Array.from({ length: 24 }).map((_, i) => (
                 <div key={i} className="aspect-[3/4] rounded-[16px] skeleton" />
               ))}
@@ -463,7 +463,7 @@ function CasinoContent() {
 
           {/* Game grid */}
           {games.length > 0 && (
-            <div className="stagger grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 2xl:grid-cols-8 gap-2.5">
+            <div className="stagger grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-2.5">
               {games.map((game, i) => (
                 <GameCard
                   key={(game.id || game.gameCode || "g") + i}

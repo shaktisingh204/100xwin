@@ -238,8 +238,8 @@ function RailArrow({ direction, onClick }: { direction: 'left' | 'right'; onClic
   const Icon = direction === 'left' ? ChevronLeft : ChevronRight;
   return (
     <button type="button" onClick={onClick} aria-label={`Scroll ${direction}`}
-      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] border border-white/[0.08] text-white/70 transition hover:bg-white/[0.08] hover:text-white active:scale-90">
-      <Icon size={14} />
+      className="hidden md:flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] border border-[var(--line-default)] text-[var(--ink-dim)] transition hover:bg-white/[0.08] hover:text-[var(--ink)] active:scale-90">
+      <Icon size={16} />
     </button>
   );
 }

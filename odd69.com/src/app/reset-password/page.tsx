@@ -33,7 +33,7 @@ function ResetForm() {
         <p className="text-[13px] text-[var(--ink-dim)] mt-2 mb-5 leading-relaxed">
           This password reset link is invalid or missing. Please request a new one.
         </p>
-        <Link href="/forgot-password" className="btn btn-gold sweep h-11 uppercase tracking-[0.06em] text-[12px]">
+        <Link href="/forgot-password" className="btn btn-gold sweep h-12 uppercase tracking-[0.06em] text-[12px]">
           Request new link
         </Link>
       </div>
@@ -109,10 +109,11 @@ function ResetForm() {
             <input
               type={showPw ? "text" : "password"}
               placeholder="Minimum 8 characters"
+              autoComplete="new-password"
               value={password}
               onChange={(e) => { setPassword(e.target.value); setError(""); }}
               autoFocus
-              className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
+              className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
                 error ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
               }`}
             />
@@ -134,9 +135,10 @@ function ResetForm() {
             <input
               type={showConfirm ? "text" : "password"}
               placeholder="Repeat your password"
+              autoComplete="new-password"
               value={confirm}
               onChange={(e) => { setConfirm(e.target.value); setError(""); }}
-              className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
+              className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
                 error ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
               }`}
             />
@@ -180,7 +182,7 @@ function ResetForm() {
         <button
           type="submit"
           disabled={loading || !allValid}
-          className="btn btn-gold sweep h-11 w-full uppercase tracking-[0.06em] text-[12px] disabled:opacity-40"
+          className="btn btn-gold sweep h-12 w-full uppercase tracking-[0.06em] text-[12px] disabled:opacity-40"
         >
           {loading ? (
             <><Loader2 size={14} className="animate-spin" /> Resetting</>

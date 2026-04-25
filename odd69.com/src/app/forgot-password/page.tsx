@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -12,6 +12,84 @@ import toast from "react-hot-toast";
 
 type Mode = "phone" | "email";
 type PhoneStep = "enter_phone" | "verify_otp" | "new_password" | "done";
+
+/* ── 6-cell paste-aware OTP input (inline) ─────────────────────────────── */
+function OtpCells({
+  value, onChange, length = 6, error = false, autoFocus = false,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  length?: number;
+  error?: boolean;
+  autoFocus?: boolean;
+}) {
+  const inputs = useRef<Array<HTMLInputElement | null>>([]);
+  const focus = useCallback((i: number) => {
+    const el = inputs.current[i];
+    if (el) { el.focus(); el.select(); }
+  }, []);
+  useEffect(() => {
+    if (autoFocus) focus(Math.min(value.length, length - 1));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const onCellChange = (i: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    if (!raw) { const arr = value.split(""); arr[i] = ""; onChange(arr.join("")); return; }
+    const digits = raw.replace(/\D/g, "");
+    if (!digits) return;
+    if (digits.length === 1) {
+      const arr = value.padEnd(length, " ").split("");
+      arr[i] = digits;
+      onChange(arr.join("").replace(/\s/g, "").slice(0, length));
+      if (i < length - 1) focus(i + 1);
+    } else {
+      const merged = (value.slice(0, i) + digits).slice(0, length);
+      onChange(merged);
+      focus(Math.min(i + digits.length, length - 1));
+    }
+  };
+  const onKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") {
+      if (value[i]) { const arr = value.split(""); arr[i] = ""; onChange(arr.join("")); e.preventDefault(); }
+      else if (i > 0) { const arr = value.split(""); arr[i - 1] = ""; onChange(arr.join("")); focus(i - 1); e.preventDefault(); }
+    } else if (e.key === "ArrowLeft" && i > 0) { focus(i - 1); e.preventDefault(); }
+    else if (e.key === "ArrowRight" && i < length - 1) { focus(i + 1); e.preventDefault(); }
+    else if (e.key === "Home") { focus(0); e.preventDefault(); }
+    else if (e.key === "End") { focus(length - 1); e.preventDefault(); }
+  };
+  const onPaste = (i: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "");
+    if (!pasted) return;
+    const merged = (value.slice(0, i) + pasted).slice(0, length);
+    onChange(merged);
+    setTimeout(() => focus(Math.min(i + pasted.length, length - 1)), 0);
+  };
+  return (
+    <div className="flex gap-1.5 sm:gap-2 w-full" role="group" aria-label="One-time passcode">
+      {Array.from({ length }).map((_, i) => (
+        <input
+          key={i}
+          ref={(el) => { inputs.current[i] = el; }}
+          type="text"
+          inputMode="numeric"
+          autoComplete={i === 0 ? "one-time-code" : "off"}
+          pattern="[0-9]*"
+          maxLength={1}
+          aria-label={`Digit ${i + 1}`}
+          value={value[i] ?? ""}
+          onChange={(e) => onCellChange(i, e)}
+          onKeyDown={(e) => onKey(i, e)}
+          onPaste={(e) => onPaste(i, e)}
+          onFocus={(e) => e.target.select()}
+          className={`flex-1 min-w-0 h-14 text-[22px] font-bold text-center num text-[var(--ink)] bg-[var(--bg-inlay)] border rounded-[10px] focus:outline-none transition-colors ${
+            error ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -160,7 +238,7 @@ export default function ForgotPasswordPage() {
                   Your password has been changed successfully. Redirecting to home…
                 </p>
                 <div className="mt-5">
-                  <button onClick={() => router.push("/")} className="btn btn-gold sweep h-11 w-full uppercase tracking-[0.06em] text-[12px]">
+                  <button onClick={() => router.push("/")} className="btn btn-gold sweep h-12 w-full uppercase tracking-[0.06em] text-[12px]">
                     Go to home
                   </button>
                 </div>
@@ -189,7 +267,7 @@ export default function ForgotPasswordPage() {
                   <h1 className="t-section !text-[20px]">Reset your password</h1>
                   <p className="text-[13px] text-[var(--ink-dim)] mt-2">
                     {mode === "email"
-                      ? "We&rsquo;ll email you a secure reset link."
+                      ? "We’ll email you a secure reset link."
                       : phoneStep === "verify_otp" || phoneStep === "new_password"
                       ? "Enter the OTP and set a new password."
                       : "Reset via email link or phone OTP."}
@@ -231,7 +309,7 @@ export default function ForgotPasswordPage() {
                           value={email}
                           onChange={(e) => { setEmail(e.target.value); setEmailError(""); }}
                           autoFocus
-                          className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
+                          className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
                             emailError ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
                           }`}
                         />
@@ -246,7 +324,7 @@ export default function ForgotPasswordPage() {
                     <button
                       type="submit"
                       disabled={emailLoading || !email.trim()}
-                      className="btn btn-gold sweep h-11 w-full uppercase tracking-[0.06em] text-[12px] disabled:opacity-40"
+                      className="btn btn-gold sweep h-12 w-full uppercase tracking-[0.06em] text-[12px] disabled:opacity-40"
                     >
                       {emailLoading ? (
                         <><Loader2 size={14} className="animate-spin" /> Sending</>
@@ -300,7 +378,7 @@ export default function ForgotPasswordPage() {
                               value={phone}
                               onChange={(e) => { setPhone(e.target.value); setPhoneError(""); }}
                               autoFocus
-                              className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors num ${
+                              className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors num ${
                                 phoneError ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
                               }`}
                             />
@@ -315,7 +393,7 @@ export default function ForgotPasswordPage() {
                         <button
                           type="submit"
                           disabled={phoneLoading || phone.trim().length < 10}
-                          className="btn btn-gold sweep h-11 w-full uppercase tracking-[0.06em] text-[12px] disabled:opacity-40"
+                          className="btn btn-gold sweep h-12 w-full uppercase tracking-[0.06em] text-[12px] disabled:opacity-40"
                         >
                           {phoneLoading ? (
                             <><Loader2 size={14} className="animate-spin" /> Sending OTP</>
@@ -335,34 +413,28 @@ export default function ForgotPasswordPage() {
                         <p className="text-[12.5px] text-[var(--ink-dim)] text-center">
                           OTP sent to <span className="text-[var(--ink)] font-semibold num">{phone}</span>
                         </p>
-                        <label className="block">
-                          <span className="text-[11.5px] font-medium text-[var(--ink-dim)] mb-1.5 block">OTP code</span>
-                          <div className="relative">
-                            <ShieldCheck size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              maxLength={6}
-                              placeholder="000000"
-                              value={otp}
-                              onChange={(e) => { setOtp(e.target.value.replace(/\D/g, "").slice(0, 6)); setPhoneError(""); }}
-                              autoFocus
-                              className={`w-full h-12 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-center tracking-[0.4em] text-[18px] font-bold text-[var(--ink)] placeholder:text-[var(--ink-whisper)] placeholder:tracking-normal placeholder:font-normal focus:outline-none transition-colors num ${
-                                phoneError ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
-                              }`}
-                            />
+                        <div className="block">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <ShieldCheck size={13} className="text-[var(--gold-bright)]" />
+                            <span className="text-[11.5px] font-medium text-[var(--ink-dim)]">Enter OTP code</span>
                           </div>
+                          <OtpCells
+                            value={otp}
+                            onChange={(v) => { setOtp(v); setPhoneError(""); }}
+                            error={!!phoneError}
+                            autoFocus
+                          />
                           {phoneError && (
                             <p className="text-[var(--crimson)] text-[11.5px] mt-1.5 flex items-center gap-1">
                               <AlertCircle size={11} /> {phoneError}
                             </p>
                           )}
-                        </label>
+                        </div>
 
                         <button
                           type="submit"
                           disabled={otp.length < 4}
-                          className="btn btn-gold sweep h-11 w-full uppercase tracking-[0.06em] text-[12px] disabled:opacity-40"
+                          className="btn btn-gold sweep h-12 w-full uppercase tracking-[0.06em] text-[12px] disabled:opacity-40"
                         >
                           Continue <ArrowRight size={13} />
                         </button>
@@ -386,10 +458,11 @@ export default function ForgotPasswordPage() {
                             <input
                               type={showPass ? "text" : "password"}
                               placeholder="Min. 6 characters"
+                              autoComplete="new-password"
                               value={newPass}
                               onChange={(e) => { setNewPass(e.target.value); setPhoneError(""); }}
                               autoFocus
-                              className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
+                              className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
                                 phoneError ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
                               }`}
                             />
@@ -411,9 +484,10 @@ export default function ForgotPasswordPage() {
                             <input
                               type={showPass ? "text" : "password"}
                               placeholder="Repeat new password"
+                              autoComplete="new-password"
                               value={confirmPass}
                               onChange={(e) => { setConfirmPass(e.target.value); setPhoneError(""); }}
-                              className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
+                              className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
                                 phoneError ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
                               }`}
                             />
@@ -428,7 +502,7 @@ export default function ForgotPasswordPage() {
                         <button
                           type="submit"
                           disabled={phoneLoading || newPass.length < 6 || newPass !== confirmPass}
-                          className="btn btn-gold sweep h-11 w-full uppercase tracking-[0.06em] text-[12px] disabled:opacity-40"
+                          className="btn btn-gold sweep h-12 w-full uppercase tracking-[0.06em] text-[12px] disabled:opacity-40"
                         >
                           {phoneLoading ? (
                             <><Loader2 size={14} className="animate-spin" /> Resetting</>

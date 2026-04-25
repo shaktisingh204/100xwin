@@ -9,16 +9,16 @@ interface PromotionCardProps {
     promo: Promotion;
 }
 
-const CATEGORY_STYLE: Record<string, { color: string; bg: string }> = {
-    CASINO: { color: 'text-amber-300', bg: 'bg-amber-500/15' },
-    SPORTS: { color: 'text-emerald-300', bg: 'bg-emerald-500/15' },
-    LIVE: { color: 'text-amber-300', bg: 'bg-amber-500/15' },
-    VIP: { color: 'text-amber-300', bg: 'bg-amber-500/15' },
-    ALL: { color: 'text-white/70', bg: 'bg-white/[0.06]' },
+const CATEGORY_CHIP: Record<string, string> = {
+    CASINO: 'chip-gold',
+    SPORTS: 'chip-emerald',
+    LIVE: 'chip-crimson',
+    VIP: 'chip-gold',
+    ALL: '',
 };
 
 export default function PromotionCard({ promo }: PromotionCardProps) {
-    const cat = CATEGORY_STYLE[promo.category || 'ALL'] || CATEGORY_STYLE.ALL;
+    const chipClass = CATEGORY_CHIP[(promo.category || 'ALL').toUpperCase()] || '';
 
     const daysLeft = promo.expiryDate
         ? Math.max(0, Math.ceil((new Date(promo.expiryDate).getTime() - Date.now()) / 86400000))
@@ -32,120 +32,129 @@ export default function PromotionCard({ promo }: PromotionCardProps) {
     return (
         <Link
             href={`/promotions/${promo._id}`}
-            className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02] transition-all duration-200 hover:border-amber-500/30 hover:shadow-[0_8px_32px_rgba(245,158,11,0.1)] active:scale-[0.99]"
+            className="group relative flex flex-col overflow-hidden rounded-[18px] border border-[var(--line-default)] bg-[var(--bg-surface)] transition-all duration-200 hover:border-[var(--line-gold)] hover:-translate-y-1 hover:shadow-[var(--shadow-lift)] active:scale-[0.99] grain"
         >
-            {/* Banner */}
-            <div className="relative h-[160px] overflow-hidden">
+            {/* Full-bleed banner with gradient scrim */}
+            <div className="relative aspect-[16/10] overflow-hidden">
                 {promo.bgImage ? (
                     <img
                         src={promo.bgImage}
                         alt={promo.title}
-                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
                     />
                 ) : (
                     <div
-                        className="h-full w-full"
-                        style={{ background: promo.gradient || 'linear-gradient(135deg, #12161e 0%, #1a1208 50%, #0c0f14 100%)' }}
+                        className="absolute inset-0"
+                        style={{ background: promo.gradient || 'linear-gradient(135deg, var(--gold-soft), transparent), var(--bg-elevated)' }}
                     />
                 )}
 
-                {/* Dark gradient overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#06080c] via-black/30 to-transparent" />
+                {/* Scrim — top-to-bottom darkening for legibility */}
+                <div
+                    className="absolute inset-0"
+                    style={{
+                        background:
+                            'linear-gradient(180deg, rgba(10,11,15,0.05) 0%, rgba(10,11,15,0.45) 55%, rgba(10,11,15,0.92) 100%)',
+                    }}
+                />
 
                 {/* Top-left badges */}
-                <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                    {promo.category && (
-                        <span className={`px-2.5 py-1 rounded-full ${cat.bg} ${cat.color} text-[10px] font-black uppercase backdrop-blur-md`}>
-                            {promo.category}
-                        </span>
-                    )}
-                    {promo.badgeLabel && (
-                        <span className="px-2.5 py-1 rounded-full bg-black/50 backdrop-blur-md text-white text-[10px] font-black border border-white/[0.08]">
-                            {promo.badgeLabel}
-                        </span>
+                <div className="absolute top-3 left-3 right-3 z-10 flex items-start justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        {promo.category && (
+                            <span className={`chip ${chipClass}`}>{promo.category}</span>
+                        )}
+                        {promo.badgeLabel && (
+                            <span className="chip">{promo.badgeLabel}</span>
+                        )}
+                    </div>
+                    {promo.isFeatured && (
+                        <Star size={14} className="text-[var(--gold)] drop-shadow-[0_2px_8px_rgba(245,183,10,0.6)]" fill="currentColor" />
                     )}
                 </div>
 
-                {/* Featured star */}
-                {promo.isFeatured && (
-                    <div className="absolute top-3 right-3">
-                        <Star size={14} className="text-amber-400 fill-amber-400 drop-shadow-lg" />
-                    </div>
-                )}
-
                 {/* Bonus overlay */}
-                {promo.bonusPercentage && promo.bonusPercentage > 0 && (
-                    <div className="absolute bottom-3 left-3">
-                        <span className="text-4xl font-black text-white drop-shadow-lg leading-none">
+                {promo.bonusPercentage && promo.bonusPercentage > 0 ? (
+                    <div className="absolute bottom-3 left-3 z-10">
+                        <span className="num font-display font-extrabold text-[36px] md:text-[40px] leading-none tracking-[-0.04em] text-gold-grad drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)]">
                             +{promo.bonusPercentage}%
                         </span>
                     </div>
-                )}
+                ) : null}
 
                 {/* Character image */}
                 {promo.charImage && (
                     <img
                         src={promo.charImage}
                         alt=""
-                        className="absolute bottom-0 right-2 h-[85%] object-contain pointer-events-none opacity-90"
+                        className="absolute bottom-0 right-2 h-[85%] object-contain pointer-events-none"
                     />
                 )}
             </div>
 
             {/* Content */}
             <div className="flex flex-col flex-1 p-4 gap-3">
-                {/* Title + subtitle */}
                 <div>
-                    <h3 className="text-[15px] font-black text-white leading-snug line-clamp-2 group-hover:text-amber-400 transition-colors">
+                    <h3 className="font-display font-bold text-[14px] md:text-[15px] text-[var(--ink-strong)] leading-snug line-clamp-2 group-hover:text-[var(--gold-bright)] transition-colors">
                         {promo.title}
                     </h3>
                     {promo.subtitle && (
-                        <p className="text-[12px] text-white/50 mt-1 line-clamp-1">{promo.subtitle}</p>
+                        <p className="text-[12px] text-[var(--ink-dim)] mt-1 line-clamp-1">{promo.subtitle}</p>
                     )}
                 </div>
 
                 {/* Quick info chips */}
                 <div className="flex flex-wrap gap-1.5">
-                    {promo.maxBonus && (
-                        <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[10px] font-black text-white/70">
-                            <Gift size={10} className="text-amber-400" />
-                            Up to ₹{promo.maxBonus.toLocaleString()}
+                    {promo.maxBonus ? (
+                        <span className="chip">
+                            <Gift size={10} className="text-[var(--gold)]" />
+                            Up to <span className="num">₹{promo.maxBonus.toLocaleString()}</span>
                         </span>
-                    )}
-                    {promo.wageringMultiplier && (
-                        <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[10px] font-black text-white/70">
-                            <Percent size={10} className="text-white/50" />
-                            {promo.wageringMultiplier}× wager
+                    ) : null}
+                    {promo.wageringMultiplier ? (
+                        <span className="chip">
+                            <Percent size={10} className="text-[var(--ink-faint)]" />
+                            <span className="num">{promo.wageringMultiplier}×</span> wager
                         </span>
-                    )}
+                    ) : null}
                 </div>
 
                 {/* Claim progress */}
                 {claimProgress !== null && promo.claimLimit && (
                     <div className="space-y-1">
                         <div className="flex justify-between text-[10px]">
-                            <span className="text-white/50">Claims</span>
-                            <span className="text-white/70 font-black">{promo.claimCount || 0}/{promo.claimLimit}</span>
+                            <span className="text-[var(--ink-faint)]">Claims</span>
+                            <span className="num text-[var(--ink-dim)] font-bold">
+                                {promo.claimCount || 0}/{promo.claimLimit}
+                            </span>
                         </div>
-                        <div className="h-1 bg-white/[0.06] rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-amber-500 to-orange-600 rounded-full" style={{ width: `${claimProgress}%` }} />
+                        <div className="h-1 bg-[var(--ink-ghost)] rounded-full overflow-hidden">
+                            <div className="h-full bg-gold-grad rounded-full" style={{ width: `${claimProgress}%` }} />
                         </div>
                     </div>
                 )}
 
                 {/* Bottom row: expiry + CTA */}
-                <div className="flex items-center justify-between mt-auto pt-2 border-t border-white/[0.06]">
+                <div className="flex items-center justify-between mt-auto pt-2 border-t border-[var(--line)]">
                     {daysLeft !== null ? (
-                        <span className={`flex items-center gap-1 text-[11px] font-black ${isExpired ? 'text-red-400' : daysLeft <= 3 ? 'text-amber-400' : 'text-white/50'}`}>
+                        <span
+                            className={`flex items-center gap-1 text-[11px] font-bold ${
+                                isExpired
+                                    ? 'text-[var(--crimson)]'
+                                    : daysLeft <= 3
+                                        ? 'text-[var(--gold-bright)]'
+                                        : 'text-[var(--ink-faint)]'
+                            }`}
+                        >
                             <Clock size={11} />
-                            {isExpired ? 'Expired' : `${daysLeft}d left`}
+                            {isExpired ? 'Expired' : <><span className="num">{daysLeft}</span>d left</>}
                         </span>
                     ) : (
-                        <span className="text-[11px] text-white/25">No expiry</span>
+                        <span className="text-[11px] text-[var(--ink-whisper)]">No expiry</span>
                     )}
 
-                    <span className="flex items-center gap-1 text-[11px] font-black text-amber-400 group-hover:gap-2 transition-all">
-                        View Details <ArrowRight size={12} />
+                    <span className="flex items-center gap-1 text-[11px] font-mono uppercase tracking-[0.06em] font-semibold text-[var(--gold-bright)] group-hover:gap-2 transition-all">
+                        Details <ArrowRight size={12} />
                     </span>
                 </div>
             </div>

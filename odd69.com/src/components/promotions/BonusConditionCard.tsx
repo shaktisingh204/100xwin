@@ -21,14 +21,14 @@ const TYPE_CONFIG = {
     CASINO: {
         icon: Gamepad2,
         label: 'Casino',
-        accentColor: 'text-amber-400',
-        badgeBg: 'bg-amber-500/15 text-amber-300 border-amber-500/25',
+        accentColor: 'text-[var(--gold-bright)]',
+        chipClass: 'chip-gold',
     },
     SPORTS: {
         icon: Trophy,
         label: 'Sports',
-        accentColor: 'text-emerald-400',
-        badgeBg: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25',
+        accentColor: 'text-[var(--emerald)]',
+        chipClass: 'chip-emerald',
     },
 };
 
@@ -39,21 +39,27 @@ const APPLICABLE_LABELS: Record<string, string> = {
 };
 
 const CURRENCY_CONFIG: Record<string, { label: string; color: string }> = {
-    INR: { label: 'Fiat & Crypto', color: 'text-amber-400' },
-    CRYPTO: { label: 'Crypto', color: 'text-amber-400' },
-    BOTH: { label: 'Fiat & Crypto', color: 'text-amber-400' },
+    INR: { label: 'Fiat & Crypto', color: 'text-[var(--gold-bright)]' },
+    CRYPTO: { label: 'Crypto', color: 'text-[var(--gold-bright)]' },
+    BOTH: { label: 'Fiat & Crypto', color: 'text-[var(--gold-bright)]' },
 };
 
-function DetailChip({ icon: Icon, label, value, accent }: {
-    icon: React.ElementType; label: string; value: React.ReactNode; accent?: string;
+function DetailChip({ icon: Icon, label, value, accent, numeric = false }: {
+    icon: React.ElementType;
+    label: string;
+    value: React.ReactNode;
+    accent?: string;
+    numeric?: boolean;
 }) {
     return (
-        <div className="flex items-center justify-between py-2.5 border-b border-white/[0.04] last:border-0">
-            <div className="flex items-center gap-2 text-[12px] text-white/50">
+        <div className="flex items-center justify-between py-2.5 border-b border-[var(--line)] last:border-0 gap-3">
+            <div className="flex items-center gap-2 text-[12px] text-[var(--ink-faint)]">
                 <Icon size={12} className="flex-shrink-0" />
                 <span>{label}</span>
             </div>
-            <div className={`text-[12px] font-black ${accent || 'text-white/70'}`}>{value}</div>
+            <div className={`text-[12px] font-bold text-right ${accent || 'text-[var(--ink-dim)]'} ${numeric ? 'num' : ''}`}>
+                {value}
+            </div>
         </div>
     );
 }
@@ -114,66 +120,66 @@ const BonusConditionCard: React.FC<Props> = ({ bonus, currencySymbol = '₹' }) 
         : 0;
 
     return (
-        <div
-            className="
-                group relative overflow-hidden rounded-2xl bg-white/[0.02]
-                border border-white/[0.06]
-                flex flex-col transition-all duration-200
-                hover:border-amber-500/30 hover:shadow-[0_8px_32px_rgba(245,158,11,0.1)]
-                active:scale-[0.99]
-            "
-        >
+        <div className="group relative overflow-hidden rounded-[18px] bg-[var(--bg-surface)] border border-[var(--line-default)] flex flex-col transition-all duration-200 hover:border-[var(--line-gold)] hover:-translate-y-1 hover:shadow-[var(--shadow-lift)] active:scale-[0.99] grain">
             {/* Top accent line */}
-            <div className="h-[2px] bg-gradient-to-r from-amber-500 to-orange-600" />
+            <div className="h-[2px] bg-gold-grad" />
 
-            {/* Header Section */}
-            <div className="p-5 pb-4">
-                {/* Top row: title + info toggle */}
-                <div className="flex items-start justify-between gap-3 mb-4">
+            {/* Header */}
+            <div className="p-4 md:p-5 pb-3 md:pb-4">
+                <div className="flex items-start justify-between gap-3 mb-3 md:mb-4">
                     <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 rounded-[12px] bg-[var(--gold-soft)] border border-[var(--line-gold)] flex items-center justify-center flex-shrink-0">
                             <TypeIcon size={18} className={cfg.accentColor} />
                         </div>
                         <div className="min-w-0">
-                            <h3 className="text-[14px] font-black text-white leading-tight truncate">{bonus.title}</h3>
+                            <h3 className="font-display font-bold text-[14px] text-[var(--ink-strong)] leading-tight truncate">
+                                {bonus.title}
+                            </h3>
                             {bonus.description && (
-                                <p className="text-[11px] text-white/50 mt-0.5 line-clamp-1">{bonus.description}</p>
+                                <p className="text-[11px] text-[var(--ink-faint)] mt-0.5 line-clamp-1">
+                                    {bonus.description}
+                                </p>
                             )}
                         </div>
                     </div>
                     <button
+                        type="button"
                         onClick={() => setShowInfo(v => !v)}
-                        className="p-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] flex-shrink-0 transition-colors"
-                        title="Toggle wagering info"
+                        aria-expanded={showInfo}
+                        aria-label="Toggle wagering info"
+                        className="p-1.5 rounded-[10px] bg-[var(--bg-elevated)] hover:bg-[var(--bg-raised)] flex-shrink-0 transition-colors border border-[var(--line)]"
                     >
-                        <Info size={13} className="text-white/50" />
+                        <Info size={13} className="text-[var(--ink-faint)]" />
                     </button>
                 </div>
 
                 {/* Hero value + badges */}
                 <div className="flex items-end justify-between gap-3">
                     <div>
-                        <div className="text-3xl font-black text-white leading-none tracking-tight">
+                        <div className="num font-display font-extrabold text-[28px] md:text-[32px] leading-none tracking-[-0.03em]">
                             {isPercentage
-                                ? <span className={cfg.accentColor}>+{bonus.percentage}%</span>
-                                : <span className={cfg.accentColor}>{currencySymbol}{bonus.amount.toLocaleString()}</span>
-                            }
+                                ? <span className="text-gold-grad">+{bonus.percentage}%</span>
+                                : <span className="text-gold-grad">{currencySymbol}{bonus.amount.toLocaleString()}</span>}
                         </div>
                         {isPercentage && bonus.maxBonus > 0 && (
-                            <div className="text-[12px] text-white/50 mt-1.5">
-                                Up to <span className="text-white/70 font-black">{currencySymbol}{bonus.maxBonus.toLocaleString()}</span> bonus
+                            <div className="text-[12px] text-[var(--ink-faint)] mt-1.5">
+                                Up to{' '}
+                                <span className="num font-bold text-[var(--ink-dim)]">
+                                    {currencySymbol}{bonus.maxBonus.toLocaleString()}
+                                </span>{' '}
+                                bonus
                             </div>
                         )}
                         {!isPercentage && bonus.amount > 0 && (
-                            <div className="text-[12px] text-white/50 mt-1.5">Flat bonus — no deposit required</div>
+                            <div className="text-[12px] text-[var(--ink-faint)] mt-1.5">
+                                Flat bonus — no deposit required
+                            </div>
                         )}
                     </div>
 
                     <div className="flex flex-col items-end gap-1.5">
-                        <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border ${cfg.badgeBg} tracking-wider`}>
-                            {cfg.label}
-                        </span>
-                        <span className={`text-[10px] font-black ${currCfg.color}`}>
+                        <span className={`chip ${cfg.chipClass}`}>{cfg.label}</span>
+                        <span className={`text-[10px] font-mono uppercase tracking-[0.06em] font-semibold ${currCfg.color}`}>
                             {currCfg.label}
                         </span>
                     </div>
@@ -181,83 +187,128 @@ const BonusConditionCard: React.FC<Props> = ({ bonus, currencySymbol = '₹' }) 
             </div>
 
             {/* Conditions */}
-            <div className="px-5 pt-1 pb-1 flex-1">
+            <div className="px-4 md:px-5 pt-1 pb-1 flex-1">
                 {showInfo && (
-                    <div className="mb-3 p-3 bg-white/[0.03] rounded-xl border border-white/[0.06] text-[11px] text-white/50 leading-relaxed">
-                        <span className="font-black text-white/70">How wagering works: </span>
-                        You must wager your bonus <span className="font-black text-white/70">{bonus.wageringRequirement}×</span> before withdrawing.
+                    <div className="mb-3 p-3 bg-[var(--bg-elevated)] rounded-[12px] border border-[var(--line)] text-[11px] text-[var(--ink-faint)] leading-relaxed">
+                        <span className="font-bold text-[var(--ink-dim)]">How wagering works: </span>
+                        You must wager your bonus{' '}
+                        <span className="num font-bold text-[var(--ink-dim)]">{bonus.wageringRequirement}×</span>{' '}
+                        before withdrawing.
                         {bonus.depositWagerMultiplier > 1 && (
-                            <> You also need to wager your deposit amount <span className="font-black text-white/70">{bonus.depositWagerMultiplier}×</span>.</>
+                            <>
+                                {' '}You also need to wager your deposit amount{' '}
+                                <span className="num font-bold text-[var(--ink-dim)]">{bonus.depositWagerMultiplier}×</span>.
+                            </>
                         )}
                     </div>
                 )}
 
-                <DetailChip icon={Wallet} label="Min Deposit" value={minimumDepositLabel} />
-                <DetailChip icon={BadgePercent} label="Max Bonus"
+                <DetailChip icon={Wallet} label="Min Deposit" value={minimumDepositLabel} numeric />
+                <DetailChip
+                    icon={BadgePercent}
+                    label="Max Bonus"
                     value={bonus.maxBonus > 0 ? `${currencySymbol}${bonus.maxBonus.toLocaleString()}` : 'Uncapped'}
-                    accent={bonus.maxBonus > 0 ? cfg.accentColor : 'text-white/50'}
+                    accent={bonus.maxBonus > 0 ? cfg.accentColor : 'text-[var(--ink-faint)]'}
+                    numeric={bonus.maxBonus > 0}
                 />
-                <DetailChip icon={Zap} label="Wagering Req."
-                    value={<span>{bonus.wageringRequirement}<span className="text-white/50 font-normal">× bonus amount</span></span>}
+                <DetailChip
+                    icon={Zap}
+                    label="Wagering Req."
+                    value={
+                        <span>
+                            <span className="num">{bonus.wageringRequirement}×</span>
+                            <span className="text-[var(--ink-faint)] font-normal"> bonus amount</span>
+                        </span>
+                    }
                     accent={cfg.accentColor}
                 />
                 {bonus.depositWagerMultiplier > 1 && (
-                    <DetailChip icon={Coins} label="Deposit Wager"
-                        value={<span>{bonus.depositWagerMultiplier}<span className="text-white/50 font-normal">× deposit amount</span></span>}
+                    <DetailChip
+                        icon={Coins}
+                        label="Deposit Wager"
+                        value={
+                            <span>
+                                <span className="num">{bonus.depositWagerMultiplier}×</span>
+                                <span className="text-[var(--ink-faint)] font-normal"> deposit amount</span>
+                            </span>
+                        }
                     />
                 )}
-                <DetailChip icon={Gamepad2} label="Applies To"
+                <DetailChip
+                    icon={Gamepad2}
+                    label="Applies To"
                     value={APPLICABLE_LABELS[bonus.applicableTo] || bonus.applicableTo}
                 />
-                <DetailChip icon={Clock} label="Validity"
-                    value={`${bonus.expiryDays} days after claim`}
+                <DetailChip
+                    icon={Clock}
+                    label="Validity"
+                    value={<><span className="num">{bonus.expiryDays}</span> days after claim</>}
                 />
                 {bonus.forFirstDepositOnly && (
-                    <DetailChip icon={Star} label="First Deposit"
+                    <DetailChip
+                        icon={Star}
+                        label="First Deposit"
                         value="First deposit only"
-                        accent="text-amber-400"
+                        accent="text-[var(--gold-bright)]"
                     />
                 )}
                 {bonus.usageLimit > 0 && (
-                    <DetailChip icon={Users} label="Usage"
-                        value={<span>{bonus.usageCount.toLocaleString()} / {bonus.usageLimit.toLocaleString()} claimed</span>}
-                        accent="text-white/70"
+                    <DetailChip
+                        icon={Users}
+                        label="Usage"
+                        value={
+                            <span className="num">
+                                {bonus.usageCount.toLocaleString()} / {bonus.usageLimit.toLocaleString()}
+                            </span>
+                        }
                     />
                 )}
                 {bonus.validUntil && (
-                    <DetailChip icon={ShieldCheck} label="Valid Until"
-                        value={new Date(bonus.validUntil).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    <DetailChip
+                        icon={ShieldCheck}
+                        label="Valid Until"
+                        value={
+                            <span className="num">
+                                {new Date(bonus.validUntil).toLocaleDateString('en-IN', {
+                                    day: 'numeric', month: 'short', year: 'numeric',
+                                })}
+                            </span>
+                        }
                     />
                 )}
             </div>
 
             {/* Usage progress */}
             {bonus.usageLimit > 0 && (
-                <div className="px-5 pb-3">
-                    <div className="h-1 rounded-full bg-white/[0.06] overflow-hidden">
+                <div className="px-4 md:px-5 pb-3">
+                    <div className="h-1 rounded-full bg-[var(--ink-ghost)] overflow-hidden">
                         <div
-                            className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-600 transition-all duration-700"
+                            className="h-full rounded-full bg-gold-grad transition-all duration-700"
                             style={{ width: `${usagePct}%` }}
                         />
                     </div>
-                    <p className="text-[9px] text-white/25 mt-1 text-right">{usagePct}% claimed</p>
+                    <p className="text-[9px] text-[var(--ink-whisper)] mt-1 text-right">
+                        <span className="num">{usagePct}%</span> claimed
+                    </p>
                 </div>
             )}
 
             {/* Footer: code + CTA */}
-            <div className="p-4 pt-2 space-y-2.5 border-t border-white/[0.06]">
+            <div className="p-4 pt-2 space-y-2.5 border-t border-[var(--line)]">
                 {/* Promo code */}
-                <div className="flex items-center gap-2 bg-white/[0.03] border border-dashed border-white/[0.08] rounded-xl px-3 py-2">
-                    <span className="font-mono font-black text-sm tracking-widest text-white flex-1 truncate">{bonus.code}</span>
+                <div className="flex items-center gap-2 bg-[var(--bg-elevated)] border border-dashed border-[var(--line-default)] rounded-[12px] px-3 py-2">
+                    <span className="num font-bold text-[14px] tracking-widest text-[var(--ink-strong)] flex-1 truncate">
+                        {bonus.code}
+                    </span>
                     <button
+                        type="button"
                         onClick={handleCopy}
-                        className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center bg-white/[0.04] hover:bg-white/[0.08] transition-colors"
-                        title="Copy code"
+                        aria-label="Copy code"
+                        className="flex-shrink-0 w-7 h-7 rounded-[8px] flex items-center justify-center bg-[var(--bg-raised)] hover:bg-[var(--gold-soft)] transition-colors border border-[var(--line)]"
                     >
                         {copied
-                            ? <Check size={12} className="text-emerald-400" />
-                            : <Copy size={12} className="text-white/50" />
-                        }
+                            ? <Check size={12} className="text-[var(--emerald)]" />
+                            : <Copy size={12} className="text-[var(--ink-faint)]" />}
                     </button>
                 </div>
 
@@ -265,15 +316,7 @@ const BonusConditionCard: React.FC<Props> = ({ bonus, currencySymbol = '₹' }) 
                 <button
                     type="button"
                     onClick={handleClaimBonus}
-                    className="
-                        w-full flex items-center justify-center gap-2
-                        py-2.5 rounded-xl font-black text-sm
-                        bg-gradient-to-r from-amber-500 to-orange-600
-                        text-[#1a1208]
-                        hover:opacity-90 hover:scale-[1.01]
-                        active:scale-[0.99]
-                        transition-all duration-200
-                    "
+                    className="btn btn-gold sweep w-full h-10 uppercase tracking-[0.06em] text-[11px]"
                 >
                     Claim Bonus <ArrowRight size={14} />
                 </button>
