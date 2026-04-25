@@ -18,18 +18,7 @@ interface ProviderLogoProps {
 
 function getProviderSources(provider: ProviderLike): string[] {
     const customImage = provider.image?.trim();
-    const providerCode = (provider.provider || provider.code || '').trim();
-    const encodedProvider = providerCode ? encodeURIComponent(providerCode) : '';
-
-    return Array.from(new Set([
-        ...(customImage ? [customImage] : []),
-        ...(encodedProvider
-            ? [
-                `/assets/providers/${encodedProvider}.png`,
-                `/assets/providers/${encodedProvider}.jpg`,
-            ]
-            : []),
-    ]));
+    return customImage ? [customImage] : [];
 }
 
 function getFallbackLabel(label: string): string {

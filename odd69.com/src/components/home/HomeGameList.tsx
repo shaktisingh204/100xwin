@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { Play, Loader2, X, RefreshCw, Maximize2, Minimize2, ChevronLeft, ChevronRight, Heart } from 'lucide-react';
+import { Play, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { casinoService } from '@/services/casino';
 import { useAuth } from '@/context/AuthContext';
 import { useModal } from '@/context/ModalContext';
 import { useWallet } from '@/context/WalletContext';
+import GamePlayInterface from '@/components/casino/GamePlayInterface';
 
 // ─── Skeleton row (inline) ───────────────────────────────────────────────────
 function SkeletonGameRow({ count = 10 }: { count?: number }) {
@@ -87,63 +88,6 @@ function GameCard({ game, onPlay }: GameCardProps) {
     );
 }
 
-// ─── Game Player Overlay ─────────────────────────────────────────────────────
-interface GamePlayerProps {
-    game: { id: string; name: string; provider: string; url: string };
-    onClose: () => void;
-}
-
-function GamePlayerOverlay({ game, onClose }: GamePlayerProps) {
-    const [iframeKey, setIframeKey] = useState(0);
-    const [isFavorite, setIsFavorite] = useState(false);
-    const [isFullscreen, setIsFullscreen] = useState(false);
-
-    const toggleFullscreen = () => {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen().catch(() => { });
-            setIsFullscreen(true);
-        } else {
-            document.exitFullscreen();
-            setIsFullscreen(false);
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 z-[300] bg-black/95 flex flex-col animate-in fade-in duration-200">
-            <div className="flex items-center gap-3 px-4 py-3 bg-[#06080c] border-b border-white/[0.06] flex-shrink-0">
-                <div className="flex-1 min-w-0">
-                    <p className="text-white font-black text-sm truncate">{game.name}</p>
-                    <p className="text-white/50 text-[10px] font-bold uppercase">{game.provider}</p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                    <button onClick={() => setIsFavorite(!isFavorite)} className={`p-2 rounded-lg transition-colors ${isFavorite ? 'text-amber-400 bg-amber-400/10' : 'text-white/50 hover:text-white bg-white/[0.04]'}`}>
-                        <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
-                    </button>
-                    <button onClick={() => setIframeKey(k => k + 1)} className="p-2 rounded-lg text-white/50 hover:text-white bg-white/[0.04] transition-colors">
-                        <RefreshCw size={16} />
-                    </button>
-                    <button onClick={toggleFullscreen} className="p-2 rounded-lg text-white/50 hover:text-white bg-white/[0.04] transition-colors hidden md:flex">
-                        {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-                    </button>
-                    <button onClick={onClose} className="p-2 rounded-lg text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500/20 transition-colors">
-                        <X size={18} />
-                    </button>
-                </div>
-            </div>
-
-            <div className="flex-1 relative overflow-hidden">
-                <iframe
-                    key={iframeKey}
-                    src={game.url}
-                    className="w-full h-full border-0"
-                    allow="autoplay; fullscreen; clipboard-write; encrypted-media; picture-in-picture"
-                    sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
-                />
-            </div>
-        </div>
-    );
-}
-
 // ─── Main HomeGameList ───────────────────────────────────────────────────────
 interface HomeGameListProps {
     title?: string;
@@ -206,7 +150,18 @@ export default function HomeGameList({ title, games, icon, viewAllHref, isLoadin
 
     return (
         <>
-            {activeGame && <GamePlayerOverlay game={activeGame} onClose={handleClose} />}
+            {/* Full-feature game player overlay (same component used by /casino/play and /casino/game) */}
+            {activeGame && (
+                <div className="fixed inset-0 z-[300] bg-black flex flex-col">
+                    <GamePlayInterface
+                        game={activeGame}
+                        onClose={handleClose}
+                        isEmbedded={false}
+                        onLaunch={setActiveGame}
+                        key={activeGame.id}
+                    />
+                </div>
+            )}
 
             <div>
                 {(title || icon) && (
