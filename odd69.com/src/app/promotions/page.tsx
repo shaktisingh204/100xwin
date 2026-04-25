@@ -347,7 +347,8 @@ function PromoCard({
   isAuthenticated: boolean;
   openLogin: () => void;
 }) {
-  const accent = ACCENT_CLASSES[index % ACCENT_CLASSES.length];
+  // Index-based accent kept available for future variants
+  void index;
 
   /* Extract percentage for big display */
   const bigNumber = (() => {
