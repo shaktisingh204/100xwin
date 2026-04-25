@@ -281,10 +281,18 @@ export default function DepositModal() {
     <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={closeUPIDeposit} />
 
-      <div className="relative z-10 w-full sm:max-w-2xl bg-[#0f1117] border border-white/10 rounded-t-2xl sm:rounded-2xl overflow-hidden shadow-2xl max-h-[95vh] flex flex-col">
+      <div
+        className="relative z-10 w-full sm:max-w-2xl bg-[#0f1117] border border-white/10 rounded-t-2xl sm:rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+        style={{ maxHeight: 'min(95dvh, 95vh)' }}
+      >
+
+        {/* Mobile drag handle */}
+        <div className="sm:hidden flex-shrink-0 pt-2 pb-1 flex justify-center">
+          <div className="w-10 h-1 bg-white/20 rounded-full" />
+        </div>
 
         {/* ── Header ── */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 shrink-0">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-4 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
               <Zap className="w-4 h-4 text-white" />
@@ -319,7 +327,10 @@ export default function DepositModal() {
         </div>
 
         {/* ── Body ── */}
-        <div className="overflow-y-auto flex-1 p-5">
+        <div
+          className="overflow-y-auto flex-1 p-4 sm:p-5"
+          style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+        >
 
           {/* ════════════ FIAT TAB ════════════ */}
           {activeTab === "fiat" && (
@@ -344,15 +355,15 @@ export default function DepositModal() {
               {upiStep === "form" && !manualRequired && (
                 <form onSubmit={handleUpiSubmit} className="space-y-4">
                   {/* Gateway selector */}
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 min-w-0">
                     {[
                       { id: "upi2", label: "UPI Gateway 2", sublabel: "Recommended · Fast" },
                       { id: "upi1", label: "UPI Gateway 1", sublabel: "Alternate · NekPay" },
                     ].map(g => (
                       <button key={g.id} type="button" onClick={() => setUpiGateway(g.id as any)}
-                        className={`p-3 rounded-xl border text-left transition-all ${upiGateway === g.id ? "border-green-500/60 bg-green-500/10" : "border-white/10 bg-white/5 hover:border-white/20"}`}>
-                        <p className={`text-sm font-medium ${upiGateway === g.id ? "text-green-400" : "text-white"}`}>{g.label}</p>
-                        <p className="text-xs text-white/40 mt-0.5">{g.sublabel}</p>
+                        className={`min-w-0 p-2.5 sm:p-3 rounded-xl border text-left transition-all ${upiGateway === g.id ? "border-green-500/60 bg-green-500/10" : "border-white/10 bg-white/5 hover:border-white/20"}`}>
+                        <p className={`text-[13px] sm:text-sm font-medium truncate ${upiGateway === g.id ? "text-green-400" : "text-white"}`}>{g.label}</p>
+                        <p className="text-[11px] sm:text-xs text-white/40 mt-0.5 truncate">{g.sublabel}</p>
                       </button>
                     ))}
                   </div>
@@ -368,10 +379,10 @@ export default function DepositModal() {
                         className="w-full bg-white/5 border border-white/10 rounded-xl py-3 pl-8 pr-4 text-white placeholder-white/30 focus:outline-none focus:border-green-500/50 transition-all text-lg font-semibold"
                       />
                     </div>
-                    <div className="grid grid-cols-5 gap-1.5 mt-2">
+                    <div className="grid grid-cols-5 gap-1 sm:gap-1.5 mt-2 min-w-0">
                       {UPI_QUICK_AMOUNTS.map(a => (
                         <button key={a} type="button" onClick={() => { setUpiAmount(String(a)); setUpiError(""); }}
-                          className={`py-2 rounded-lg text-xs font-medium transition-all ${numUpi === a ? "bg-green-500 text-black" : "bg-white/5 border border-white/10 text-white/60 hover:bg-white/10"}`}>
+                          className={`min-w-0 py-2 px-1 rounded-lg text-[11px] sm:text-xs font-medium transition-all truncate ${numUpi === a ? "bg-green-500 text-black" : "bg-white/5 border border-white/10 text-white/60 hover:bg-white/10"}`}>
                           ₹{a >= 1000 ? `${a / 1000}K` : a}
                         </button>
                       ))}
@@ -460,21 +471,21 @@ export default function DepositModal() {
                   {/* Coin grid */}
                   <div>
                     <label className="block text-xs text-white/50 mb-3 font-medium uppercase tracking-wider">Select Coin & Network</label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 min-w-0">
                       {cryptoOptions.map(coin => (
                         <button key={coin.id} onClick={() => setSelectedCoin(coin)}
-                          className={`p-3 rounded-xl border text-left transition-all ${selectedCoin.id === coin.id ? "border-white/30 bg-white/10" : "border-white/10 bg-white/5 hover:border-white/20"}`}>
-                          <div className="flex items-start justify-between mb-2">
-                            <span className="w-8 h-8 flex items-center justify-center rounded-lg bg-black/30 text-base font-bold"
+                          className={`min-w-0 p-2.5 sm:p-3 rounded-xl border text-left transition-all ${selectedCoin.id === coin.id ? "border-white/30 bg-white/10" : "border-white/10 bg-white/5 hover:border-white/20"}`}>
+                          <div className="flex items-start justify-between gap-1.5 mb-1.5 sm:mb-2">
+                            <span className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-black/30 text-base font-bold shrink-0"
                               style={{ color: coin.color }}>
                               {coin.icon}
                             </span>
                             {selectedCoin.id === coin.id && (
-                              <span className="text-[9px] font-bold bg-green-500 text-black px-1.5 py-0.5 rounded-full uppercase">Active</span>
+                              <span className="text-[9px] font-bold bg-green-500 text-black px-1.5 py-0.5 rounded-full uppercase shrink-0">Active</span>
                             )}
                           </div>
-                          <p className="text-xs font-semibold text-white truncate">{coin.label}</p>
-                          <p className="text-[10px] text-white/40 mt-0.5">{coin.network}</p>
+                          <p className="text-[12px] sm:text-xs font-semibold text-white truncate">{coin.label}</p>
+                          <p className="text-[10px] text-white/40 mt-0.5 truncate">{coin.network}</p>
                         </button>
                       ))}
                     </div>
@@ -492,10 +503,10 @@ export default function DepositModal() {
                       />
                     </div>
                     <p className="text-xs text-white/30 mt-1">Min: ${MIN_CRYPTO_USD} USD</p>
-                    <div className="grid grid-cols-5 gap-1.5 mt-2">
+                    <div className="grid grid-cols-5 gap-1 sm:gap-1.5 mt-2 min-w-0">
                       {CRYPTO_QUICK_AMOUNTS.map(a => (
                         <button key={a} type="button" onClick={() => { setCryptoAmount(String(a)); setCryptoError(""); }}
-                          className={`py-2 rounded-lg text-xs font-medium transition-all ${numCrypto === a ? "bg-purple-500 text-white" : "bg-white/5 border border-white/10 text-white/60 hover:bg-white/10"}`}>
+                          className={`min-w-0 py-2 px-1 rounded-lg text-[11px] sm:text-xs font-medium transition-all truncate ${numCrypto === a ? "bg-purple-500 text-white" : "bg-white/5 border border-white/10 text-white/60 hover:bg-white/10"}`}>
                           ${a}
                         </button>
                       ))}
@@ -592,8 +603,8 @@ export default function DepositModal() {
                     {/* Address */}
                     <div className="mb-3">
                       <p className="text-white/40 text-[10px] uppercase text-left mb-1">{selectedCoin.label} Address</p>
-                      <div className="flex items-center gap-2 bg-black/30 rounded-xl px-3 py-2">
-                        <p className="flex-1 font-mono text-xs text-white truncate">{paymentData.payAddress}</p>
+                      <div className="flex items-center gap-2 bg-black/30 rounded-xl px-3 py-2 min-w-0">
+                        <p className="flex-1 min-w-0 font-mono text-[11px] sm:text-xs text-white truncate">{paymentData.payAddress}</p>
                         <button onClick={() => handleCopy(paymentData.payAddress)}
                           className="shrink-0 p-1.5 rounded-lg hover:bg-white/10 transition-colors">
                           {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4 text-white/50" />}
