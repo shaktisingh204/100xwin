@@ -508,7 +508,7 @@ function LeftSidebarWithSearchParams({ selectedSportId, onSelectSport, collapsed
             {isMobileSidebarOpen && <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-40 md:hidden" onClick={closeMobileSidebar} />}
 
             <aside className="hidden md:block md:sticky md:top-[64px] h-[calc(100vh-64px)] w-[240px] flex-shrink-0 border-r border-white/[0.06] bg-[#06080c]/80 backdrop-blur-md">
-                <div className="h-full overflow-y-auto py-3 scrollbar-none">
+                <div className="h-full overflow-y-auto py-3 no-scrollbar">
 
                     {/* Logo */}
                     <div className="flex items-center gap-2.5 px-3.5 pb-4">

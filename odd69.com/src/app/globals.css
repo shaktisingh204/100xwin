@@ -63,6 +63,29 @@
   --font-display: var(--font-bricolage), "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
   --font-body:    var(--font-dm), "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono:    var(--font-mono), "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ── Layout chrome heights (used by ClientLayout, sticky chrome, fixed widgets) ── */
+  --header-height: 64px;
+  --mobile-nav-height: 72px;
+}
+
+/* iOS: prevent zoom on input focus by ensuring 16px font on small screens */
+@media (max-width: 640px) {
+  input, select, textarea { font-size: 16px; }
+}
+
+/* Safe-area helpers for mobile chrome */
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.safe-top    { padding-top: env(safe-area-inset-top); }
+.has-mobile-nav-pad { padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom)); }
+@media (min-width: 1024px) { .has-mobile-nav-pad { padding-bottom: 0; } }
+
+/* Touch-target helper — guarantees 44×44 hit area without forcing visual size */
+.touch-target { position: relative; }
+.touch-target::after {
+  content: ""; position: absolute; inset: 50% 50% 50% 50%;
+  width: 44px; height: 44px; transform: translate(-50%, -50%);
+  /* invisible expander; only used when child is smaller than 44px */
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════

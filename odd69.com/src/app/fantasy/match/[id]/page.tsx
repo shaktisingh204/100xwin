@@ -324,7 +324,7 @@ export default function FantasyMatchPage() {
         ) : (
           <>
             {/* Phase filter pills — full match / innings / powerplay */}
-            <div className="flex items-center gap-2 mb-3 overflow-x-auto -mx-1 px-1 scrollbar-none">
+            <div className="flex items-center gap-2 mb-3 overflow-x-auto -mx-1 px-1 no-scrollbar">
               {PHASE_TABS.map((p) => {
                 const active = phase === p.id;
                 const count = phaseCounts[p.id];

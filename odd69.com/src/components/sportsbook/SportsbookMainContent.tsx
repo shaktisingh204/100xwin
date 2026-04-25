@@ -280,13 +280,13 @@ export default function SportsbookMainContent() {
           </div>
 
           {loading ? (
-            <div className="flex gap-3 overflow-x-auto py-1 scrollbar-none snap-x snap-mandatory">
+            <div className="flex gap-3 overflow-x-auto py-1 no-scrollbar snap-x snap-mandatory">
               {Array.from({ length: 8 }).map((_, i) => (
                 <div key={i} className="min-w-[140px] shrink-0 snap-start h-[90px] rounded-xl bg-white/[0.03] animate-pulse" />
               ))}
             </div>
           ) : (
-            <div className="-mx-1 flex gap-3 overflow-x-auto px-1 py-1 scrollbar-none snap-x snap-mandatory">
+            <div className="-mx-1 flex gap-3 overflow-x-auto px-1 py-1 no-scrollbar snap-x snap-mandatory">
               {featuredSports.map((sport) => (
                 <FeaturedSportCard
                   key={sport.key}

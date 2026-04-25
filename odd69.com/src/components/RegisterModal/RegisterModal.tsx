@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
     User, X, Check, Trophy, Smartphone, Mail, Eye, EyeOff, AlertCircle, Lock,
     Gift, Sparkles, ChevronDown, Search, Globe, ShieldCheck, Loader2,
@@ -15,6 +15,91 @@ import { getStoredUtm, clearStoredUtm } from "@/lib/utm";
 interface RegisterModalProps {
     onClose?: () => void;
     onLoginClick?: () => void;
+}
+
+/* ── 6-cell paste-aware OTP input (inline) ─────────────────────────────── */
+function OtpCells({
+    value, onChange, length = 6, error = false, autoFocus = false,
+}: {
+    value: string;
+    onChange: (v: string) => void;
+    length?: number;
+    error?: boolean;
+    autoFocus?: boolean;
+}) {
+    const inputs = useRef<Array<HTMLInputElement | null>>([]);
+    const focus = useCallback((i: number) => {
+        const el = inputs.current[i];
+        if (el) { el.focus(); el.select(); }
+    }, []);
+    useEffect(() => {
+        if (autoFocus) focus(Math.min(value.length, length - 1));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    const onCellChange = (i: number, e: React.ChangeEvent<HTMLInputElement>) => {
+        const raw = e.target.value;
+        if (!raw) {
+            const arr = value.split(""); arr[i] = ""; onChange(arr.join(""));
+            return;
+        }
+        const digits = raw.replace(/\D/g, "");
+        if (!digits) return;
+        if (digits.length === 1) {
+            const arr = value.padEnd(length, " ").split("");
+            arr[i] = digits;
+            onChange(arr.join("").replace(/\s/g, "").slice(0, length));
+            if (i < length - 1) focus(i + 1);
+        } else {
+            const merged = (value.slice(0, i) + digits).slice(0, length);
+            onChange(merged);
+            focus(Math.min(i + digits.length, length - 1));
+        }
+    };
+    const onKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Backspace") {
+            if (value[i]) {
+                const arr = value.split(""); arr[i] = ""; onChange(arr.join("")); e.preventDefault();
+            } else if (i > 0) {
+                const arr = value.split(""); arr[i - 1] = ""; onChange(arr.join(""));
+                focus(i - 1); e.preventDefault();
+            }
+        } else if (e.key === "ArrowLeft" && i > 0) { focus(i - 1); e.preventDefault(); }
+        else if (e.key === "ArrowRight" && i < length - 1) { focus(i + 1); e.preventDefault(); }
+        else if (e.key === "Home") { focus(0); e.preventDefault(); }
+        else if (e.key === "End") { focus(length - 1); e.preventDefault(); }
+    };
+    const onPaste = (i: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+        e.preventDefault();
+        const pasted = e.clipboardData.getData("text").replace(/\D/g, "");
+        if (!pasted) return;
+        const merged = (value.slice(0, i) + pasted).slice(0, length);
+        onChange(merged);
+        setTimeout(() => focus(Math.min(i + pasted.length, length - 1)), 0);
+    };
+    return (
+        <div className="flex gap-1.5 sm:gap-2 w-full" role="group" aria-label="One-time passcode">
+            {Array.from({ length }).map((_, i) => (
+                <input
+                    key={i}
+                    ref={(el) => { inputs.current[i] = el; }}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete={i === 0 ? "one-time-code" : "off"}
+                    pattern="[0-9]*"
+                    maxLength={1}
+                    aria-label={`Digit ${i + 1}`}
+                    value={value[i] ?? ""}
+                    onChange={(e) => onCellChange(i, e)}
+                    onKeyDown={(e) => onKey(i, e)}
+                    onPaste={(e) => onPaste(i, e)}
+                    onFocus={(e) => e.target.select()}
+                    className={`flex-1 min-w-0 h-14 text-[22px] font-bold text-center num text-[var(--ink)] bg-[var(--bg-inlay)] border rounded-[10px] focus:outline-none transition-colors ${
+                        error ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
+                    }`}
+                />
+            ))}
+        </div>
+    );
 }
 
 const COUNTRY_CURRENCY_MAP: Record<string, { currency: string; name: string; flag: string }> = {
@@ -125,6 +210,13 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
     const [selectedBonusCode, setSelectedBonusCode] = useState<string | null>(null);
 
     const { login } = useAuth();
+
+    // Body scroll-lock while modal mounted
+    React.useEffect(() => {
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => { document.body.style.overflow = prev; };
+    }, []);
 
     React.useEffect(() => {
         if (resendCooldown <= 0) return;
@@ -344,22 +436,29 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/70 backdrop-blur-md animate-fade-in">
+        <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-md animate-fade-in"
+            onClick={(e) => { if (e.target === e.currentTarget && onClose) onClose(); }}
+        >
             <div
-                className="relative w-full md:max-w-[860px] md:max-h-[92vh] bg-[var(--bg-surface)] rounded-t-[22px] md:rounded-[22px] shadow-[var(--shadow-lift)] flex flex-col md:flex-row border border-[var(--line-gold)] overflow-hidden grain"
-                style={{ maxHeight: '92dvh' }}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="register-modal-title"
+                className="relative w-full sm:max-w-[860px] sm:max-h-[92vh] bg-[var(--bg-surface)] rounded-t-[22px] sm:rounded-[22px] shadow-[var(--shadow-lift)] flex flex-col sm:flex-row border border-[var(--line-gold)] overflow-hidden grain animate-rise"
+                style={{ maxHeight: '92dvh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
             >
-                {/* Close */}
+                {/* Close — 44×44 touch target with safe-area top inset */}
                 <button
                     onClick={onClose}
-                    className="absolute top-4 right-4 z-20 w-8 h-8 grid place-items-center rounded-full bg-[var(--bg-inlay)] border border-[var(--line-default)] text-[var(--ink-faint)] hover:text-[var(--ink)] hover:border-[var(--line-strong)] transition-colors"
+                    style={{ top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
+                    className="absolute right-3 z-20 w-11 h-11 grid place-items-center rounded-full bg-[var(--bg-inlay)] border border-[var(--line-default)] text-[var(--ink-faint)] hover:text-[var(--ink)] hover:border-[var(--line-strong)] active:scale-95 transition-all"
                     aria-label="Close"
                 >
-                    <X size={15} />
+                    <X size={18} />
                 </button>
 
-                {/* Left banner — desktop only */}
-                <div className="hidden md:flex flex-col w-[38%] relative items-center justify-center p-8 text-center border-r border-[var(--line-default)] flex-shrink-0 bg-gold-soft">
+                {/* Left banner — sm+ only */}
+                <div className="hidden sm:flex flex-col w-[38%] relative items-center justify-center p-8 text-center border-r border-[var(--line-default)] flex-shrink-0 bg-gold-soft">
                     <div className="pointer-events-none absolute inset-0 dotgrid opacity-40" />
                     <div
                         className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[280px] h-[200px] rounded-full blur-[110px]"
@@ -398,24 +497,24 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                 <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
                     {/* Atmospheric halo on mobile */}
                     <div
-                        className="md:hidden pointer-events-none absolute -top-20 left-1/2 -translate-x-1/2 w-[340px] h-[180px] rounded-full blur-[110px]"
+                        className="sm:hidden pointer-events-none absolute -top-20 left-1/2 -translate-x-1/2 w-[340px] h-[180px] rounded-full blur-[110px]"
                         style={{ background: "var(--gold-halo)" }}
                     />
 
                     {/* Header */}
-                    <div className="relative z-10 flex-shrink-0 px-6 pt-6 pb-0 md:px-9 md:pt-9">
+                    <div className="relative z-10 flex-shrink-0 px-6 pt-6 pb-0 sm:px-9 sm:pt-9">
                         {/* Mobile drag handle */}
-                        <div className="md:hidden w-10 h-1 bg-[var(--line-strong)] rounded-full mx-auto mb-4" />
+                        <div className="sm:hidden w-10 h-1 bg-[var(--line-strong)] rounded-full mx-auto mb-4" />
 
                         {/* Mobile logo */}
-                        <div className="md:hidden text-center mb-4">
+                        <div className="sm:hidden text-center mb-4">
                             <span className="font-display text-[26px] font-bold text-[var(--ink)] tracking-tight">
                                 odd<span className="text-gold-grad">69</span>
                             </span>
                             <p className="t-eyebrow mt-1.5">Sports · Casino · Originals</p>
                         </div>
 
-                        <h3 className="t-section !text-[20px] mb-1">
+                        <h3 id="register-modal-title" className="t-section !text-[20px] mb-1">
                             {regStep === 'verify_otp' ? 'Verify your account' : 'Create account'}
                         </h3>
                         <p className="text-[12.5px] text-[var(--ink-dim)] mb-4">
@@ -427,7 +526,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                     </div>
 
                     {/* Scrollable body */}
-                    <div className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden min-h-0 px-6 pb-2 md:px-9">
+                    <div className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden min-h-0 px-6 pb-2 sm:px-9">
                         {regStep === 'verify_otp' ? (
                             <div className="flex flex-col gap-5 pb-4 pt-2">
                                 <div className="text-center">
@@ -445,17 +544,11 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                     </p>
                                 </div>
                                 <div>
-                                    <input
-                                        type="text"
-                                        inputMode="numeric"
-                                        maxLength={6}
-                                        placeholder="000000"
+                                    <OtpCells
                                         value={otpCode}
-                                        onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}
+                                        onChange={(v) => { setOtpCode(v); setError(''); }}
+                                        error={!!error}
                                         autoFocus
-                                        className={`w-full h-14 bg-[var(--bg-inlay)] border rounded-[10px] px-4 text-[var(--ink)] text-[26px] font-bold tracking-[0.5em] text-center num focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] placeholder:tracking-[0.3em] placeholder:font-normal ${
-                                            error ? 'border-[var(--crimson)]' : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
-                                        }`}
                                     />
                                     {error && (
                                         <p className="text-[var(--crimson)] text-[11.5px] mt-1.5 ml-1 flex items-center gap-1">
@@ -476,7 +569,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                         <button
                                             type="button"
                                             onClick={() => { setShowCountryDropdown(!showCountryDropdown); setCountrySearch(''); }}
-                                            className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] px-3.5 flex items-center gap-3 text-left transition-colors ${
+                                            className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] px-3.5 flex items-center gap-3 text-left transition-colors ${
                                                 fieldErrors.registrationCountry
                                                     ? 'border-[var(--crimson)]'
                                                     : registrationCountry
@@ -577,7 +670,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                                 inputMode="numeric"
                                                 placeholder="Phone number"
                                                 autoFocus
-                                                className={`flex-1 h-11 bg-[var(--bg-inlay)] border rounded-[10px] px-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] num ${
+                                                className={`flex-1 h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] px-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] num ${
                                                     fieldErrors.phoneNumber
                                                         ? 'border-[var(--crimson)]'
                                                         : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
@@ -598,7 +691,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                                 placeholder="Email address"
                                                 autoFocus
                                                 autoComplete="email"
-                                                className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
+                                                className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
                                                     fieldErrors.email
                                                         ? 'border-[var(--crimson)]'
                                                         : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
@@ -631,7 +724,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                             type="text"
                                             placeholder="Username (optional)"
                                             autoComplete="username"
-                                            className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
+                                            className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
                                                 fieldErrors.username
                                                     ? 'border-[var(--crimson)]'
                                                     : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
@@ -658,7 +751,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                             type={showPassword ? "text" : "password"}
                                             placeholder="Password (min. 8 characters)"
                                             autoComplete="new-password"
-                                            className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
+                                            className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
                                                 fieldErrors.password
                                                     ? 'border-[var(--crimson)]'
                                                     : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
@@ -693,7 +786,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                             type={showConfirmPassword ? "text" : "password"}
                                             placeholder="Confirm password"
                                             autoComplete="new-password"
-                                            className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
+                                            className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
                                                 fieldErrors.confirmPassword
                                                     ? 'border-[var(--crimson)]'
                                                     : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
@@ -796,7 +889,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                 <button
                                     type="button"
                                     onClick={() => setHasPromo(!hasPromo)}
-                                    className={`w-full h-11 border rounded-[10px] px-4 flex items-center justify-center font-semibold text-[12px] uppercase tracking-[0.08em] transition-all ${
+                                    className={`w-full h-12 sm:h-11 border rounded-[10px] px-4 flex items-center justify-center font-semibold text-[12px] uppercase tracking-[0.08em] transition-all ${
                                         hasPromo
                                             ? 'border-[var(--line-gold)] text-[var(--gold-bright)] bg-[var(--gold-soft)]'
                                             : 'border-[var(--line-default)] text-[var(--ink-faint)] hover:text-[var(--ink)] bg-[var(--bg-inlay)] hover:border-[var(--line-strong)]'
@@ -828,7 +921,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                                     <input
                                         type="text"
                                         placeholder="Enter promo code"
-                                        className="w-full h-11 bg-[var(--bg-inlay)] border-2 border-dashed border-[var(--line-gold)] rounded-[10px] px-3.5 text-[var(--gold-bright)] text-[13.5px] focus:outline-none focus:border-[var(--gold-bright)] transition-colors placeholder:text-[rgba(255,204,51,0.35)] font-bold uppercase tracking-[0.12em]"
+                                        className="w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border-2 border-dashed border-[var(--line-gold)] rounded-[10px] px-3.5 text-[var(--gold-bright)] text-[13.5px] focus:outline-none focus:border-[var(--gold-bright)] transition-colors placeholder:text-[rgba(255,204,51,0.35)] font-bold uppercase tracking-[0.12em]"
                                         value={formData.promoCode}
                                         onChange={(e) => setFormData({ ...formData, promoCode: e.target.value })}
                                     />
@@ -870,7 +963,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ onClose, onLoginClick }) 
                     </div>
 
                     {/* Sticky footer */}
-                    <div className="relative z-10 flex-shrink-0 px-6 pt-3 pb-6 md:px-9 border-t border-[var(--line-default)] bg-[var(--bg-surface)]">
+                    <div className="relative z-10 flex-shrink-0 px-6 pt-3 pb-6 sm:px-9 border-t border-[var(--line-default)] bg-[var(--bg-surface)]">
                         {regStep === 'verify_otp' ? (
                             <>
                                 <button

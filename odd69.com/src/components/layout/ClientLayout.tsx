@@ -48,7 +48,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                     {/* Static sidebar — full height, no scroll */}
                     <Sidebar />
                     {/* Content area — scrolls independently, footer lives here */}
-                    <div className="flex-1 min-w-0 flex flex-col overflow-y-auto h-[calc(100vh-56px)]">
+                    <div className="flex-1 min-w-0 flex flex-col overflow-y-auto h-[calc(100dvh-var(--header-height))] pb-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom))] md:pb-0">
                       <main className="flex-1">{children}</main>
                       <Footer />
                     </div>

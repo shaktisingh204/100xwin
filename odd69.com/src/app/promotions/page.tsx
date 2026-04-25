@@ -111,42 +111,42 @@ export default function PromotionsPage() {
   const hasAnyContent = filteredPromos.length > 0 || filteredBonuses.length > 0;
 
   return (
-    <div className="max-w-[1680px] mx-auto pt-6 pb-24 space-y-10 md:space-y-12">
+    <div className="max-w-[1680px] mx-auto pt-4 md:pt-6 pb-24 space-y-8 md:space-y-12">
       {/* ═══ HERO ═══════════════════════════════════════════════════════════ */}
       <section className="page-x">
-        <div className="relative overflow-hidden rounded-[24px] border border-[var(--line-gold)] bg-[var(--bg-surface)] grain">
+        <div className="relative overflow-hidden rounded-[20px] md:rounded-[24px] border border-[var(--line-gold)] bg-[var(--bg-surface)] grain">
           <div className="absolute inset-0 dotgrid opacity-60" />
           <div
-            className="absolute -top-24 -right-24 w-[420px] h-[420px] rounded-full pointer-events-none"
+            className="absolute -top-24 -right-24 w-[320px] h-[320px] md:w-[420px] md:h-[420px] rounded-full pointer-events-none"
             style={{ background: "radial-gradient(circle, var(--gold-halo), transparent 70%)" }}
           />
 
-          <div className="relative px-6 md:px-10 py-10 md:py-12 flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+          <div className="relative px-5 md:px-10 py-7 md:py-12 flex flex-col md:flex-row md:items-end md:justify-between gap-5 md:gap-6">
             <div>
-              <div className="inline-flex items-center gap-2 chip chip-gold mb-4">
+              <div className="inline-flex items-center gap-2 chip chip-gold mb-3 md:mb-4">
                 <Gift size={12} />
                 <span>Offers &amp; Rewards</span>
               </div>
-              <h1 className="font-display font-extrabold text-[36px] md:text-[52px] leading-[0.95] tracking-[-0.03em]">
+              <h1 className="font-display font-extrabold text-[28px] md:text-[52px] leading-[1] md:leading-[0.95] tracking-[-0.03em]">
                 <span className="text-gold-grad">Promotions</span> &amp; Bonuses
               </h1>
-              <p className="mt-3 text-[var(--ink-dim)] text-[13px] md:text-[14px] max-w-xl leading-relaxed">
-                Discover exclusive bonuses, cashback offers, and VIP rewards tailored for you. All
-                wagering requirements on-chip, fully transparent.
+              <p className="mt-2.5 md:mt-3 text-[var(--ink-dim)] text-[12.5px] md:text-[14px] max-w-xl leading-relaxed">
+                Exclusive bonuses, cashback offers, and VIP rewards. All wagering requirements
+                on-chip, fully transparent.
               </p>
             </div>
 
             {/* Quick stats */}
-            <div className="flex gap-3">
-              <div className="rounded-[16px] border border-[var(--line-gold)] bg-[var(--bg-elevated)] px-5 py-3 text-center min-w-[110px]">
-                <span className="num font-display font-extrabold text-[26px] text-gold-grad">
+            <div className="flex gap-2.5 md:gap-3">
+              <div className="flex-1 md:flex-none rounded-[14px] md:rounded-[16px] border border-[var(--line-gold)] bg-[var(--bg-elevated)] px-4 md:px-5 py-2.5 md:py-3 text-center min-w-[100px] md:min-w-[110px]">
+                <span className="num font-display font-extrabold text-[22px] md:text-[26px] text-gold-grad">
                   {promos.length}
                 </span>
-                <p className="t-eyebrow !text-[9px] mt-1">Active Offers</p>
+                <p className="t-eyebrow !text-[9px] mt-0.5 md:mt-1">Active Offers</p>
               </div>
               {expiringCount > 0 && (
                 <div
-                  className="rounded-[16px] border px-5 py-3 text-center min-w-[110px] animate-pulse-gold"
+                  className="flex-1 md:flex-none rounded-[14px] md:rounded-[16px] border px-4 md:px-5 py-2.5 md:py-3 text-center min-w-[100px] md:min-w-[110px] animate-pulse-gold"
                   style={{
                     background: "var(--crimson-soft)",
                     borderColor: "rgba(255, 46, 76, 0.25)",
@@ -158,11 +158,11 @@ export default function PromotionsPage() {
                       fill="currentColor"
                       className="text-[var(--crimson)] animate-live-dot"
                     />
-                    <span className="num font-display font-extrabold text-[26px] text-[var(--crimson)]">
+                    <span className="num font-display font-extrabold text-[22px] md:text-[26px] text-[var(--crimson)]">
                       {expiringCount}
                     </span>
                   </div>
-                  <p className="t-eyebrow !text-[9px] mt-1 !text-[var(--crimson)]">Expiring soon</p>
+                  <p className="t-eyebrow !text-[9px] mt-0.5 md:mt-1 !text-[var(--crimson)]">Expiring soon</p>
                 </div>
               )}
             </div>
@@ -171,23 +171,24 @@ export default function PromotionsPage() {
       </section>
 
       {/* ═══ SEARCH + CATEGORIES ════════════════════════════════════════════ */}
-      <section className="page-x">
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-          <div className="relative flex-1 max-w-md w-full">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-whisper)]"
-            />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search promos or codes..."
-              className="w-full rounded-[10px] border border-[var(--line-default)] bg-[var(--bg-inlay)] pl-9 pr-3 py-2.5 text-[13px] placeholder:text-[var(--ink-whisper)] outline-none focus:border-[var(--line-gold)] transition-colors font-body"
-            />
-          </div>
+      <section className="page-x space-y-3">
+        <div className="relative w-full sm:max-w-md">
+          <Search
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--ink-whisper)]"
+          />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search promos or codes..."
+            className="w-full rounded-[10px] border border-[var(--line-default)] bg-[var(--bg-inlay)] pl-9 pr-3 py-2.5 text-[13px] placeholder:text-[var(--ink-whisper)] outline-none focus:border-[var(--line-gold)] transition-colors font-body"
+          />
+        </div>
 
-          <div className="flex gap-1.5 flex-wrap">
+        {/* Mobile: horizontally scroll-snap rail. md+: flex-wrap. */}
+        <div className="-mx-4 md:mx-0 px-4 md:px-0 overflow-x-auto md:overflow-visible no-scrollbar snap-x snap-proximity">
+          <div className="flex gap-1.5 md:flex-wrap min-w-max md:min-w-0">
             {CATEGORIES.map((cat) => {
               const Icon = cat.icon;
               const count =
@@ -200,7 +201,7 @@ export default function PromotionsPage() {
                 <button
                   key={cat.id}
                   onClick={() => setActiveCategory(cat.id)}
-                  className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-[10px] font-mono text-[11px] font-semibold uppercase tracking-[0.08em] border transition-all ${
+                  className={`snap-start inline-flex items-center gap-1.5 h-9 px-3 rounded-[10px] font-mono text-[11px] font-semibold uppercase tracking-[0.08em] border transition-all flex-shrink-0 ${
                     active
                       ? "bg-gold-grad !text-[#120c00] border-transparent shadow-[0_6px_20px_var(--gold-halo)]"
                       : "bg-[var(--bg-surface)] text-[var(--ink-dim)] border-[var(--line-default)] hover:border-[var(--line-gold)] hover:text-[var(--ink)]"
@@ -227,12 +228,12 @@ export default function PromotionsPage() {
       {/* ═══ FEATURED ═══════════════════════════════════════════════════════ */}
       {!loading && featured.length > 0 && activeCategory === "ALL" && !search && (
         <section className="page-x">
-          <div className="mb-4 rail-gold">
+          <div className="mb-3 md:mb-4 rail-gold">
             <span className="t-eyebrow">Hand-picked</span>
             <h2 className="t-section mt-1">Featured Offers</h2>
             <p className="t-section-sub">The biggest bonuses live right now.</p>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 stagger">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4 stagger">
             {featured.map((p, i) => (
               <PromoCard key={p._id || i} p={p} index={i} large isAuthenticated={isAuthenticated} openLogin={openLogin} />
             ))}
@@ -255,13 +256,13 @@ export default function PromotionsPage() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="skeleton rounded-[16px] h-[300px]" />
+              <div key={i} className="skeleton rounded-[16px] h-[260px] md:h-[300px]" />
             ))}
           </div>
         ) : filteredPromos.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 stagger">
             {filteredPromos.map((p, i) => (
               <PromoCard
                 key={p._id || i}
@@ -299,13 +300,13 @@ export default function PromotionsPage() {
           </div>
 
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="skeleton rounded-[16px] h-[260px]" />
+                <div key={i} className="skeleton rounded-[16px] h-[220px] md:h-[260px]" />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 stagger">
               {filteredBonuses.map((b) => (
                 <BonusCard key={b._id} b={b} />
               ))}
@@ -361,31 +362,41 @@ function PromoCard({
     ? Math.ceil((new Date(p.expiryDate).getTime() - Date.now()) / 86400000) <= 7
     : false;
 
+  const heroAspect = large ? "aspect-[16/10] md:aspect-[16/8]" : "aspect-[16/10]";
+  const fallbackBg = p.gradient || `linear-gradient(135deg, var(--gold-soft), transparent), var(--bg-elevated)`;
+
   return (
     <div
-      className={`relative overflow-hidden rounded-[18px] border border-[var(--line-default)] bg-[var(--bg-surface)] hover:border-[var(--line-gold)] hover:-translate-y-1 hover:shadow-[var(--shadow-lift)] transition-all grain group`}
+      className="relative overflow-hidden rounded-[18px] border border-[var(--line-default)] bg-[var(--bg-surface)] hover:border-[var(--line-gold)] hover:-translate-y-1 hover:shadow-[var(--shadow-lift)] transition-all grain group flex flex-col"
     >
-      {/* Colored header */}
-      <div
-        className={`relative bg-gradient-to-br ${accent} p-5 min-h-[${large ? "160px" : "130px"}]`}
-        style={p.gradient ? { background: p.gradient } : undefined}
-      >
-        {p.bgImage && (
+      {/* Full-bleed hero with gradient scrim */}
+      <div className={`relative ${heroAspect} overflow-hidden`}>
+        {p.bgImage ? (
           <img
             src={p.bgImage}
             alt=""
-            className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-25"
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
           />
+        ) : (
+          <div className="absolute inset-0" style={{ background: fallbackBg }} />
         )}
+        {/* Scrim for legible title */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(10,11,15,0.05) 0%, rgba(10,11,15,0.45) 55%, rgba(10,11,15,0.92) 100%)",
+          }}
+        />
 
-        {/* Chips row */}
-        <div className="relative z-10 flex items-start justify-between gap-2">
+        {/* Top chips */}
+        <div className="absolute top-3 left-3 right-3 z-10 flex items-start justify-between gap-2">
           <div className="flex flex-wrap gap-1.5">
             {p.badgeLabel && <span className="chip chip-gold">{p.badgeLabel}</span>}
             {expiringSoon && (
               <span className="chip chip-crimson">
                 <Circle size={6} fill="currentColor" className="animate-live-dot" />
-                Ending soon
+                Ending
               </span>
             )}
           </div>
@@ -396,33 +407,37 @@ function PromoCard({
           )}
         </div>
 
-        {/* Big number or title */}
-        <div className="relative z-10 mt-4">
-          {bigNumber && (
-            <div className="font-display font-extrabold leading-none tracking-[-0.04em]">
+        {/* Big percent / multiplier overlaid */}
+        {bigNumber && (
+          <div className="absolute top-3 right-3 z-10 text-right pointer-events-none">
+            <span
+              className={`num font-display font-extrabold text-gold-grad leading-none tracking-[-0.04em] drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)] ${
+                large ? "text-[44px] md:text-[56px]" : "text-[34px] md:text-[40px]"
+              }`}
+            >
+              {bigNumber.value}
               <span
-                className={`num text-gold-grad ${large ? "text-[64px]" : "text-[48px]"}`}
-              >
-                {bigNumber.value}
-              </span>
-              <span
-                className={`num text-[var(--gold-bright)] ml-1 ${
-                  large ? "text-[30px]" : "text-[22px]"
+                className={`text-[var(--gold-bright)] ml-0.5 ${
+                  large ? "text-[22px] md:text-[26px]" : "text-[18px] md:text-[20px]"
                 }`}
               >
                 {bigNumber.suffix}
               </span>
-            </div>
-          )}
+            </span>
+          </div>
+        )}
+
+        {/* Bottom-anchored title */}
+        <div className="absolute bottom-3 left-3 right-3 z-10">
           <h3
-            className={`font-display font-bold text-[var(--ink)] leading-tight ${
-              large ? "text-[20px] mt-2" : "text-[15px] mt-1"
+            className={`font-display font-bold text-[var(--ink-strong)] leading-tight line-clamp-2 ${
+              large ? "text-[18px] md:text-[22px]" : "text-[14px] md:text-[15px]"
             }`}
           >
             {p.title}
           </h3>
           {p.subtitle && (
-            <p className="text-[12px] text-[var(--ink-dim)] font-semibold mt-0.5">
+            <p className="text-[11px] md:text-[12px] text-[var(--ink-dim)] font-semibold mt-0.5 line-clamp-1">
               {p.subtitle}
             </p>
           )}
@@ -430,14 +445,14 @@ function PromoCard({
       </div>
 
       {/* Body */}
-      <div className="p-5">
+      <div className="p-4 md:p-5 flex flex-col gap-3 flex-1">
         {p.description && (
-          <p className="text-[12px] text-[var(--ink-faint)] leading-relaxed mb-4 line-clamp-3">
+          <p className="text-[12px] text-[var(--ink-faint)] leading-relaxed line-clamp-2 md:line-clamp-3">
             {p.description}
           </p>
         )}
 
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-3 mt-auto">
           <div className="flex flex-col gap-1 text-[10px] text-[var(--ink-whisper)] min-w-0">
             {p.promoCode && (
               <span className="inline-flex items-center gap-1">

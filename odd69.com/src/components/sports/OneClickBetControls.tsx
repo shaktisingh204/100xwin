@@ -164,10 +164,10 @@ export default function OneClickBetControls({ className = '' }: OneClickBetContr
                                     key={amount}
                                     type="button"
                                     onClick={() => selectPreset(amount)}
-                                    className={`rounded-xl border py-2 text-[11px] font-black transition-all ${
+                                    className={`num min-h-[44px] rounded-xl border py-2 text-[12px] font-black transition-all active:scale-95 ${
                                         active
-                                            ? 'border-amber-500/40 bg-amber-500/20 text-amber-300'
-                                            : 'border-white/[0.08] bg-white/[0.04] text-white/70 hover:border-white/[0.12] hover:text-white'
+                                            ? 'border-[var(--gold-line)] bg-[var(--gold-soft)] text-[var(--gold-bright)]'
+                                            : 'border-[var(--line-default)] bg-white/[0.04] text-[var(--ink-dim)] hover:border-[var(--line-strong)] hover:text-[var(--ink)]'
                                     }`}
                                 >
                                     {activeSymbol}{amount >= 1000 ? `${amount / 1000}K` : amount}
@@ -178,8 +178,8 @@ export default function OneClickBetControls({ className = '' }: OneClickBetContr
 
                     {/* Custom input + apply */}
                     <div className="flex items-center gap-2">
-                        <div className="flex h-10 flex-1 items-center rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 focus-within:border-amber-500/40 transition-colors">
-                            <span className="text-[12px] font-black text-white/50 flex-shrink-0">{activeSymbol}</span>
+                        <div className="flex min-h-[44px] flex-1 items-center rounded-xl border border-[var(--line-default)] bg-white/[0.02] px-3 focus-within:border-[var(--gold-line)] transition-colors">
+                            <span className="num text-[13px] font-black text-[var(--ink-dim)] flex-shrink-0">{activeSymbol}</span>
                             <input
                                 ref={inputRef}
                                 type="text"
@@ -190,14 +190,15 @@ export default function OneClickBetControls({ className = '' }: OneClickBetContr
                                     if (e.key === 'Enter') { e.preventDefault(); applyStake(); }
                                 }}
                                 placeholder="Custom amount"
-                                className="ml-1.5 w-full bg-transparent text-[13px] font-bold text-white outline-none placeholder:text-white/25"
+                                className="num ml-1.5 w-full bg-transparent text-[14px] font-bold text-[var(--ink)] outline-none placeholder:text-[var(--ink-whisper)]"
                             />
                         </div>
 
                         <button
                             type="button"
                             onClick={applyStake}
-                            className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-[#1a1208] transition-all hover:brightness-110 active:scale-95"
+                            aria-label="Apply stake"
+                            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gold-grad text-[#120c00] transition-all hover:brightness-110 active:scale-95"
                         >
                             <Check size={16} strokeWidth={3} />
                         </button>

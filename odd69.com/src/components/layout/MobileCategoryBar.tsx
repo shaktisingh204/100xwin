@@ -143,7 +143,7 @@ function MobileCategoryBarInner() {
     if (pathname.includes('/live-dealers')) return null;
 
     return (
-        <div className="md:hidden w-full bg-[#06080c] border-b border-white/[0.06] overflow-x-auto scrollbar-none sticky top-[64px] z-40">
+        <div className="md:hidden w-full bg-[#06080c] border-b border-white/[0.06] overflow-x-auto no-scrollbar sticky top-[64px] z-40">
             <div className="flex items-center gap-2 p-3 min-w-max">
                 {loading ? (
                     // Skeletons

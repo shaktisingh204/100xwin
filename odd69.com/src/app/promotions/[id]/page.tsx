@@ -9,15 +9,22 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string | number | undefined }) {
-  if (!value) return null;
+function InfoRow({ icon: Icon, label, value, numeric = false }: {
+  icon: React.ElementType;
+  label: string;
+  value: string | number | undefined;
+  numeric?: boolean;
+}) {
+  if (value === undefined || value === null || value === '') return null;
   return (
-    <div className="flex items-center justify-between py-3 border-b border-white/[0.06] last:border-0">
-      <div className="flex items-center gap-2.5 text-white/50">
+    <div className="flex items-center justify-between py-3 border-b border-[var(--line)] last:border-0">
+      <div className="flex items-center gap-2.5 text-[var(--ink-faint)]">
         <Icon size={14} />
         <span className="text-[13px]">{label}</span>
       </div>
-      <span className="text-[13px] font-bold text-white">{value}</span>
+      <span className={`text-[13px] font-bold text-[var(--ink-strong)] ${numeric ? 'num' : ''}`}>
+        {value}
+      </span>
     </div>
   );
 }
@@ -57,18 +64,20 @@ export default function PromotionDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center bg-[#06080c]">
-        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-white/[0.06] border-t-amber-500" />
+      <div className="flex min-h-[50vh] items-center justify-center bg-[var(--bg-base)]">
+        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-[var(--line)] border-t-[var(--gold)]" />
       </div>
     );
   }
 
   if (!promo) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 bg-[#06080c]">
-        <p className="text-white/50 text-lg">Promotion not found</p>
-        <button onClick={() => router.push('/promotions')}
-          className="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 text-[#1a1208] rounded-xl font-bold text-sm">
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 bg-[var(--bg-base)] px-4 text-center">
+        <p className="text-[var(--ink-dim)] text-[15px]">Promotion not found</p>
+        <button
+          onClick={() => router.push('/promotions')}
+          className="btn btn-gold sweep h-10 uppercase tracking-[0.06em] text-[11px] px-5"
+        >
           Back to Promotions
         </button>
       </div>
@@ -76,71 +85,92 @@ export default function PromotionDetailPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#06080c]">
-      <div className="max-w-[800px] mx-auto px-4 md:px-6 py-6 space-y-6">
+    <div className="min-h-screen bg-[var(--bg-base)]">
+      <div className="max-w-[800px] mx-auto px-4 md:px-6 pt-4 md:pt-6 pb-32 md:pb-12 space-y-5 md:space-y-6">
         {/* Back */}
-        <button onClick={() => router.back()}
-          className="flex items-center gap-2 text-white/50 hover:text-white text-sm transition-colors">
+        <button
+          onClick={() => router.back()}
+          className="inline-flex items-center gap-2 text-[var(--ink-faint)] hover:text-[var(--ink)] text-[13px] transition-colors"
+        >
           <ArrowLeft size={16} /> Back to Promotions
         </button>
 
         {/* Hero banner */}
-        <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] h-[200px] md:h-[260px]">
+        <div className="relative overflow-hidden rounded-[18px] md:rounded-[22px] border border-[var(--line-gold)] aspect-[16/9] md:aspect-[21/9] grain">
           {promo.bgImage ? (
-            <img src={promo.bgImage} alt={promo.title} className="h-full w-full object-cover" />
+            <img src={promo.bgImage} alt={promo.title} className="absolute inset-0 h-full w-full object-cover" />
           ) : (
-            <div className="h-full w-full" style={{ background: promo.gradient || 'linear-gradient(135deg, #1a1d22 0%, #2a2030 100%)' }} />
+            <div
+              className="absolute inset-0"
+              style={{ background: promo.gradient || 'linear-gradient(135deg, var(--gold-soft), transparent), var(--bg-elevated)' }}
+            />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+          {/* Scrim */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'linear-gradient(180deg, rgba(10,11,15,0.05) 0%, rgba(10,11,15,0.45) 50%, rgba(10,11,15,0.92) 100%)',
+            }}
+          />
 
           {/* Character image */}
           {promo.charImage && (
-            <img src={promo.charImage} alt="" className="absolute bottom-0 right-4 h-[80%] object-contain pointer-events-none" />
+            <img
+              src={promo.charImage}
+              alt=""
+              className="absolute bottom-0 right-3 md:right-4 h-[78%] md:h-[82%] object-contain pointer-events-none"
+            />
           )}
 
-          {/* Category + bonus */}
-          <div className="absolute top-4 left-4 flex items-center gap-2">
+          {/* Top chips */}
+          <div className="absolute top-3 left-3 right-3 flex items-center gap-2 flex-wrap">
             {promo.category && (
-              <span className="px-3 py-1 rounded-full bg-amber-500/90 text-[#1a1208] text-[11px] font-bold uppercase">
-                {promo.category}
-              </span>
+              <span className="chip chip-gold">{promo.category}</span>
             )}
             {promo.badgeLabel && (
-              <span className="px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-white text-[11px] font-bold border border-white/[0.1]">
-                {promo.badgeLabel}
-              </span>
+              <span className="chip">{promo.badgeLabel}</span>
             )}
           </div>
 
           {/* Bonus percentage */}
-          {promo.bonusPercentage && promo.bonusPercentage > 0 && (
-            <div className="absolute bottom-4 left-4">
-              <span className="text-5xl md:text-6xl font-black text-white/90 drop-shadow-lg leading-none">
+          {promo.bonusPercentage && promo.bonusPercentage > 0 ? (
+            <div className="absolute bottom-3 left-3 md:bottom-4 md:left-4">
+              <span className="num font-display font-extrabold text-[44px] md:text-[64px] leading-none tracking-[-0.04em] text-gold-grad drop-shadow-[0_2px_12px_rgba(0,0,0,0.6)]">
                 +{promo.bonusPercentage}%
               </span>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Title + description */}
         <div className="space-y-2">
-          <h1 className="text-2xl md:text-3xl font-black text-white leading-tight">{promo.title}</h1>
-          {promo.subtitle && <p className="text-amber-500 font-bold text-sm">{promo.subtitle}</p>}
+          <h1 className="font-display font-extrabold text-[22px] md:text-[28px] leading-tight tracking-[-0.02em] text-[var(--ink-strong)]">
+            {promo.title}
+          </h1>
+          {promo.subtitle && (
+            <p className="text-[var(--gold-bright)] font-semibold text-[13px]">{promo.subtitle}</p>
+          )}
           {promo.description && (
-            <p className="text-white/70 text-[14px] leading-relaxed">{promo.description}</p>
+            <p className="text-[var(--ink-dim)] text-[13.5px] leading-relaxed">{promo.description}</p>
           )}
         </div>
 
         {/* Promo code */}
         {promo.promoCode && (
-          <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/[0.06] border border-amber-500/20">
-            <Tag size={16} className="text-amber-500 shrink-0" />
+          <div className="flex items-center gap-3 p-4 rounded-[14px] bg-[var(--gold-soft)] border border-[var(--line-gold)]">
+            <Tag size={16} className="text-[var(--gold)] shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] text-amber-500/60 uppercase font-bold">Promo Code</p>
-              <p className="text-lg font-black text-amber-500 tracking-widest">{promo.promoCode}</p>
+              <p className="t-eyebrow !text-[9px] !text-[var(--gold)]">Promo Code</p>
+              <p className="num text-[18px] font-bold text-[var(--gold-bright)] tracking-widest truncate">
+                {promo.promoCode}
+              </p>
             </div>
-            <button onClick={copyCode}
-              className="flex items-center gap-1.5 px-4 py-2 bg-amber-500/15 hover:bg-amber-500/25 rounded-lg text-amber-500 font-bold text-xs transition-colors border border-amber-500/20">
+            <button
+              onClick={copyCode}
+              className="inline-flex items-center gap-1.5 chip chip-gold !py-2 !px-3"
+              aria-label="Copy promo code"
+            >
               {copied ? <CheckCircle size={14} /> : <Copy size={14} />}
               {copied ? 'Copied' : 'Copy'}
             </button>
@@ -148,64 +178,101 @@ export default function PromotionDetailPage() {
         )}
 
         {/* Details card */}
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] overflow-hidden">
-          <div className="px-4 py-3 border-b border-white/[0.06]">
-            <h3 className="text-sm font-bold text-white">Offer Details</h3>
+        <div className="rounded-[14px] border border-[var(--line-default)] bg-[var(--bg-surface)] overflow-hidden">
+          <div className="px-4 py-3 border-b border-[var(--line)]">
+            <h3 className="font-display font-bold text-[13px] text-[var(--ink-strong)]">Offer Details</h3>
           </div>
           <div className="px-4">
-            <InfoRow icon={Percent} label="Bonus Percentage" value={promo.bonusPercentage ? `${promo.bonusPercentage}%` : undefined} />
-            <InfoRow icon={Gift} label="Max Bonus" value={promo.maxBonus ? `₹${promo.maxBonus.toLocaleString()}` : undefined} />
-            <InfoRow icon={Wallet} label="Min Deposit" value={promo.minDeposit ? `₹${promo.minDeposit.toLocaleString()}` : undefined} />
-            <InfoRow icon={Shield} label="Wagering Requirement" value={promo.wageringMultiplier ? `${promo.wageringMultiplier}×` : undefined} />
-            <InfoRow icon={Calendar} label="Validity" value={promo.validityDays ? `${promo.validityDays} days` : undefined} />
+            <InfoRow icon={Percent} label="Bonus Percentage" value={promo.bonusPercentage ? `${promo.bonusPercentage}%` : undefined} numeric />
+            <InfoRow icon={Gift} label="Max Bonus" value={promo.maxBonus ? `₹${promo.maxBonus.toLocaleString()}` : undefined} numeric />
+            <InfoRow icon={Wallet} label="Min Deposit" value={promo.minDeposit ? `₹${promo.minDeposit.toLocaleString()}` : undefined} numeric />
+            <InfoRow icon={Shield} label="Wagering Requirement" value={promo.wageringMultiplier ? `${promo.wageringMultiplier}×` : undefined} numeric />
+            <InfoRow icon={Calendar} label="Validity" value={promo.validityDays ? `${promo.validityDays} days` : undefined} numeric />
             <InfoRow icon={Users} label="Target Audience" value={promo.targetAudience} />
-            <InfoRow icon={Clock} label="Expires" value={daysLeft !== null ? (daysLeft === 0 ? 'Today' : `${daysLeft} days left`) : undefined} />
+            <InfoRow icon={Clock} label="Expires" value={daysLeft !== null ? (daysLeft === 0 ? 'Today' : `${daysLeft} days left`) : undefined} numeric={daysLeft !== null && daysLeft > 0} />
           </div>
         </div>
 
         {/* Claim progress */}
         {claimProgress !== null && promo.claimLimit && (
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4 space-y-2">
+          <div className="rounded-[14px] border border-[var(--line-default)] bg-[var(--bg-surface)] p-4 space-y-2">
             <div className="flex items-center justify-between text-[12px]">
-              <span className="text-white/50">Claims Used</span>
-              <span className="font-bold text-white">{promo.claimCount || 0} / {promo.claimLimit}</span>
+              <span className="text-[var(--ink-faint)]">Claims Used</span>
+              <span className="num font-bold text-[var(--ink-strong)]">
+                {promo.claimCount || 0} / {promo.claimLimit}
+              </span>
             </div>
-            <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-600 transition-all" style={{ width: `${claimProgress}%` }} />
+            <div className="h-2 bg-[var(--ink-ghost)] rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gold-grad transition-all"
+                style={{ width: `${claimProgress}%` }}
+              />
             </div>
           </div>
         )}
 
-        {/* T&C */}
+        {/* T&C accordion (default closed) */}
         {promo.termsAndConditions && (
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] overflow-hidden">
-            <button onClick={() => setTcOpen(!tcOpen)}
-              className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/[0.02] transition-colors">
+          <div className="rounded-[14px] border border-[var(--line-default)] bg-[var(--bg-surface)] overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setTcOpen(!tcOpen)}
+              aria-expanded={tcOpen}
+              className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-[var(--bg-elevated)] transition-colors"
+            >
               <div className="flex items-center gap-2">
-                <FileText size={14} className="text-white/50" />
-                <span className="text-sm font-bold text-white">Terms & Conditions</span>
+                <FileText size={14} className="text-[var(--ink-faint)]" />
+                <span className="text-[13px] font-bold text-[var(--ink-strong)]">Terms &amp; Conditions</span>
               </div>
-              {tcOpen ? <ChevronUp size={14} className="text-white/50" /> : <ChevronDown size={14} className="text-white/50" />}
+              {tcOpen
+                ? <ChevronUp size={14} className="text-[var(--ink-faint)]" />
+                : <ChevronDown size={14} className="text-[var(--ink-faint)]" />}
             </button>
             {tcOpen && (
-              <div className="px-4 pb-4 border-t border-white/[0.06]">
-                <p className="text-[12px] text-white/50 leading-relaxed whitespace-pre-line pt-3">{promo.termsAndConditions}</p>
+              <div className="px-4 pb-4 border-t border-[var(--line)]">
+                <p className="text-[12px] text-[var(--ink-dim)] leading-relaxed whitespace-pre-line pt-3">
+                  {promo.termsAndConditions}
+                </p>
               </div>
             )}
           </div>
         )}
 
-        {/* CTA */}
-        <div className="flex gap-3">
-          {promo.buttonLink && (
-            <a href={promo.buttonLink} target="_blank" rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:opacity-90 text-[#1a1208] font-black text-sm uppercase tracking-wider transition-all active:scale-[0.98]">
+        {/* Inline CTA (md+) */}
+        {promo.buttonLink && (
+          <div className="hidden md:block">
+            <a
+              href={promo.buttonLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-gold sweep w-full h-12 uppercase tracking-[0.08em] text-[12px]"
+            >
               <Gift size={16} />
               {promo.buttonText || 'Claim Now'}
             </a>
-          )}
-        </div>
+          </div>
+        )}
       </div>
+
+      {/* Sticky bottom CTA — mobile only, with safe-area */}
+      {promo.buttonLink && (
+        <div
+          className="md:hidden fixed inset-x-0 bottom-0 z-40 glass border-t border-[var(--line-default)]"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        >
+          <div className="px-4 pt-3 pb-3">
+            <a
+              href={promo.buttonLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-gold sweep w-full h-12 uppercase tracking-[0.08em] text-[12px]"
+            >
+              <Gift size={15} />
+              {promo.buttonText || 'Claim Now'}
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

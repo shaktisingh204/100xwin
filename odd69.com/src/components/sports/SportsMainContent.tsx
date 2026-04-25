@@ -350,7 +350,7 @@ function SportGroupSection({
           <RailArrow direction="right" onClick={() => scrollRail(railRef, 'right')} />
         </div>
       </div>
-      <div ref={railRef} className="-mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 py-1.5 scrollbar-none">
+      <div ref={railRef} className="-mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 py-1.5 no-scrollbar">
         {cards.map((e) => {
           const isUserPinned  = userPinnedIds.has(e.matchId);
           const isAdminPinned = adminPinnedIds.has(e.matchId);
@@ -472,7 +472,7 @@ function PinnedMatchesRail({
 
       <div
         ref={railRef}
-        className="-mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 py-1.5 scrollbar-none"
+        className="-mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 py-1.5 no-scrollbar"
       >
         {loading
           ? Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} />)
@@ -1015,7 +1015,7 @@ export default function SportsMainContent({
           <div className="relative">
             <div
               ref={leaguesRef}
-              className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 py-1 scrollbar-none"
+              className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 py-1 no-scrollbar"
             >
               {loading
                 ? Array.from({ length: 8 }).map((_, i) => <BadgeSkeleton key={i} />)
@@ -1052,7 +1052,7 @@ export default function SportsMainContent({
           <div className="relative">
             <div
               ref={leagueRef}
-              className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 py-1 scrollbar-none"
+              className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 py-1 no-scrollbar"
             >
               {topLeagues.map((league) => (
                 <LeagueCard
@@ -1132,7 +1132,7 @@ export default function SportsMainContent({
             </div>
           </div>
 
-          <div ref={liveRef} className="-mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 py-1.5 scrollbar-none">
+          <div ref={liveRef} className="-mx-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 py-1.5 no-scrollbar">
             {loading
               ? Array.from({ length: 4 }).map((_, i) => <CardSkeleton key={i} />)
               : topEvents.length > 0

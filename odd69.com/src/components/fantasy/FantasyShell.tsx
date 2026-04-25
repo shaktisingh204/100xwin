@@ -44,19 +44,19 @@ export default function FantasyShell({
     href === "/fantasy" ? pathname === "/fantasy" : pathname?.startsWith(href) ?? false;
 
   return (
-    <div className="min-h-full bg-[#06080c]">
+    <div className="min-h-full bg-[var(--bg-base)]">
       {(title || backHref !== undefined || rightSlot) && (
-        <div className="relative overflow-hidden border-b border-white/[0.04]">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(245,158,11,0.15),_transparent_60%)]" />
-          <div className="absolute -right-20 -top-20 w-64 h-64 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
-          <div className="relative px-4 md:px-6 py-5 md:py-6 max-w-5xl mx-auto w-full">
+        <div className="relative overflow-hidden border-b border-[var(--line-default)] glass">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--gold-soft),_transparent_60%)]" />
+          <div className="absolute -right-20 -top-20 w-64 h-64 rounded-full bg-[var(--gold)]/10 blur-3xl pointer-events-none" />
+          <div className="relative px-4 md:px-6 py-4 md:py-5 max-w-5xl mx-auto w-full">
             <div className="flex items-center gap-3">
               {backHref !== undefined && (
                 backHref ? (
                   <Link
                     prefetch
                     href={backHref}
-                    className="w-9 h-9 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] flex items-center justify-center text-white/70 hover:text-white transition-colors shrink-0"
+                    className="w-11 h-11 rounded-full bg-[var(--bg-elevated)] hover:bg-[var(--bg-raised)] border border-[var(--line-default)] flex items-center justify-center text-[var(--ink-dim)] hover:text-[var(--ink)] transition-colors shrink-0"
                     aria-label="Back"
                   >
                     <ArrowLeft size={16} strokeWidth={2.5} />
@@ -64,7 +64,7 @@ export default function FantasyShell({
                 ) : (
                   <button
                     onClick={() => router.back()}
-                    className="w-9 h-9 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] flex items-center justify-center text-white/70 hover:text-white transition-colors shrink-0"
+                    className="w-11 h-11 rounded-full bg-[var(--bg-elevated)] hover:bg-[var(--bg-raised)] border border-[var(--line-default)] flex items-center justify-center text-[var(--ink-dim)] hover:text-[var(--ink)] transition-colors shrink-0"
                     aria-label="Back"
                   >
                     <ArrowLeft size={16} strokeWidth={2.5} />
@@ -73,12 +73,12 @@ export default function FantasyShell({
               )}
               <div className="flex-1 min-w-0">
                 {title && (
-                  <h1 className="text-white font-black text-[17px] md:text-xl truncate tracking-tight">
+                  <h1 className="font-display text-[var(--ink)] font-extrabold text-[17px] md:text-xl truncate tracking-tight">
                     {title}
                   </h1>
                 )}
                 {subtitle && (
-                  <p className="text-white/40 text-[11px] md:text-xs font-medium truncate mt-0.5">
+                  <p className="text-[var(--ink-faint)] text-[11px] md:text-xs font-medium truncate mt-0.5">
                     {subtitle}
                   </p>
                 )}
@@ -91,7 +91,7 @@ export default function FantasyShell({
 
       <div className="px-4 md:px-6 py-4 md:py-5 max-w-5xl mx-auto w-full">
         {!hideSubNav && (
-          <div className="-mx-4 md:mx-0 mb-4 md:mb-5 overflow-x-auto" style={{ scrollbarWidth: "none" }}>
+          <div className="-mx-4 md:mx-0 mb-4 md:mb-5 overflow-x-auto no-scrollbar">
             <div className="inline-flex md:flex items-center gap-2 px-4 md:px-0 min-w-full">
               {subNav.map((item) => {
                 const Icon = item.icon;
@@ -100,10 +100,10 @@ export default function FantasyShell({
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-[11px] md:text-xs font-bold whitespace-nowrap transition-all tracking-wide ${
+                    className={`inline-flex items-center gap-1.5 px-4 h-9 rounded-full text-[11px] md:text-xs font-bold whitespace-nowrap transition-all uppercase tracking-[0.08em] ${
                       active
-                        ? "bg-gradient-to-r from-amber-500/20 to-orange-500/10 text-amber-300 border border-amber-500/30"
-                        : "bg-white/[0.02] text-white/40 border border-white/[0.06] hover:border-white/[0.12] hover:text-white/70"
+                        ? "bg-[var(--gold-soft)] text-[var(--gold-bright)] border border-[var(--line-gold)]"
+                        : "bg-[var(--bg-surface)] text-[var(--ink-faint)] border border-[var(--line-default)] hover:border-[var(--line-strong)] hover:text-[var(--ink)]"
                     }`}
                   >
                     <Icon size={13} strokeWidth={2.5} />

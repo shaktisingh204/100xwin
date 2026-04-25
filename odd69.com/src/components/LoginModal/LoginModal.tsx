@@ -13,6 +13,91 @@ interface LoginModalProps {
     onRegisterClick?: () => void;
 }
 
+/* ── 6-cell paste-aware OTP input (inline) ─────────────────────────────── */
+function OtpCells({
+    value, onChange, length = 6, error = false, autoFocus = false,
+}: {
+    value: string;
+    onChange: (v: string) => void;
+    length?: number;
+    error?: boolean;
+    autoFocus?: boolean;
+}) {
+    const inputs = useRef<Array<HTMLInputElement | null>>([]);
+    const focus = useCallback((i: number) => {
+        const el = inputs.current[i];
+        if (el) { el.focus(); el.select(); }
+    }, []);
+    useEffect(() => {
+        if (autoFocus) focus(Math.min(value.length, length - 1));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    const onCellChange = (i: number, e: React.ChangeEvent<HTMLInputElement>) => {
+        const raw = e.target.value;
+        if (!raw) {
+            const arr = value.split(""); arr[i] = ""; onChange(arr.join(""));
+            return;
+        }
+        const digits = raw.replace(/\D/g, "");
+        if (!digits) return;
+        if (digits.length === 1) {
+            const arr = value.padEnd(length, " ").split("");
+            arr[i] = digits;
+            onChange(arr.join("").replace(/\s/g, "").slice(0, length));
+            if (i < length - 1) focus(i + 1);
+        } else {
+            const merged = (value.slice(0, i) + digits).slice(0, length);
+            onChange(merged);
+            focus(Math.min(i + digits.length, length - 1));
+        }
+    };
+    const onKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Backspace") {
+            if (value[i]) {
+                const arr = value.split(""); arr[i] = ""; onChange(arr.join("")); e.preventDefault();
+            } else if (i > 0) {
+                const arr = value.split(""); arr[i - 1] = ""; onChange(arr.join(""));
+                focus(i - 1); e.preventDefault();
+            }
+        } else if (e.key === "ArrowLeft" && i > 0) { focus(i - 1); e.preventDefault(); }
+        else if (e.key === "ArrowRight" && i < length - 1) { focus(i + 1); e.preventDefault(); }
+        else if (e.key === "Home") { focus(0); e.preventDefault(); }
+        else if (e.key === "End") { focus(length - 1); e.preventDefault(); }
+    };
+    const onPaste = (i: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+        e.preventDefault();
+        const pasted = e.clipboardData.getData("text").replace(/\D/g, "");
+        if (!pasted) return;
+        const merged = (value.slice(0, i) + pasted).slice(0, length);
+        onChange(merged);
+        setTimeout(() => focus(Math.min(i + pasted.length, length - 1)), 0);
+    };
+    return (
+        <div className="flex gap-1.5 sm:gap-2 w-full" role="group" aria-label="One-time passcode">
+            {Array.from({ length }).map((_, i) => (
+                <input
+                    key={i}
+                    ref={(el) => { inputs.current[i] = el; }}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete={i === 0 ? "one-time-code" : "off"}
+                    pattern="[0-9]*"
+                    maxLength={1}
+                    aria-label={`Digit ${i + 1}`}
+                    value={value[i] ?? ""}
+                    onChange={(e) => onCellChange(i, e)}
+                    onKeyDown={(e) => onKey(i, e)}
+                    onPaste={(e) => onPaste(i, e)}
+                    onFocus={(e) => e.target.select()}
+                    className={`flex-1 min-w-0 h-14 text-[22px] font-bold text-center num text-[var(--ink)] bg-[var(--bg-inlay)] border rounded-[10px] focus:outline-none transition-colors ${
+                        error ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
+                    }`}
+                />
+            ))}
+        </div>
+    );
+}
+
 const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => {
     const router = useRouter();
     const [showPassword, setShowPassword] = useState(false);
@@ -73,6 +158,13 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
             if (cooldownRef.current) clearInterval(cooldownRef.current);
             if (expiryRef.current) clearInterval(expiryRef.current);
         };
+    }, []);
+
+    // Body scroll-lock while modal mounted
+    useEffect(() => {
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => { document.body.style.overflow = prev; };
     }, []);
 
     const clearErrors = () => { setError(''); setFieldErrors({}); };
@@ -204,8 +296,11 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
             onClick={(e) => { if (e.target === e.currentTarget && onClose) onClose(); }}
         >
             <div
-                className="relative w-full sm:w-[440px] bg-[var(--bg-surface)] rounded-t-[22px] sm:rounded-[22px] border border-[var(--line-gold)] shadow-[var(--shadow-lift)] flex flex-col flex-shrink-0 overflow-hidden grain sm:min-h-[560px]"
-                style={{ maxHeight: '92dvh' }}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="login-modal-title"
+                className="relative w-full sm:w-[440px] bg-[var(--bg-surface)] rounded-t-[22px] sm:rounded-[22px] border border-[var(--line-gold)] shadow-[var(--shadow-lift)] flex flex-col flex-shrink-0 overflow-hidden grain sm:min-h-[560px] animate-rise"
+                style={{ maxHeight: '92dvh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
             >
                 {/* Atmospheric halo */}
                 <div
@@ -213,13 +308,14 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
                     style={{ background: "var(--gold-halo)" }}
                 />
 
-                {/* Close */}
+                {/* Close — 44×44 touch target with safe-area top inset */}
                 <button
                     onClick={onClose}
-                    className="absolute top-4 right-4 z-20 w-8 h-8 grid place-items-center rounded-full bg-[var(--bg-inlay)] border border-[var(--line-default)] text-[var(--ink-faint)] hover:text-[var(--ink)] hover:border-[var(--line-strong)] transition-colors"
+                    style={{ top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
+                    className="absolute right-3 z-20 w-11 h-11 grid place-items-center rounded-full bg-[var(--bg-inlay)] border border-[var(--line-default)] text-[var(--ink-faint)] hover:text-[var(--ink)] hover:border-[var(--line-strong)] active:scale-95 transition-all"
                     aria-label="Close"
                 >
-                    <X size={15} />
+                    <X size={18} />
                 </button>
 
                 {/* ── Non-scrolling header ── */}
@@ -236,7 +332,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
                     </div>
 
                     {/* Heading */}
-                    <h2 className="t-section !text-[20px] mb-1">Welcome back</h2>
+                    <h2 id="login-modal-title" className="t-section !text-[20px] mb-1">Welcome back</h2>
                     <p className="text-[12.5px] text-[var(--ink-dim)] mb-4">
                         New here?{' '}
                         <button
@@ -273,25 +369,30 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
                     <form onSubmit={handleLogin} className="flex flex-col gap-3 pt-4" noValidate>
 
                         {/* Identifier */}
-                        <div className="flex flex-col gap-1">
-                            <div className="flex gap-2 h-11">
+                        <div className="flex flex-col gap-1.5">
+                            <label htmlFor="login-identifier" className="text-[11.5px] font-medium text-[var(--ink-dim)] ml-0.5">
+                                Email, phone, or username
+                            </label>
+                            <div className="flex gap-2 h-12 sm:h-11">
                                 {showCountryCode && (
-                                    <div className="flex-shrink-0 h-11">
+                                    <div className="flex-shrink-0 h-12 sm:h-11">
                                         <CountryCodeSelector
                                             value={selectedCountry}
                                             onChange={setSelectedCountry}
                                         />
                                     </div>
                                 )}
-                                <div className="relative flex-1 h-11">
+                                <div className="relative flex-1 h-12 sm:h-11">
                                     {!showCountryCode && (
                                         <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
                                     )}
                                     <input
+                                        id="login-identifier"
                                         type="text"
+                                        inputMode={/^\d+$/.test(identifier) ? "tel" : "text"}
                                         placeholder="Email / Phone / Username"
                                         autoComplete="username"
-                                        className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] ${showCountryCode ? 'px-3.5' : 'pl-9 pr-3.5'} text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
+                                        className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] ${showCountryCode ? 'px-3.5' : 'pl-9 pr-3.5'} text-[15px] sm:text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
                                             fieldErrors.identifier
                                                 ? 'border-[var(--crimson)]'
                                                 : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
@@ -312,14 +413,18 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
                         {/* Password mode */}
                         {loginMode === 'password' && (
                             <>
-                                <div className="flex flex-col gap-1">
-                                    <div className="relative h-11">
+                                <div className="flex flex-col gap-1.5">
+                                    <label htmlFor="login-password" className="text-[11.5px] font-medium text-[var(--ink-dim)] ml-0.5">
+                                        Password
+                                    </label>
+                                    <div className="relative h-12 sm:h-11">
                                         <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
                                         <input
+                                            id="login-password"
                                             type={showPassword ? "text" : "password"}
-                                            placeholder="Password"
+                                            placeholder="Enter your password"
                                             autoComplete="current-password"
-                                            className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
+                                            className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-12 text-[15px] sm:text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
                                                 fieldErrors.password
                                                     ? 'border-[var(--crimson)]'
                                                     : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
@@ -334,11 +439,11 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
                                         <button
                                             type="button"
                                             onClick={() => setShowPassword(v => !v)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] hover:text-[var(--ink)] transition-colors"
+                                            className="absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 grid place-items-center text-[var(--ink-faint)] hover:text-[var(--ink)] transition-colors"
                                             tabIndex={-1}
                                             aria-label={showPassword ? "Hide password" : "Show password"}
                                         >
-                                            {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                                         </button>
                                     </div>
                                     {fieldErrors.password && (
@@ -362,30 +467,21 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
 
                         {/* OTP verify */}
                         {loginMode === 'otp' && otpStep === 'verify' && (
-                            <div className="flex flex-col gap-1.5 mt-1">
-                                <div className="flex items-center gap-2 mb-0.5">
+                            <div className="flex flex-col gap-2 mt-1">
+                                <div className="flex items-center gap-2 mb-1">
                                     <ShieldCheck size={13} className="text-[var(--gold-bright)]" />
                                     <label className="text-[11.5px] font-medium text-[var(--ink-dim)]">
                                         Enter the 6-digit code we just sent
                                     </label>
                                 </div>
-                                <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    maxLength={6}
-                                    placeholder="000000"
-                                    className={`w-full h-12 bg-[var(--bg-inlay)] border rounded-[10px] px-4 text-[var(--ink)] text-[20px] tracking-[0.45em] text-center font-bold num focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] placeholder:tracking-normal placeholder:font-normal ${
-                                        fieldErrors.otpCode
-                                            ? 'border-[var(--crimson)]'
-                                            : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
-                                    }`}
+                                <OtpCells
                                     value={otpCode}
-                                    onChange={e => {
-                                        const digits = e.target.value.replace(/\D/g, '').slice(0, 6);
-                                        setOtpCode(digits);
+                                    onChange={(v) => {
+                                        setOtpCode(v);
                                         setError('');
                                         setFieldErrors(p => ({ ...p, otpCode: '' }));
                                     }}
+                                    error={!!fieldErrors.otpCode}
                                     autoFocus
                                 />
                                 {fieldErrors.otpCode && (

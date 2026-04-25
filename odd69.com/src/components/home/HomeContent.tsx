@@ -66,7 +66,7 @@ export default function HomeContent() {
     }, []);
 
     return (
-        <main className="flex-1 bg-[#06080c] pt-[60px] md:pt-[64px] min-h-screen pb-20 w-full max-w-[1600px] mx-auto px-4 md:px-6 lg:px-8">
+        <main className="flex-1 bg-[var(--bg-base)] pt-3 sm:pt-4 md:pt-6 min-h-screen pb-6 w-full max-w-[1600px] mx-auto page-x">
             <HomeHero />
             <RecentWinsTicker />
             <CategoryGrid />
@@ -112,7 +112,7 @@ export default function HomeContent() {
             )}
 
             {liveGames.length > 0 && (
-                <div className="bg-white/[0.02] border border-white/[0.04] p-6 -mx-6 md:-mx-8 rounded-3xl mt-12 mb-8">
+                <div className="bg-white/[0.02] border border-[var(--line-default)] p-4 sm:p-6 -mx-4 sm:-mx-6 md:-mx-8 rounded-3xl mt-8 sm:mt-12 mb-8">
                     <HomeGameList
                         title="Live Casino"
                         games={liveGames}

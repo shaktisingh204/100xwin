@@ -88,6 +88,91 @@ const ALL_COUNTRIES = Object.entries(COUNTRY_CURRENCY_MAP)
     .map(([iso, v]) => ({ iso, ...v }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+/* ── 6-cell paste-aware OTP input (inline) ─────────────────────────────── */
+function OtpCells({
+    value, onChange, length = 6, error = false, autoFocus = false,
+}: {
+    value: string;
+    onChange: (v: string) => void;
+    length?: number;
+    error?: boolean;
+    autoFocus?: boolean;
+}) {
+    const inputs = useRef<Array<HTMLInputElement | null>>([]);
+    const focus = useCallback((i: number) => {
+        const el = inputs.current[i];
+        if (el) { el.focus(); el.select(); }
+    }, []);
+    useEffect(() => {
+        if (autoFocus) focus(Math.min(value.length, length - 1));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    const onCellChange = (i: number, e: React.ChangeEvent<HTMLInputElement>) => {
+        const raw = e.target.value;
+        if (!raw) {
+            const arr = value.split(""); arr[i] = ""; onChange(arr.join(""));
+            return;
+        }
+        const digits = raw.replace(/\D/g, "");
+        if (!digits) return;
+        if (digits.length === 1) {
+            const arr = value.padEnd(length, " ").split("");
+            arr[i] = digits;
+            onChange(arr.join("").replace(/\s/g, "").slice(0, length));
+            if (i < length - 1) focus(i + 1);
+        } else {
+            const merged = (value.slice(0, i) + digits).slice(0, length);
+            onChange(merged);
+            focus(Math.min(i + digits.length, length - 1));
+        }
+    };
+    const onKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Backspace") {
+            if (value[i]) {
+                const arr = value.split(""); arr[i] = ""; onChange(arr.join("")); e.preventDefault();
+            } else if (i > 0) {
+                const arr = value.split(""); arr[i - 1] = ""; onChange(arr.join(""));
+                focus(i - 1); e.preventDefault();
+            }
+        } else if (e.key === "ArrowLeft" && i > 0) { focus(i - 1); e.preventDefault(); }
+        else if (e.key === "ArrowRight" && i < length - 1) { focus(i + 1); e.preventDefault(); }
+        else if (e.key === "Home") { focus(0); e.preventDefault(); }
+        else if (e.key === "End") { focus(length - 1); e.preventDefault(); }
+    };
+    const onPaste = (i: number, e: React.ClipboardEvent<HTMLInputElement>) => {
+        e.preventDefault();
+        const pasted = e.clipboardData.getData("text").replace(/\D/g, "");
+        if (!pasted) return;
+        const merged = (value.slice(0, i) + pasted).slice(0, length);
+        onChange(merged);
+        setTimeout(() => focus(Math.min(i + pasted.length, length - 1)), 0);
+    };
+    return (
+        <div className="flex gap-1.5 sm:gap-2 w-full" role="group" aria-label="One-time passcode">
+            {Array.from({ length }).map((_, i) => (
+                <input
+                    key={i}
+                    ref={(el) => { inputs.current[i] = el; }}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete={i === 0 ? "one-time-code" : "off"}
+                    pattern="[0-9]*"
+                    maxLength={1}
+                    aria-label={`Digit ${i + 1}`}
+                    value={value[i] ?? ""}
+                    onChange={(e) => onCellChange(i, e)}
+                    onKeyDown={(e) => onKey(i, e)}
+                    onPaste={(e) => onPaste(i, e)}
+                    onFocus={(e) => e.target.select()}
+                    className={`flex-1 min-w-0 h-14 text-[22px] font-bold text-center num text-[var(--ink)] bg-[var(--bg-inlay)] border rounded-[10px] focus:outline-none transition-colors ${
+                        error ? "border-[var(--crimson)]" : "border-[var(--line-default)] focus:border-[var(--line-gold)]"
+                    }`}
+                />
+            ))}
+        </div>
+    );
+}
+
 /* ──────────────────────────────────────────────────────────────────────
    LOGIN FORM — password / OTP, identifier auto-detect, country code,
    send + verify OTP with cooldown & expiry, suspended/429 messaging.
@@ -282,13 +367,13 @@ function LoginForm({ onSwitchToRegister, onClose }: { onSwitchToRegister: () => 
             <form onSubmit={handleLogin} className="flex flex-col gap-3" noValidate>
                 {/* Identifier */}
                 <div className="flex flex-col gap-1">
-                    <div className="flex gap-2 h-11">
+                    <div className="flex gap-2 h-12 sm:h-11">
                         {showCountryCode && (
-                            <div className="flex-shrink-0 h-11">
+                            <div className="flex-shrink-0 h-12 sm:h-11">
                                 <CountryCodeSelector value={selectedCountry} onChange={setSelectedCountry} />
                             </div>
                         )}
-                        <div className="relative flex-1 h-11">
+                        <div className="relative flex-1 h-12 sm:h-11">
                             {!showCountryCode && (
                                 <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
                             )}
@@ -296,7 +381,7 @@ function LoginForm({ onSwitchToRegister, onClose }: { onSwitchToRegister: () => 
                                 type="text"
                                 placeholder="Email / Phone / Username"
                                 autoComplete="username"
-                                className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] ${showCountryCode ? 'px-3.5' : 'pl-9 pr-3.5'} text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
+                                className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] ${showCountryCode ? 'px-3.5' : 'pl-9 pr-3.5'} text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
                                     fieldErrors.identifier
                                         ? 'border-[var(--crimson)]'
                                         : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
@@ -318,13 +403,13 @@ function LoginForm({ onSwitchToRegister, onClose }: { onSwitchToRegister: () => 
                 {loginMode === 'password' && (
                     <>
                         <div className="flex flex-col gap-1">
-                            <div className="relative h-11">
+                            <div className="relative h-12 sm:h-11">
                                 <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
                                 <input
                                     type={showPassword ? "text" : "password"}
                                     placeholder="Password"
                                     autoComplete="current-password"
-                                    className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
+                                    className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
                                         fieldErrors.password
                                             ? 'border-[var(--crimson)]'
                                             : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
@@ -367,29 +452,21 @@ function LoginForm({ onSwitchToRegister, onClose }: { onSwitchToRegister: () => 
 
                 {/* OTP verify */}
                 {loginMode === 'otp' && otpStep === 'verify' && (
-                    <div className="flex flex-col gap-1.5 mt-1">
-                        <div className="flex items-center gap-2 mb-0.5">
+                    <div className="flex flex-col gap-2 mt-1">
+                        <div className="flex items-center gap-2 mb-1">
                             <ShieldCheck size={13} className="text-[var(--gold-bright)]" />
                             <label className="text-[11.5px] font-medium text-[var(--ink-dim)]">
                                 Enter the 6-digit code we just sent
                             </label>
                         </div>
-                        <input
-                            type="text"
-                            inputMode="numeric"
-                            maxLength={6}
-                            placeholder="000000"
-                            className={`w-full h-12 bg-[var(--bg-inlay)] border rounded-[10px] px-4 text-[var(--ink)] text-[20px] tracking-[0.45em] text-center font-bold num focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] placeholder:tracking-normal placeholder:font-normal ${
-                                fieldErrors.otpCode
-                                    ? 'border-[var(--crimson)]'
-                                    : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
-                            }`}
+                        <OtpCells
                             value={otpCode}
-                            onChange={e => {
-                                setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6));
+                            onChange={(v) => {
+                                setOtpCode(v);
                                 setError('');
                                 setFieldErrors(p => ({ ...p, otpCode: '' }));
                             }}
+                            error={!!fieldErrors.otpCode}
                             autoFocus
                         />
                         {fieldErrors.otpCode && (
@@ -715,17 +792,11 @@ function RegisterForm({ onSwitchToLogin, onClose }: { onSwitchToLogin: () => voi
                     </div>
 
                     <div>
-                        <input
-                            type="text"
-                            inputMode="numeric"
-                            maxLength={6}
-                            placeholder="000000"
+                        <OtpCells
                             value={otpCode}
-                            onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}
+                            onChange={(v) => { setOtpCode(v); setError(''); }}
+                            error={!!error}
                             autoFocus
-                            className={`w-full h-14 bg-[var(--bg-inlay)] border rounded-[10px] px-4 text-[var(--ink)] text-[26px] font-bold tracking-[0.5em] text-center num focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] placeholder:tracking-[0.3em] placeholder:font-normal ${
-                                error ? 'border-[var(--crimson)]' : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
-                            }`}
                         />
                         {error && (
                             <p className="text-[var(--crimson)] text-[11.5px] mt-1.5 ml-1 flex items-center gap-1">
@@ -784,7 +855,7 @@ function RegisterForm({ onSwitchToLogin, onClose }: { onSwitchToLogin: () => voi
                             <button
                                 type="button"
                                 onClick={() => { setShowCountryDropdown(!showCountryDropdown); setCountrySearch(''); }}
-                                className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] px-3.5 flex items-center gap-3 text-left transition-colors ${
+                                className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] px-3.5 flex items-center gap-3 text-left transition-colors ${
                                     fieldErrors.registrationCountry
                                         ? 'border-[var(--crimson)]'
                                         : registrationCountry
@@ -882,7 +953,7 @@ function RegisterForm({ onSwitchToLogin, onClose }: { onSwitchToLogin: () => voi
                                     inputMode="numeric"
                                     placeholder="Phone number"
                                     autoFocus
-                                    className={`flex-1 h-11 bg-[var(--bg-inlay)] border rounded-[10px] px-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] num ${
+                                    className={`flex-1 h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] px-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] num ${
                                         fieldErrors.phoneNumber
                                             ? 'border-[var(--crimson)]'
                                             : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
@@ -902,7 +973,7 @@ function RegisterForm({ onSwitchToLogin, onClose }: { onSwitchToLogin: () => voi
                                     placeholder="Email address"
                                     autoFocus
                                     autoComplete="email"
-                                    className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
+                                    className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
                                         fieldErrors.email
                                             ? 'border-[var(--crimson)]'
                                             : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
@@ -935,7 +1006,7 @@ function RegisterForm({ onSwitchToLogin, onClose }: { onSwitchToLogin: () => voi
                                 type="text"
                                 placeholder="Username (optional)"
                                 autoComplete="username"
-                                className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
+                                className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-3.5 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
                                     fieldErrors.username
                                         ? 'border-[var(--crimson)]'
                                         : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
@@ -962,7 +1033,7 @@ function RegisterForm({ onSwitchToLogin, onClose }: { onSwitchToLogin: () => voi
                                 type={showPassword ? "text" : "password"}
                                 placeholder="Password (min. 8 characters)"
                                 autoComplete="new-password"
-                                className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
+                                className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
                                     fieldErrors.password
                                         ? 'border-[var(--crimson)]'
                                         : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
@@ -997,7 +1068,7 @@ function RegisterForm({ onSwitchToLogin, onClose }: { onSwitchToLogin: () => voi
                                 type={showConfirmPassword ? "text" : "password"}
                                 placeholder="Confirm password"
                                 autoComplete="new-password"
-                                className={`w-full h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
+                                className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] pl-9 pr-10 text-[var(--ink)] text-[13.5px] focus:outline-none transition-colors placeholder:text-[var(--ink-whisper)] ${
                                     fieldErrors.confirmPassword
                                         ? 'border-[var(--crimson)]'
                                         : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
@@ -1100,7 +1171,7 @@ function RegisterForm({ onSwitchToLogin, onClose }: { onSwitchToLogin: () => voi
                     <button
                         type="button"
                         onClick={() => setHasPromo(!hasPromo)}
-                        className={`w-full h-11 border rounded-[10px] px-4 flex items-center justify-center font-semibold text-[12px] uppercase tracking-[0.08em] transition-all ${
+                        className={`w-full h-12 sm:h-11 border rounded-[10px] px-4 flex items-center justify-center font-semibold text-[12px] uppercase tracking-[0.08em] transition-all ${
                             hasPromo
                                 ? 'border-[var(--line-gold)] text-[var(--gold-bright)] bg-[var(--gold-soft)]'
                                 : 'border-[var(--line-default)] text-[var(--ink-faint)] hover:text-[var(--ink)] bg-[var(--bg-inlay)] hover:border-[var(--line-strong)]'
@@ -1132,7 +1203,7 @@ function RegisterForm({ onSwitchToLogin, onClose }: { onSwitchToLogin: () => voi
                         <input
                             type="text"
                             placeholder="Enter promo code"
-                            className="w-full h-11 bg-[var(--bg-inlay)] border-2 border-dashed border-[var(--line-gold)] rounded-[10px] px-3.5 text-[var(--gold-bright)] text-[13.5px] focus:outline-none focus:border-[var(--gold-bright)] transition-colors placeholder:text-[rgba(255,204,51,0.35)] font-bold uppercase tracking-[0.12em]"
+                            className="w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border-2 border-dashed border-[var(--line-gold)] rounded-[10px] px-3.5 text-[var(--gold-bright)] text-[13.5px] focus:outline-none focus:border-[var(--gold-bright)] transition-colors placeholder:text-[rgba(255,204,51,0.35)] font-bold uppercase tracking-[0.12em]"
                             value={formData.promoCode}
                             onChange={(e) => setFormData({ ...formData, promoCode: e.target.value })}
                         />
@@ -1202,6 +1273,14 @@ export default function AuthModal() {
         return () => document.removeEventListener("keydown", onKey);
     }, [isOpen, closeLogin, closeRegister]);
 
+    // Body scroll-lock while modal open
+    useEffect(() => {
+        if (!isOpen) return;
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+        return () => { document.body.style.overflow = prev; };
+    }, [isOpen]);
+
     if (!isOpen) return null;
 
     const handleClose = () => { closeLogin(); closeRegister(); };
@@ -1214,8 +1293,11 @@ export default function AuthModal() {
             onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
         >
             <div
-                className={`relative w-full ${isRegisterOpen ? 'sm:max-w-[480px]' : 'sm:max-w-[440px]'} bg-[var(--bg-surface)] rounded-t-[22px] sm:rounded-[22px] border border-[var(--line-gold)] shadow-[var(--shadow-lift)] overflow-hidden grain`}
-                style={{ maxHeight: '92dvh' }}
+                role="dialog"
+                aria-modal="true"
+                aria-label={isRegisterOpen ? "Create an account" : "Log in"}
+                className={`relative w-full ${isRegisterOpen ? 'sm:max-w-[480px]' : 'sm:max-w-[440px]'} bg-[var(--bg-surface)] rounded-t-[22px] sm:rounded-[22px] border border-[var(--line-gold)] shadow-[var(--shadow-lift)] overflow-hidden grain animate-rise`}
+                style={{ maxHeight: '92dvh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
             >
                 {/* Atmospheric halo */}
                 <div
@@ -1223,13 +1305,14 @@ export default function AuthModal() {
                     style={{ background: "var(--gold-halo)" }}
                 />
 
-                {/* Close */}
+                {/* Close — 44×44 touch target with safe-area top inset */}
                 <button
                     onClick={handleClose}
-                    className="absolute top-4 right-4 z-20 w-8 h-8 grid place-items-center rounded-full bg-[var(--bg-inlay)] border border-[var(--line-default)] text-[var(--ink-faint)] hover:text-[var(--ink)] hover:border-[var(--line-strong)] transition-colors"
+                    style={{ top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
+                    className="absolute right-3 z-20 w-11 h-11 grid place-items-center rounded-full bg-[var(--bg-inlay)] border border-[var(--line-default)] text-[var(--ink-faint)] hover:text-[var(--ink)] hover:border-[var(--line-strong)] active:scale-95 transition-all"
                     aria-label="Close"
                 >
-                    <X size={15} />
+                    <X size={18} />
                 </button>
 
                 {/* Logo */}

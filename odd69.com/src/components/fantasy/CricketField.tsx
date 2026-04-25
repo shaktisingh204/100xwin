@@ -41,6 +41,10 @@ const ROLE_ORDER: Array<{ key: string; label: string }> = [
   { key: "bowler", label: "Bowlers" },
 ];
 
+// Team colour fallbacks pulled from theme tokens (resolved via CSS vars at use site).
+const FALLBACK_TEAM_A = "var(--gold)";
+const FALLBACK_TEAM_B = "var(--ice)";
+
 export default function CricketField({
   players,
   teamA,
@@ -62,13 +66,13 @@ export default function CricketField({
   return (
     <div className="relative w-full max-w-md mx-auto aspect-[4/5] select-none">
       <div className="absolute inset-0 rounded-[46%] bg-gradient-to-b from-[#2a7a38] via-[#1e5c2a] to-[#0f3a18] overflow-hidden shadow-2xl shadow-black/60">
-        <div className="absolute inset-[2%] rounded-[46%] border-[3px] border-white/25" />
-        <div className="absolute inset-[24%] rounded-[50%] border-2 border-white/20" />
+        <div className="absolute inset-[2%] rounded-[46%] border-[3px] border-[var(--ink-whisper)]" />
+        <div className="absolute inset-[24%] rounded-[50%] border-2 border-[var(--ink-whisper)]" />
         <div
           className="absolute inset-0 opacity-[0.12]"
           style={{
             backgroundImage:
-              "repeating-linear-gradient(0deg, transparent 0 22px, rgba(255,255,255,0.85) 22px 23px)",
+              "repeating-linear-gradient(0deg, transparent 0 22px, rgba(243,241,236,0.85) 22px 23px)",
           }}
         />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_transparent_40%,_rgba(0,0,0,0.55)_100%)]" />
@@ -77,17 +81,17 @@ export default function CricketField({
           <div className="absolute top-[14%] left-0 right-0 h-[2px] bg-black/70" />
           <div className="absolute bottom-[14%] left-0 right-0 h-[2px] bg-black/70" />
           <div className="absolute top-[6%] left-1/2 -translate-x-1/2 flex gap-[1px]">
-            <span className="w-[2px] h-[6px] bg-white rounded-sm" />
-            <span className="w-[2px] h-[6px] bg-white rounded-sm" />
-            <span className="w-[2px] h-[6px] bg-white rounded-sm" />
+            <span className="w-[2px] h-[6px] bg-[var(--ink)] rounded-sm" />
+            <span className="w-[2px] h-[6px] bg-[var(--ink)] rounded-sm" />
+            <span className="w-[2px] h-[6px] bg-[var(--ink)] rounded-sm" />
           </div>
           <div className="absolute bottom-[6%] left-1/2 -translate-x-1/2 flex gap-[1px]">
-            <span className="w-[2px] h-[6px] bg-white rounded-sm" />
-            <span className="w-[2px] h-[6px] bg-white rounded-sm" />
-            <span className="w-[2px] h-[6px] bg-white rounded-sm" />
+            <span className="w-[2px] h-[6px] bg-[var(--ink)] rounded-sm" />
+            <span className="w-[2px] h-[6px] bg-[var(--ink)] rounded-sm" />
+            <span className="w-[2px] h-[6px] bg-[var(--ink)] rounded-sm" />
           </div>
         </div>
-        <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-40 h-20 bg-amber-400/15 blur-2xl rounded-full" />
+        <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-40 h-20 bg-[var(--gold)]/15 blur-2xl rounded-full" />
       </div>
 
       <div className="absolute inset-0 flex flex-col justify-between px-[5%] py-[9%]">
@@ -125,17 +129,17 @@ function RoleRow({
   if (players.length === 0) {
     return (
       <div className="flex flex-col items-center gap-1 min-h-[58px] justify-center">
-        <span className="text-[8px] font-black uppercase tracking-widest text-white/45">
+        <span className="t-eyebrow !text-[8px] !text-[var(--ink-whisper)]">
           {label}
         </span>
-        <span className="text-[9px] font-bold text-white/40">—</span>
+        <span className="num text-[9px] font-bold text-[var(--ink-faint)]">—</span>
       </div>
     );
   }
 
   return (
     <div className="flex flex-col items-center gap-1">
-      <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-white/80 drop-shadow">
+      <span className="t-eyebrow !text-[8px] md:!text-[9px] !text-[var(--ink-strong)] drop-shadow">
         {label}
       </span>
       <div className="flex items-start justify-center gap-1.5 md:gap-2.5 flex-wrap w-full">
@@ -146,8 +150,8 @@ function RoleRow({
             "";
           const teamColor =
             p.teamId === teamA?.id
-              ? teamA?.color || "#f59e0b"
-              : teamB?.color || "#0ea5e9";
+              ? teamA?.color || FALLBACK_TEAM_A
+              : teamB?.color || FALLBACK_TEAM_B;
           return (
             <PlayerChip
               key={p.playerId}
@@ -193,10 +197,11 @@ function PlayerChip({
     >
       <div className="relative">
         <div
-          className="w-11 h-11 md:w-[52px] md:h-[52px] rounded-full bg-[#0c0f14] overflow-hidden flex items-center justify-center"
+          className="w-11 h-11 md:w-[52px] md:h-[52px] rounded-full bg-[var(--bg-base)] overflow-hidden flex items-center justify-center"
           style={{ boxShadow: `0 0 0 3px ${teamColor}, 0 4px 14px rgba(0,0,0,0.5)` }}
         >
           {player.image ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={player.image}
               alt=""
@@ -206,15 +211,15 @@ function PlayerChip({
               }}
             />
           ) : (
-            <div className="w-full h-full bg-gradient-to-b from-white/10 to-white/[0.02] flex items-center justify-center">
-              <Users size={16} className="text-white/40" />
+            <div className="w-full h-full bg-gradient-to-b from-[var(--ink-ghost)] to-transparent flex items-center justify-center">
+              <Users size={16} className="text-[var(--ink-faint)]" />
             </div>
           )}
         </div>
 
         {teamShort && (
           <span
-            className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[7px] font-black text-white px-1.5 py-[1px] rounded-sm tracking-wide shadow"
+            className="absolute -bottom-1 left-1/2 -translate-x-1/2 num text-[7px] font-extrabold text-[var(--ink)] px-1.5 py-[1px] rounded-sm tracking-wide shadow"
             style={{ background: teamColor }}
           >
             {teamShort}
@@ -222,13 +227,13 @@ function PlayerChip({
         )}
 
         {isC && (
-          <span className="absolute -top-1.5 -right-1.5 inline-flex items-center gap-0.5 bg-amber-500 text-[#1a1208] text-[9px] font-black rounded-md px-1 py-[1px] border-2 border-[#06080c] shadow-md">
-            <Crown size={8} strokeWidth={3} /> C · 2x
+          <span className="absolute -top-1.5 -right-1.5 inline-flex items-center gap-0.5 bg-[var(--gold)] text-[var(--bg-base)] text-[9px] font-extrabold rounded-md px-1 py-[1px] border-2 border-[var(--bg-base)] shadow-md">
+            <Crown size={8} strokeWidth={3} /> <span className="num">C · 2x</span>
           </span>
         )}
         {isVC && (
-          <span className="absolute -top-1.5 -right-1.5 inline-flex items-center gap-0.5 bg-cyan-400 text-[#06080c] text-[9px] font-black rounded-md px-1 py-[1px] border-2 border-[#06080c] shadow-md">
-            <Star size={8} strokeWidth={3} /> VC · 1.5x
+          <span className="absolute -top-1.5 -right-1.5 inline-flex items-center gap-0.5 bg-[var(--ice)] text-[var(--bg-base)] text-[9px] font-extrabold rounded-md px-1 py-[1px] border-2 border-[var(--bg-base)] shadow-md">
+            <Star size={8} strokeWidth={3} /> <span className="num">VC · 1.5x</span>
           </span>
         )}
       </div>
@@ -236,19 +241,19 @@ function PlayerChip({
       <div
         className={`mt-2 rounded px-1.5 py-[2px] min-w-[52px] text-center shadow ${
           isC
-            ? "bg-amber-500 text-[#1a1208]"
+            ? "bg-[var(--gold)] text-[var(--bg-base)]"
             : isVC
-              ? "bg-cyan-400 text-[#06080c]"
-              : "bg-black/70 backdrop-blur-sm text-white"
+              ? "bg-[var(--ice)] text-[var(--bg-base)]"
+              : "bg-black/70 backdrop-blur-sm text-[var(--ink)]"
         }`}
       >
-        <p className="text-[9px] md:text-[10px] font-black truncate leading-tight tracking-tight">
+        <p className="text-[9px] md:text-[10px] font-extrabold truncate leading-tight tracking-tight">
           {displayName}
         </p>
       </div>
 
       {showCredits && player.credit != null && (
-        <span className="mt-0.5 bg-white/90 text-[#0c0f14] text-[8px] font-black px-1.5 py-[1px] rounded-full shadow-sm">
+        <span className="num mt-0.5 bg-[var(--ink)] text-[var(--bg-base)] text-[8px] font-extrabold px-1.5 py-[1px] rounded-full shadow-sm">
           {player.credit.toFixed(1)} Cr
         </span>
       )}

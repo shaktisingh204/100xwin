@@ -86,11 +86,11 @@ export default function CategoryGrid() {
                 {/* Casino Large Card */}
                 <Link
                     href={hasTwoLarge ? largeCats![0].link : '/casino'}
-                    className="relative h-[140px] md:h-[180px] rounded-2xl overflow-hidden group cursor-pointer border border-white/[0.04] hover:border-amber-500/30 transition-all hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] block bg-white/[0.02]"
-                    style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.08) 0%, #06080c 100%)' }}
+                    className="relative h-[120px] sm:h-[140px] md:h-[180px] rounded-2xl overflow-hidden group cursor-pointer border border-[var(--line-default)] hover:border-[var(--line-gold)] transition-all hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] block bg-[var(--bg-surface)]"
+                    style={{ background: 'linear-gradient(135deg, var(--gold-soft) 0%, var(--bg-base) 100%)' }}
                 >
                     {/* Background pattern */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-[var(--gold-soft)] via-transparent to-transparent" />
 
                     {/* Image */}
                     {hasTwoLarge && largeCats![0].image ? (
@@ -111,21 +111,21 @@ export default function CategoryGrid() {
                     )}
 
                     {/* Label */}
-                    <div className="absolute top-4 left-4 z-10">
+                    <div className="absolute top-3 sm:top-4 left-3 sm:left-4 z-10">
                         <div className="flex items-center gap-2 mb-1">
-                            <div className="w-6 h-6 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                                <Gamepad2 size={13} className="text-amber-400" />
+                            <div className="w-6 h-6 rounded-lg bg-[var(--gold-soft)] flex items-center justify-center">
+                                <Gamepad2 size={13} className="text-[var(--gold-bright)]" />
                             </div>
                         </div>
-                        <h3 className="text-white font-black text-xl uppercase leading-tight tracking-tight drop-shadow">
+                        <h3 className="font-display text-[var(--ink)] font-black text-base sm:text-lg md:text-xl uppercase leading-tight tracking-tight drop-shadow">
                             {hasTwoLarge ? largeCats![0].title : 'CASINO'}
                         </h3>
                         {hasTwoLarge && largeCats![0].subtitle && (
-                            <p className="text-white/70 text-[10px] font-medium mt-0.5">{largeCats![0].subtitle}</p>
+                            <p className="text-[var(--ink-dim)] text-[10px] font-medium mt-0.5">{largeCats![0].subtitle}</p>
                         )}
                     </div>
-                    <div className="absolute bottom-3 left-4 z-10">
-                        <span className="text-amber-400 text-[10px] font-bold uppercase flex items-center gap-1">
+                    <div className="absolute bottom-3 left-3 sm:left-4 z-10">
+                        <span className="text-[var(--gold-bright)] text-[10px] font-bold uppercase flex items-center gap-1">
                             Play Now <ArrowRight size={10} />
                         </span>
                     </div>
@@ -134,11 +134,11 @@ export default function CategoryGrid() {
                 {/* Sports Large Card */}
                 <Link
                     href={hasTwoLarge ? largeCats![1].link : '/sports'}
-                    className="relative h-[140px] md:h-[180px] rounded-2xl overflow-hidden group cursor-pointer border border-white/[0.04] hover:border-amber-500/30 transition-all hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] block bg-white/[0.02]"
-                    style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.05) 0%, #06080c 100%)' }}
+                    className="relative h-[120px] sm:h-[140px] md:h-[180px] rounded-2xl overflow-hidden group cursor-pointer border border-[var(--line-default)] hover:border-[var(--line-gold)] transition-all hover:shadow-[0_8px_32px_rgba(0,0,0,0.4)] block bg-[var(--bg-surface)]"
+                    style={{ background: 'linear-gradient(135deg, var(--gold-soft) 0%, var(--bg-base) 100%)' }}
                 >
                     {/* Background pattern */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-amber-500/8 via-transparent to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-[var(--gold-soft)] via-transparent to-transparent" />
 
                     {/* Image */}
                     {hasTwoLarge && largeCats![1].image ? (
@@ -159,21 +159,21 @@ export default function CategoryGrid() {
                     )}
 
                     {/* Label */}
-                    <div className="absolute top-4 left-4 z-10">
+                    <div className="absolute top-3 sm:top-4 left-3 sm:left-4 z-10">
                         <div className="flex items-center gap-2 mb-1">
-                            <div className="w-6 h-6 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                                <Trophy size={13} className="text-amber-400" />
+                            <div className="w-6 h-6 rounded-lg bg-[var(--gold-soft)] flex items-center justify-center">
+                                <Trophy size={13} className="text-[var(--gold-bright)]" />
                             </div>
                         </div>
-                        <h3 className="text-white font-black text-xl uppercase leading-tight tracking-tight drop-shadow">
+                        <h3 className="font-display text-[var(--ink)] font-black text-base sm:text-lg md:text-xl uppercase leading-tight tracking-tight drop-shadow">
                             {hasTwoLarge ? largeCats![1].title : 'SPORTS'}
                         </h3>
                         {hasTwoLarge && largeCats![1].subtitle && (
-                            <p className="text-white/70 text-[10px] font-medium mt-0.5">{largeCats![1].subtitle}</p>
+                            <p className="text-[var(--ink-dim)] text-[10px] font-medium mt-0.5">{largeCats![1].subtitle}</p>
                         )}
                     </div>
-                    <div className="absolute bottom-3 left-4 z-10">
-                        <span className="text-amber-400 text-[10px] font-bold uppercase flex items-center gap-1">
+                    <div className="absolute bottom-3 left-3 sm:left-4 z-10">
+                        <span className="text-[var(--gold-bright)] text-[10px] font-bold uppercase flex items-center gap-1">
                             Bet Now <ArrowRight size={10} />
                         </span>
                     </div>
@@ -188,11 +188,11 @@ export default function CategoryGrid() {
                         <Link
                             key={cat.id}
                             href={cat.path}
-                            className={`relative flex flex-col items-center justify-center gap-2 h-[80px] md:h-[100px] rounded-xl border border-white/[0.04] hover:border-amber-500/30 transition-all group overflow-hidden bg-gradient-to-b ${cat.color}`}
+                            className="relative flex flex-col items-center justify-center gap-2 min-h-[72px] sm:h-[88px] md:h-[100px] rounded-xl border border-[var(--line-default)] hover:border-[var(--line-gold)] transition-all group overflow-hidden bg-gradient-to-b from-[var(--gold-soft)] to-transparent"
                         >
-                            <div className="absolute inset-0 bg-[#06080c]/70" />
-                            <IconComp size={20} className={`${cat.iconColor} z-10 group-hover:scale-110 transition-transform duration-300`} />
-                            <span className="text-[10px] md:text-[11px] font-bold text-white/70 uppercase tracking-wide z-10 text-center leading-none">
+                            <div className="absolute inset-0 bg-[var(--bg-base)]/70" />
+                            <IconComp size={20} className="text-[var(--gold)] z-10 group-hover:scale-110 transition-transform duration-300" />
+                            <span className="text-[10px] md:text-[11px] font-bold text-[var(--ink-dim)] uppercase tracking-wide z-10 text-center leading-none">
                                 {cat.name}
                             </span>
                         </Link>

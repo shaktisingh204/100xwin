@@ -1,8 +1,18 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Wallet, Search, ArrowDownLeft, ArrowUpRight, RefreshCw, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Wallet,
+  Search,
+  ArrowDownLeft,
+  ArrowUpRight,
+  RefreshCw,
+  Clock,
+  CheckCircle,
+  XCircle,
+} from "lucide-react";
 import api from "@/services/api";
 import { useModal } from "@/context/ModalContext";
 
@@ -17,46 +27,150 @@ interface Transaction {
   note?: string;
 }
 
-const STATUS_CONFIG: Record<string, { icon: React.ComponentType<any>; color: string; bg: string; label: string }> = {
-  approved:   { icon: CheckCircle,  color: "text-green-400",  bg: "bg-green-500/10 border-green-500/20", label: "Approved" },
-  pending:    { icon: Clock,        color: "text-yellow-400", bg: "bg-yellow-500/10 border-yellow-500/20", label: "Pending"  },
-  processing: { icon: RefreshCw,    color: "text-blue-400",   bg: "bg-blue-500/10 border-blue-500/20",   label: "Processing" },
-  rejected:   { icon: XCircle,      color: "text-red-400",    bg: "bg-red-500/10 border-red-500/20",     label: "Rejected"  },
+type StatusKey = "approved" | "pending" | "processing" | "rejected";
+
+const STATUS_CONFIG: Record<
+  StatusKey,
+  { icon: React.ComponentType<any>; chip: string; label: string }
+> = {
+  approved: { icon: CheckCircle, chip: "chip-emerald", label: "Approved" },
+  pending: { icon: Clock, chip: "chip-gold", label: "Pending" },
+  processing: { icon: RefreshCw, chip: "chip-ice", label: "Processing" },
+  rejected: { icon: XCircle, chip: "chip-crimson", label: "Rejected" },
 };
 
-function TxRow({ tx }: { tx: Transaction }) {
+const PAGE = 15;
+
+function formatDate(d: Date) {
+  return d.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+function formatTime(d: Date) {
+  return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+}
+
+/* ---------- Mobile card ---------- */
+function TxCard({ tx }: { tx: Transaction }) {
   const isDeposit = tx.type === "deposit";
-  const cfg = STATUS_CONFIG[tx.status] ?? STATUS_CONFIG.pending;
+  const cfg = STATUS_CONFIG[(tx.status as StatusKey) ?? "pending"] ?? STATUS_CONFIG.pending;
   const Icon = cfg.icon;
   const date = new Date(tx.createdAt);
+  const amountColor = isDeposit ? "var(--emerald)" : "var(--crimson)";
 
   return (
-    <div className="flex items-center gap-3 p-4 hover:bg-white/[0.02] transition-colors border-b border-white/[0.04] last:border-0">
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isDeposit ? "bg-green-500/10" : "bg-red-500/10"}`}>
-        {isDeposit
-          ? <ArrowDownLeft className="w-5 h-5 text-green-400" />
-          : <ArrowUpRight  className="w-5 h-5 text-red-400" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-semibold text-white capitalize">{tx.type}</p>
-          {tx.method && <span className="text-[10px] text-white/40 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">{tx.method}</span>}
+    <div className="card p-3 hover:border-[var(--line-gold)] transition-all">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+            style={{
+              background: isDeposit
+                ? "color-mix(in srgb, var(--emerald) 14%, transparent)"
+                : "color-mix(in srgb, var(--crimson) 14%, transparent)",
+            }}
+          >
+            {isDeposit ? (
+              <ArrowDownLeft className="w-4 h-4" style={{ color: "var(--emerald)" }} />
+            ) : (
+              <ArrowUpRight className="w-4 h-4" style={{ color: "var(--crimson)" }} />
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-[var(--ink-strong)] capitalize leading-tight">
+              {tx.type}
+            </p>
+            <p className="num text-[11px] text-[var(--ink-faint)] mt-0.5">
+              {formatDate(date)} · {formatTime(date)}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-2 mt-0.5">
-          <p className="text-xs text-white/40">{date.toLocaleDateString("en-IN")} · {date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</p>
-          {tx.utr && <span className="text-[10px] text-white/30 font-mono">UTR: {tx.utr}</span>}
-        </div>
+        <span className={`chip ${cfg.chip} shrink-0`}>
+          <Icon className="w-3 h-3" />
+          {cfg.label}
+        </span>
       </div>
-      <div className="text-right shrink-0">
-        <p className={`text-sm font-bold ${isDeposit ? "text-green-400" : "text-red-400"}`}>
+
+      <div className="mt-3 flex items-end justify-between gap-2">
+        <p className="num text-[20px] font-bold leading-none" style={{ color: amountColor }}>
           {isDeposit ? "+" : "-"}₹{tx.amount.toLocaleString("en-IN")}
         </p>
-        <div className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-medium ${cfg.bg} ${cfg.color}`}>
-          <Icon className="w-2.5 h-2.5" />
-          {cfg.label}
-        </div>
+        {tx.method && (
+          <span className="chip text-[10px] uppercase tracking-[0.06em]">{tx.method}</span>
+        )}
       </div>
+
+      {(tx.utr || tx.note) && (
+        <div className="mt-3 pt-3 border-t border-[var(--line)] flex items-center justify-between gap-2">
+          {tx.utr ? (
+            <p className="num text-[10px] text-[var(--ink-faint)] truncate">
+              <span className="text-[var(--ink-whisper)]">UTR</span> {tx.utr}
+            </p>
+          ) : (
+            <span />
+          )}
+          {tx.note && (
+            <p className="text-[10px] text-[var(--ink-faint)] truncate text-right">{tx.note}</p>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+/* ---------- Desktop row (table) ---------- */
+function TxTableRow({ tx }: { tx: Transaction }) {
+  const isDeposit = tx.type === "deposit";
+  const cfg = STATUS_CONFIG[(tx.status as StatusKey) ?? "pending"] ?? STATUS_CONFIG.pending;
+  const Icon = cfg.icon;
+  const date = new Date(tx.createdAt);
+  const amountColor = isDeposit ? "var(--emerald)" : "var(--crimson)";
+
+  return (
+    <tr className="border-b border-[var(--line)] hover:bg-[var(--bg-elevated)] transition-colors">
+      <td className="py-3 px-4">
+        <div className="flex items-center gap-2">
+          <div
+            className="w-8 h-8 rounded-lg flex items-center justify-center"
+            style={{
+              background: isDeposit
+                ? "color-mix(in srgb, var(--emerald) 14%, transparent)"
+                : "color-mix(in srgb, var(--crimson) 14%, transparent)",
+            }}
+          >
+            {isDeposit ? (
+              <ArrowDownLeft className="w-4 h-4" style={{ color: "var(--emerald)" }} />
+            ) : (
+              <ArrowUpRight className="w-4 h-4" style={{ color: "var(--crimson)" }} />
+            )}
+          </div>
+          <span className="text-sm capitalize text-[var(--ink-strong)] font-medium">
+            {tx.type}
+          </span>
+        </div>
+      </td>
+      <td className="py-3 px-4 num text-sm text-[var(--ink-dim)]">
+        {formatDate(date)}{" "}
+        <span className="text-[var(--ink-whisper)]">{formatTime(date)}</span>
+      </td>
+      <td className="py-3 px-4 text-sm text-[var(--ink-dim)]">{tx.method || "—"}</td>
+      <td className="py-3 px-4 num text-sm text-[var(--ink-faint)] truncate max-w-[160px]">
+        {tx.utr || "—"}
+      </td>
+      <td className="py-3 px-4 text-right">
+        <span className="num text-sm font-bold" style={{ color: amountColor }}>
+          {isDeposit ? "+" : "-"}₹{tx.amount.toLocaleString("en-IN")}
+        </span>
+      </td>
+      <td className="py-3 px-4 text-right">
+        <span className={`chip ${cfg.chip}`}>
+          <Icon className="w-3 h-3" />
+          {cfg.label}
+        </span>
+      </td>
+    </tr>
   );
 }
 
@@ -64,76 +178,177 @@ export default function TransactionsPage() {
   const { openDeposit, openWithdraw } = useModal();
   const [txns, setTxns] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "deposit" | "withdrawal">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "deposit" | "withdrawal">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | StatusKey>("all");
+  const [visible, setVisible] = useState(PAGE);
 
   useEffect(() => {
     setLoading(true);
-    api.get("/transactions/my")
-      .then(res => setTxns(res.data?.data || res.data || []))
+    api
+      .get("/transactions/my")
+      .then((res) => setTxns(res.data?.data || res.data || []))
       .catch(() => setTxns([]))
       .finally(() => setLoading(false));
   }, []);
 
-  const filtered = filter === "all" ? txns : txns.filter(t => t.type === filter);
+  const filtered = useMemo(
+    () =>
+      txns.filter(
+        (t) =>
+          (typeFilter === "all" || t.type === typeFilter) &&
+          (statusFilter === "all" || t.status === statusFilter),
+      ),
+    [txns, typeFilter, statusFilter],
+  );
+
+  const shown = filtered.slice(0, visible);
+  const hasMore = visible < filtered.length;
+
+  useEffect(() => {
+    setVisible(PAGE);
+  }, [typeFilter, statusFilter]);
+
+  const TYPE_FILTERS: Array<{ key: typeof typeFilter; label: string }> = [
+    { key: "all", label: "All" },
+    { key: "deposit", label: "Deposits" },
+    { key: "withdrawal", label: "Withdrawals" },
+  ];
+  const STATUS_FILTERS: Array<{ key: typeof statusFilter; label: string }> = [
+    { key: "all", label: "Any status" },
+    { key: "approved", label: "Approved" },
+    { key: "pending", label: "Pending" },
+    { key: "processing", label: "Processing" },
+    { key: "rejected", label: "Rejected" },
+  ];
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 py-6 md:py-10 space-y-5 animate-in fade-in duration-300">
+    <div className="page-x py-5 md:py-10 max-w-[1100px] mx-auto space-y-5 animate-fade-up">
       {/* Header */}
-      <div className="flex items-center gap-4 bg-[#0a0d14]/80 backdrop-blur-2xl border border-white/[0.06] rounded-2xl p-4 shadow-xl">
-        <Link href="/profile" className="w-10 h-10 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.05] flex items-center justify-center text-white/50 hover:text-white transition-all">
+      <div className="flex items-center gap-3">
+        <Link
+          href="/profile"
+          className="w-10 h-10 rounded-xl border border-[var(--line-default)] bg-[var(--bg-surface)] flex items-center justify-center text-[var(--ink-dim)] hover:text-[var(--gold-bright)] hover:border-[var(--line-gold)] transition-all shrink-0"
+          aria-label="Back to profile"
+        >
           <ArrowLeft size={18} />
         </Link>
-        <div className="flex-1">
-          <h1 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
-            <Wallet size={20} className="text-emerald-400" /> Transactions
+        <div className="flex-1 rail-gold">
+          <span className="t-eyebrow">Wallet ledger</span>
+          <h1 className="t-section mt-0.5 flex items-center gap-2">
+            <Wallet size={20} className="text-[var(--gold-bright)]" /> Transactions
           </h1>
-          <p className="text-xs font-medium text-white/40 mt-0.5">Deposits and withdrawals</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={openDeposit} className="px-3 py-1.5 text-xs font-bold bg-green-500/10 border border-green-500/20 text-green-400 rounded-lg hover:bg-green-500/20 transition-colors">
-            + Deposit
-          </button>
-          <button onClick={openWithdraw} className="px-3 py-1.5 text-xs font-bold bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors">
-            Withdraw
-          </button>
         </div>
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex gap-1 bg-[#0a0d14]/80 border border-white/[0.06] rounded-xl p-1">
-        {(["all", "deposit", "withdrawal"] as const).map(f => (
-          <button key={f} onClick={() => setFilter(f)}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg capitalize transition-all ${filter === f ? "bg-white/10 text-white" : "text-white/40 hover:text-white/70"}`}>
-            {f === "all" ? "All" : f === "deposit" ? "Deposits" : "Withdrawals"}
-          </button>
-        ))}
+      {/* Quick actions */}
+      <div className="flex gap-2">
+        <button
+          onClick={openDeposit}
+          className="btn btn-gold sweep flex-1 h-11 uppercase tracking-[0.06em] text-[11px]"
+        >
+          + Deposit
+        </button>
+        <button onClick={openWithdraw} className="btn btn-ghost flex-1 h-11">
+          Withdraw
+        </button>
+      </div>
+
+      {/* Filter bar — horizontal scroll chips on mobile */}
+      <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
+        {TYPE_FILTERS.map((f) => {
+          const active = typeFilter === f.key;
+          return (
+            <button
+              key={f.key}
+              onClick={() => setTypeFilter(f.key)}
+              className={`chip whitespace-nowrap shrink-0 h-8 ${active ? "chip-gold" : ""}`}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+        <span className="w-px self-stretch bg-[var(--line)] mx-1" />
+        {STATUS_FILTERS.map((f) => {
+          const active = statusFilter === f.key;
+          return (
+            <button
+              key={f.key}
+              onClick={() => setStatusFilter(f.key)}
+              className={`chip whitespace-nowrap shrink-0 h-8 ${active ? "chip-gold" : ""}`}
+            >
+              {f.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Content */}
-      <div className="bg-[#0a0d14]/80 backdrop-blur-2xl border border-white/[0.06] rounded-3xl overflow-hidden shadow-2xl">
-        {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-2 border-emerald-500/20 border-t-emerald-500 rounded-full animate-spin" />
+      {loading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="skeleton h-[88px] rounded-[16px]" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="card border-[var(--line-gold)] p-8 text-center bg-gold-soft">
+          <div className="w-14 h-14 mx-auto rounded-2xl border border-[var(--line-gold)] bg-[var(--bg-elevated)] flex items-center justify-center text-[var(--gold-bright)] mb-3">
+            <Search size={24} />
           </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center px-6">
-            <div className="w-16 h-16 rounded-2xl bg-white/[0.02] border border-white/[0.05] flex items-center justify-center text-white/20 mb-4">
-              <Search size={28} />
-            </div>
-            <h3 className="text-lg font-black text-white mb-2">No Transactions Found</h3>
-            <p className="text-sm text-white/40 mb-6">Your deposit and withdrawal history will appear here.</p>
-            <button onClick={openDeposit} className="px-6 py-2.5 bg-gradient-to-r from-[#f59e0b] to-[#f97316] text-black font-bold rounded-xl text-sm">
-              Make a Deposit
-            </button>
+          <h3 className="t-section text-lg">No transactions yet</h3>
+          <p className="t-section-sub mt-1 mb-5">
+            Your deposits and withdrawals will land here. Start with a deposit to fund your wallet.
+          </p>
+          <button
+            onClick={openDeposit}
+            className="btn btn-gold sweep h-11 px-6 uppercase tracking-[0.06em] text-[11px]"
+          >
+            Make a deposit
+          </button>
+        </div>
+      ) : (
+        <>
+          {/* Mobile: stacked cards */}
+          <div className="md:hidden space-y-2 stagger">
+            {shown.map((tx) => (
+              <TxCard key={tx.id} tx={tx} />
+            ))}
           </div>
-        ) : (
-          <div>
-            {filtered.map(tx => <TxRow key={tx.id} tx={tx} />)}
-          </div>
-        )}
-      </div>
 
-      <div className="h-8" />
+          {/* Desktop: table */}
+          <div className="hidden md:block card p-0 overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left t-eyebrow border-b border-[var(--line-default)]">
+                  <th className="py-3 px-4">Type</th>
+                  <th className="py-3 px-4">Date</th>
+                  <th className="py-3 px-4">Method</th>
+                  <th className="py-3 px-4">Reference</th>
+                  <th className="py-3 px-4 text-right">Amount</th>
+                  <th className="py-3 px-4 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map((tx) => (
+                  <TxTableRow key={tx.id} tx={tx} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <button
+                onClick={() => setVisible((v) => v + PAGE)}
+                className="btn btn-ghost h-11 px-8 uppercase tracking-[0.06em] text-[11px]"
+              >
+                Load more
+              </button>
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="h-6" />
     </div>
   );
 }
