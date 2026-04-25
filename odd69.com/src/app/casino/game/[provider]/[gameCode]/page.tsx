@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import GamePlayInterface from "@/components/casino/GamePlayInterface";
 import { casinoService } from "@/services/casino";
+import { useModal } from "@/context/ModalContext";
 import { BiErrorAlt } from "react-icons/bi";
 import { IoGameController } from "react-icons/io5";
 
@@ -16,6 +17,8 @@ export default function CasinoGamePage() {
   const gameId = (params.gameCode as string) || "";
   const gameName = searchParams.get("name") || "Casino Game";
   const isLobby = searchParams.get("isLobby") === "true";
+
+  const { openLogin } = useModal();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +40,9 @@ export default function CasinoGamePage() {
         const username = user?.username;
 
         if (!username || !token) {
-          setError("Please login to play games");
           setLoading(false);
+          openLogin();
+          router.replace("/casino");
           return;
         }
 
@@ -68,6 +72,7 @@ export default function CasinoGamePage() {
       }
     };
     launch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId, provider, isLobby, gameName]);
 
   if (loading) {
