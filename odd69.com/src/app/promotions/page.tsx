@@ -7,7 +7,6 @@ import {
   Clock,
   ArrowRight,
   Sparkles,
-  Loader2,
   Search,
   LayoutGrid,
   Gamepad2,
@@ -37,15 +36,6 @@ const CATEGORIES = [
 ] as const;
 
 type CatId = (typeof CATEGORIES)[number]["id"];
-
-/* Gradient accents for cards without custom imagery — all keyed to theme tokens */
-const ACCENT_CLASSES = [
-  "from-[var(--gold-soft)] to-transparent",
-  "from-[var(--emerald-soft)] to-transparent",
-  "from-[var(--violet-soft)] to-transparent",
-  "from-[var(--ice-soft)] to-transparent",
-  "from-[var(--crimson-soft)] to-transparent",
-];
 
 /* ═════════════════════════════════════════════════════════════════════════════
    PAGE
@@ -347,7 +337,7 @@ function PromoCard({
   isAuthenticated: boolean;
   openLogin: () => void;
 }) {
-  // Index-based accent kept available for future variants
+  // index reserved for stagger keying — already on parent via .stagger
   void index;
 
   /* Extract percentage for big display */

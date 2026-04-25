@@ -116,15 +116,13 @@ export default function CreateTeamPage() {
 
   const selectedByTeam = useMemo(() => {
     const c: Record<number, number> = {};
-    for (const p of selected.values())
-      c[p.teamId] = (c[p.teamId] || 0) + 1;
+    for (const p of selected.values()) c[p.teamId] = (c[p.teamId] || 0) + 1;
     return c;
   }, [selected]);
 
   const selectedByRole = useMemo(() => {
     const c: Record<string, number> = {};
-    for (const p of selected.values())
-      c[p.role] = (c[p.role] || 0) + 1;
+    for (const p of selected.values()) c[p.role] = (c[p.role] || 0) + 1;
     return c;
   }, [selected]);
 
@@ -141,8 +139,6 @@ export default function CreateTeamPage() {
     if (selected.has(player.playerId)) return true;
     if (selected.size >= TOTAL_PLAYERS) return false;
 
-    // Role-min feasibility: picking this player must leave enough slots
-    // to still reach every role's minimum.
     const afterSize = selected.size + 1;
     const slotsLeft = TOTAL_PLAYERS - afterSize;
     let unmetAfter = 0;
@@ -158,9 +154,7 @@ export default function CreateTeamPage() {
 
   const unmetRoles = useMemo(
     () =>
-      ROLES.filter(
-        (r) => (selectedByRole[r.id] || 0) < r.min,
-      ).map((r) => ({
+      ROLES.filter((r) => (selectedByRole[r.id] || 0) < r.min).map((r) => ({
         ...r,
         need: r.min - (selectedByRole[r.id] || 0),
       })),
@@ -183,7 +177,7 @@ export default function CreateTeamPage() {
 
   if (authLoading || !user || loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center text-white/40 text-sm">
+      <div className="min-h-[60vh] flex items-center justify-center text-[var(--ink-faint)] text-sm">
         Loading...
       </div>
     );
@@ -195,30 +189,31 @@ export default function CreateTeamPage() {
   const currentRoleCfg = ROLES.find((r) => r.id === roleFilter)!;
 
   return (
-    <div className="h-dvh overflow-hidden bg-[#06080c] flex flex-col pb-[64px] md:pb-0">
-      {/* Amber header */}
-      <div className="relative overflow-hidden border-b border-white/[0.06] bg-[#0b0e14] flex-shrink-0">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(245,158,11,0.15),_transparent_60%)]" />
+    <div className="h-dvh overflow-hidden bg-[var(--bg-base)] flex flex-col pb-[64px] md:pb-0">
+      {/* Header — sticky panel under shell */}
+      <div className="relative overflow-hidden border-b border-[var(--line-default)] bg-[var(--bg-surface)] flex-shrink-0">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--gold-soft),_transparent_60%)]" />
         <div className="relative">
           <div className="max-w-3xl mx-auto px-3 py-3 flex items-center gap-2">
             <button
               onClick={() => router.back()}
-              className="w-9 h-9 rounded-full bg-white/[0.05] hover:bg-white/[0.08] flex items-center justify-center text-white transition-colors"
+              aria-label="Back"
+              className="w-11 h-11 rounded-full bg-[var(--bg-elevated)] hover:bg-[var(--bg-raised)] border border-[var(--line-default)] flex items-center justify-center text-[var(--ink)] transition-colors"
             >
               <ArrowLeft size={18} strokeWidth={2.5} />
             </button>
             <div className="flex-1 min-w-0">
-              <p className="text-white font-black text-[15px] tracking-tight">
+              <p className="font-display text-[var(--ink)] font-extrabold text-[15px] tracking-tight">
                 Create Team
               </p>
-              <p className="text-white/70 text-[11px] font-semibold">
+              <p className="text-[var(--ink-dim)] text-[11px] font-semibold">
                 {contestId ? "Step 2 of 4 · Pick 11 players" : "Pick 11 players"}
               </p>
             </div>
             {selected.size > 0 && (
               <button
                 onClick={() => setSelected(new Map())}
-                className="inline-flex items-center gap-1 bg-white/[0.05] hover:bg-white/[0.08] text-white px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wide"
+                className="inline-flex items-center gap-1 bg-[var(--bg-elevated)] hover:bg-[var(--bg-raised)] text-[var(--ink)] px-3 min-h-[36px] rounded-lg text-[11px] font-bold uppercase tracking-[0.08em] border border-[var(--line-default)]"
               >
                 <Trash2 size={12} strokeWidth={2.5} /> Clear
               </button>
@@ -227,7 +222,7 @@ export default function CreateTeamPage() {
 
           {contestId && (
             <div className="max-w-3xl mx-auto px-3 pb-2">
-              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.08em]">
                 {STEPS.map((s, i) => {
                   const done = s.n < 2;
                   const active = s.n === 2;
@@ -235,12 +230,12 @@ export default function CreateTeamPage() {
                     <div key={s.n} className="flex-1 flex items-center">
                       <div className="flex items-center gap-1.5">
                         <span
-                          className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
+                          className={`num w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
                             done
-                              ? "bg-emerald-500 text-white"
+                              ? "bg-[var(--emerald)] text-[var(--bg-base)]"
                               : active
-                                ? "bg-gradient-to-r from-amber-500 to-orange-600 text-[#1a1208]"
-                                : "bg-white/[0.05] text-white/40"
+                                ? "bg-[var(--gold)] text-[var(--bg-base)]"
+                                : "bg-[var(--bg-elevated)] text-[var(--ink-faint)]"
                           }`}
                         >
                           {done ? <Check size={10} strokeWidth={3} /> : s.n}
@@ -248,17 +243,17 @@ export default function CreateTeamPage() {
                         <span
                           className={
                             active
-                              ? "text-white"
+                              ? "text-[var(--ink)]"
                               : done
-                                ? "text-white/70"
-                                : "text-white/40"
+                                ? "text-[var(--ink-dim)]"
+                                : "text-[var(--ink-faint)]"
                           }
                         >
                           {s.label}
                         </span>
                       </div>
                       {i < STEPS.length - 1 && (
-                        <div className="flex-1 h-[2px] mx-1.5 bg-white/[0.06] rounded-full" />
+                        <div className="flex-1 h-[2px] mx-1.5 bg-[var(--ink-ghost)] rounded-full" />
                       )}
                     </div>
                   );
@@ -267,9 +262,9 @@ export default function CreateTeamPage() {
             </div>
           )}
 
-          {/* Team split + players progress card */}
+          {/* Team split + player count */}
           <div className="max-w-3xl mx-auto px-3 pb-3">
-            <div className="bg-white/[0.03] backdrop-blur-sm border border-white/[0.06] rounded-2xl px-3 py-3">
+            <div className="bg-[var(--bg-surface)] backdrop-blur-sm border border-[var(--line-default)] rounded-[14px] px-3 py-3">
               <div className="flex items-center justify-between gap-3">
                 {teamA && (
                   <TeamSplit
@@ -279,12 +274,13 @@ export default function CreateTeamPage() {
                   />
                 )}
                 <div className="text-center shrink-0 px-1">
-                  <p className="text-[9px] font-black uppercase tracking-widest text-white/50 leading-none">
-                    Players
-                  </p>
-                  <p className="text-white font-black text-[22px] leading-none tracking-tight mt-1">
+                  <p className="t-eyebrow !text-[9px] leading-none">Players</p>
+                  <p className="num font-display text-[var(--ink)] font-extrabold text-[22px] leading-none tracking-tight mt-1">
                     {selected.size}
-                    <span className="text-white/40 text-sm"> / {TOTAL_PLAYERS}</span>
+                    <span className="text-[var(--ink-faint)] text-sm">
+                      {" "}
+                      / {TOTAL_PLAYERS}
+                    </span>
                   </p>
                 </div>
                 {teamB && (
@@ -297,15 +293,14 @@ export default function CreateTeamPage() {
                 )}
               </div>
 
-              {/* Segmented progress pips */}
               <div className="mt-3 flex items-center gap-1">
                 {Array.from({ length: TOTAL_PLAYERS }).map((_, i) => (
                   <span
                     key={i}
                     className={`flex-1 h-1.5 rounded-full transition-all ${
                       i < selected.size
-                        ? "bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]"
-                        : "bg-white/[0.06]"
+                        ? "bg-[var(--gold-bright)] shadow-[0_0_8px_var(--gold-halo)]"
+                        : "bg-[var(--ink-ghost)]"
                     }`}
                   />
                 ))}
@@ -315,10 +310,15 @@ export default function CreateTeamPage() {
         </div>
       </div>
 
-      {/* Scroll body */}
+      {/* Scrollable body — player picker as bottom-sheet style sheet */}
       <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+        {/* Mobile bottom-sheet handle */}
+        <div className="md:hidden flex justify-center pt-2">
+          <span className="w-10 h-1 rounded-full bg-[var(--ink-whisper)]" />
+        </div>
+
         {/* Role tabs */}
-        <div className="bg-[#0b0e14] border-b border-white/[0.06] sticky top-0 z-20 flex-shrink-0">
+        <div className="bg-[var(--bg-surface)] border-b border-[var(--line-default)] sticky top-0 z-20 flex-shrink-0">
           <div className="max-w-3xl mx-auto">
             <div className="flex items-stretch">
               {ROLES.map((r) => {
@@ -329,45 +329,41 @@ export default function CreateTeamPage() {
                   <button
                     key={r.id}
                     onClick={() => setRoleFilter(r.id)}
-                    className={`flex-1 py-3 relative transition-all ${
+                    className={`flex-1 py-3 relative transition-all min-h-[56px] ${
                       active
-                        ? "bg-gradient-to-r from-amber-500/20 to-orange-500/10 border border-amber-500/30"
-                        : "bg-white/[0.02] hover:text-white/70"
+                        ? "bg-[var(--gold-soft)]"
+                        : "bg-transparent hover:text-[var(--ink-dim)]"
                     }`}
                   >
                     <div className="flex items-center justify-center gap-1.5">
                       <span
-                        className={`text-[13px] font-black tracking-tight ${
-                          active ? "text-amber-300" : "text-white/40"
+                        className={`text-[13px] font-extrabold tracking-tight ${
+                          active ? "text-[var(--gold-bright)]" : "text-[var(--ink-faint)]"
                         }`}
                       >
                         {r.label}
                       </span>
                       <span
-                        className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-md text-[10px] font-black ${
+                        className={`num inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-md text-[10px] font-extrabold ${
                           minMet
-                            ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                            ? "bg-[var(--emerald-soft)] text-[var(--emerald)] border border-[var(--emerald)]/25"
                             : count > 0
-                              ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
-                              : "bg-white/[0.04] text-white/25"
+                              ? "bg-[var(--gold-soft)] text-[var(--gold-bright)] border border-[var(--line-gold)]"
+                              : "bg-[var(--bg-elevated)] text-[var(--ink-whisper)]"
                         }`}
                       >
-                        {minMet ? (
-                          <Check size={11} strokeWidth={3} />
-                        ) : (
-                          count
-                        )}
+                        {minMet ? <Check size={11} strokeWidth={3} /> : count}
                       </span>
                     </div>
                     <p
-                      className={`text-[9px] mt-0.5 font-bold uppercase tracking-wide ${
-                        active ? "text-amber-300/80" : "text-white/25"
+                      className={`text-[9px] mt-0.5 font-bold uppercase tracking-[0.08em] ${
+                        active ? "text-[var(--gold-bright)]/80" : "text-[var(--ink-whisper)]"
                       }`}
                     >
                       Min {r.min}
                     </p>
                     {active && (
-                      <div className="absolute bottom-0 left-1/4 right-1/4 h-[3px] bg-gradient-to-r from-amber-500 to-orange-600 rounded-t-full" />
+                      <div className="absolute bottom-0 left-1/4 right-1/4 h-[2.5px] bg-gold-grad rounded-t-full" />
                     )}
                   </button>
                 );
@@ -377,39 +373,33 @@ export default function CreateTeamPage() {
         </div>
 
         {/* Section info */}
-        <div className="bg-white/[0.04] border-b border-white/[0.04] py-2.5 flex-shrink-0">
+        <div className="bg-[var(--bg-elevated)] border-b border-[var(--line)] py-2.5 flex-shrink-0">
           <div className="max-w-3xl mx-auto px-3 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              <UserCheck
-                size={13}
-                className="text-amber-300"
-                strokeWidth={2.5}
-              />
-              <span className="text-white font-black text-[11px] uppercase tracking-widest">
-                Select {currentRoleCfg.full}
-              </span>
+              <UserCheck size={13} className="text-[var(--gold-bright)]" strokeWidth={2.5} />
+              <span className="t-eyebrow">Select {currentRoleCfg.full}</span>
             </div>
-            <span className="text-white/50 text-[10px] font-bold uppercase tracking-wider">
-              {selectedByRole[roleFilter] || 0} picked · min {currentRoleCfg.min}
+            <span className="t-eyebrow !text-[10px]">
+              <span className="num">{selectedByRole[roleFilter] || 0}</span> picked · min{" "}
+              <span className="num">{currentRoleCfg.min}</span>
             </span>
           </div>
         </div>
 
-        {/* Players */}
-        <div className="flex-1 bg-white/[0.03]">
+        {/* Players list */}
+        <div className="flex-1 bg-[var(--bg-surface)]">
           <div className="max-w-3xl mx-auto">
             {filteredPlayers.length === 0 ? (
               <div className="p-10 text-center">
-                <p className="text-white/25 text-sm">No squad data yet.</p>
+                <p className="text-[var(--ink-whisper)] text-sm">No squad data yet.</p>
               </div>
             ) : (
-              <div className="divide-y divide-white/[0.04]">
+              <div className="divide-y divide-[var(--line)]">
                 {filteredPlayers.map((player) => {
                   const isSel = selected.has(player.playerId);
                   const dis = !isSel && !canSelect(player);
-                  const team =
-                    player.teamId === teamA?.id ? teamA : teamB;
-                  const teamColor = team?.color || "#f59e0b";
+                  const team = player.teamId === teamA?.id ? teamA : teamB;
+                  const teamColor = team?.color || "var(--gold)";
                   const bat = battingAbbrev(player.battingStyle);
                   const bowl = bowlingAbbrev(player.bowlingStyle);
 
@@ -418,38 +408,37 @@ export default function CreateTeamPage() {
                       key={player.playerId}
                       onClick={() => togglePlayer(player)}
                       disabled={dis}
-                      className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left ${
+                      className={`w-full flex items-center gap-3 px-4 py-3 transition-colors text-left min-h-[64px] ${
                         isSel
-                          ? "bg-amber-500/10 border border-amber-500/30"
+                          ? "bg-[var(--gold-soft)] border-l-2 border-[var(--gold)]"
                           : dis
                             ? "opacity-40"
-                            : "hover:bg-white/[0.04] active:bg-white/[0.06]"
+                            : "hover:bg-[var(--bg-elevated)] active:bg-[var(--bg-raised)]"
                       }`}
                     >
-                      {/* Avatar + team ring */}
                       <div className="relative shrink-0">
                         <div
-                          className="w-12 h-12 rounded-full bg-white/[0.05] shadow-sm flex items-center justify-center overflow-hidden"
+                          className="w-10 h-10 rounded-full bg-[var(--bg-elevated)] shadow-sm flex items-center justify-center overflow-hidden"
                           style={{
                             boxShadow: `0 0 0 2.5px ${teamColor}, 0 1px 2px rgba(0,0,0,0.3)`,
                           }}
                         >
                           {player.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={player.image}
                               alt=""
                               className="w-full h-full object-cover"
                               onError={(e) => {
-                                (e.target as HTMLImageElement).style.display =
-                                  "none";
+                                (e.target as HTMLImageElement).style.display = "none";
                               }}
                             />
                           ) : (
-                            <Users size={18} className="text-white/25" />
+                            <Users size={16} className="text-[var(--ink-whisper)]" />
                           )}
                         </div>
                         <span
-                          className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] font-black text-white px-1.5 py-0.5 rounded-sm tracking-wide shadow"
+                          className="num absolute -bottom-1 left-1/2 -translate-x-1/2 text-[8px] font-extrabold text-[var(--ink)] px-1.5 py-0.5 rounded-sm tracking-wide shadow"
                           style={{ background: teamColor }}
                         >
                           {team?.short ||
@@ -457,50 +446,51 @@ export default function CreateTeamPage() {
                         </span>
                       </div>
 
-                      {/* Name + meta */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <p className="text-white font-black text-sm truncate tracking-tight">
+                          <p className="font-display text-[var(--ink)] font-extrabold text-sm truncate tracking-tight">
                             {player.name}
                           </p>
                           {player.isPlaying11 && (
-                            <span className="text-[8px] font-black text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-1 py-px rounded tracking-wide">
+                            <span className="text-[8px] font-extrabold text-[var(--emerald)] bg-[var(--emerald-soft)] border border-[var(--emerald)]/25 px-1 py-px rounded tracking-wide">
                               XI
                             </span>
                           )}
                           {player.isCaptain && (
-                            <span className="text-[8px] font-black text-amber-300 bg-amber-500/15 border border-amber-500/30 px-1 py-px rounded tracking-wide">
+                            <span className="text-[8px] font-extrabold text-[var(--gold-bright)] bg-[var(--gold-soft)] border border-[var(--line-gold)] px-1 py-px rounded tracking-wide">
                               C
                             </span>
                           )}
                         </div>
                         <div className="flex items-center gap-1.5 mt-0.5 text-[10px] font-bold">
-                          <span className="text-white/50 capitalize">
+                          <span className="text-[var(--ink-faint)] capitalize">
                             {player.roleStr || player.role}
                           </span>
                           {bat && (
                             <>
-                              <span className="text-white/25">·</span>
-                              <span className="text-white/50">{bat}</span>
+                              <span className="text-[var(--ink-whisper)]">·</span>
+                              <span className="num text-[var(--ink-faint)]">{bat}</span>
                             </>
                           )}
                           {bowl && bowl !== bat && (
                             <>
-                              <span className="text-white/25">·</span>
-                              <span className="text-white/50">{bowl}</span>
+                              <span className="text-[var(--ink-whisper)]">·</span>
+                              <span className="num text-[var(--ink-faint)]">{bowl}</span>
                             </>
                           )}
+                          <span className="num ml-auto text-[var(--gold-bright)] font-extrabold">
+                            {player.credit?.toFixed?.(1) ?? player.credit}
+                          </span>
                         </div>
                       </div>
 
-                      {/* Toggle */}
                       <div
-                        className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                        className={`shrink-0 w-11 h-11 rounded-full flex items-center justify-center transition-all ${
                           isSel
-                            ? "bg-gradient-to-r from-amber-500 to-orange-600 text-[#1a1208] shadow-md shadow-amber-500/30"
+                            ? "bg-gold-grad text-[var(--bg-base)] shadow-md shadow-[var(--gold-halo)]"
                             : dis
-                              ? "bg-white/[0.04] text-white/25"
-                              : "bg-emerald-500 text-white shadow-md shadow-emerald-700/20"
+                              ? "bg-[var(--bg-elevated)] text-[var(--ink-whisper)]"
+                              : "bg-[var(--emerald)] text-[var(--bg-base)] shadow-md"
                         }`}
                       >
                         {isSel ? (
@@ -519,19 +509,19 @@ export default function CreateTeamPage() {
       </div>
 
       {/* Bottom action bar */}
-      <div className="flex-shrink-0 bg-[#0b0e14] border-t border-white/[0.06] shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.5)]">
+      <div className="flex-shrink-0 glass border-t border-[var(--line-default)] shadow-[0_-4px_20px_-5px_rgba(0,0,0,0.5)]">
         <div className="max-w-3xl mx-auto px-3 py-3 flex items-center gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 mb-1.5">
               {isComplete ? (
                 <>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                  <span className="t-eyebrow !text-[10px] !text-[var(--emerald)]">
                     Team is ready
                   </span>
-                  <Check size={12} strokeWidth={3} className="text-emerald-400" />
+                  <Check size={12} strokeWidth={3} className="text-[var(--emerald)]" />
                 </>
               ) : remainingToPick > 0 ? (
-                <span className="text-[10px] font-black uppercase tracking-widest text-white/50">
+                <span className="t-eyebrow !text-[10px]">
                   {remainingToPick === TOTAL_PLAYERS
                     ? "Pick 11 players"
                     : `Pick ${remainingToPick} more`}
@@ -542,10 +532,9 @@ export default function CreateTeamPage() {
                   onClick={() => {
                     if (unmetRoles[0]) setRoleFilter(unmetRoles[0].id);
                   }}
-                  className="text-[10px] font-black uppercase tracking-widest text-amber-300 hover:underline text-left truncate"
+                  className="t-eyebrow !text-[10px] !text-[var(--gold-bright)] hover:underline text-left truncate"
                 >
-                  Need {unmetRoles[0]?.need} more{" "}
-                  {unmetRoles[0]?.full}
+                  Need {unmetRoles[0]?.need} more {unmetRoles[0]?.full}
                   {unmetRoles[0]?.need && unmetRoles[0].need > 1 ? "s" : ""}
                 </button>
               )}
@@ -557,11 +546,9 @@ export default function CreateTeamPage() {
                   className={`h-2 flex-1 max-w-[18px] rounded-full transition-all ${
                     i < selected.size
                       ? isComplete
-                        ? "bg-emerald-500"
-                        : remainingToPick === 0
-                          ? "bg-amber-400"
-                          : "bg-gradient-to-r from-amber-500 to-orange-600"
-                      : "bg-white/[0.06]"
+                        ? "bg-[var(--emerald)]"
+                        : "bg-gold-grad"
+                      : "bg-[var(--ink-ghost)]"
                   }`}
                 />
               ))}
@@ -580,10 +567,10 @@ export default function CreateTeamPage() {
                 : `/fantasy/match/${id}/create/captain`;
               router.push(next);
             }}
-            className={`font-black text-[13px] px-6 py-3 rounded-lg transition-all flex items-center gap-1 tracking-wide uppercase ${
+            className={`min-h-[44px] px-6 rounded-[12px] flex items-center gap-1 font-extrabold text-[12px] uppercase tracking-[0.08em] transition-all ${
               isComplete
-                ? "bg-gradient-to-r from-amber-500 to-orange-600 text-[#1a1208] shadow-md shadow-amber-500/30"
-                : "bg-white/[0.04] text-white/30 cursor-not-allowed"
+                ? "btn btn-gold sweep"
+                : "bg-[var(--bg-elevated)] text-[var(--ink-whisper)] border border-[var(--line-default)] cursor-not-allowed"
             }`}
           >
             Next <ChevronRight size={15} strokeWidth={3} />
@@ -606,8 +593,9 @@ function TeamSplit({
   reverse?: boolean;
 }) {
   const logoNode = (
-    <div className="w-9 h-9 rounded-full bg-white/[0.05] border border-white/[0.06] flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+    <div className="w-9 h-9 rounded-full bg-[var(--bg-elevated)] border border-[var(--line-default)] flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
       {logo ? (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={logo}
           alt={short}
@@ -617,7 +605,9 @@ function TeamSplit({
           }}
         />
       ) : (
-        <span className="text-white/70 font-black text-[9px]">{short}</span>
+        <span className="font-mono text-[var(--ink-dim)] font-extrabold text-[9px]">
+          {short}
+        </span>
       )}
     </div>
   );
@@ -629,10 +619,10 @@ function TeamSplit({
     >
       {!reverse && logoNode}
       <div className={reverse ? "text-right" : ""}>
-        <p className="text-white font-black text-[13px] tracking-tight leading-none">
+        <p className="font-display text-[var(--ink)] font-extrabold text-[13px] tracking-tight leading-none">
           {short}
         </p>
-        <p className="text-[10px] font-black leading-none mt-1 text-amber-300">
+        <p className="num text-[10px] font-extrabold leading-none mt-1 text-[var(--gold-bright)]">
           {count}
         </p>
       </div>
