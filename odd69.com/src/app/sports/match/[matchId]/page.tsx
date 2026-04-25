@@ -44,6 +44,18 @@ interface SrMarket {
   limits?: { minBetValue: number; maxBetValue: number; currency: string };
 }
 
+interface LiveRunnerOdds {
+  backOdds?: number;
+  backSize?: number;
+  layOdds?: number;
+  laySize?: number;
+}
+
+interface LiveMarket {
+  runners: Map<string, LiveRunnerOdds>;
+  suspended: boolean;
+}
+
 interface SrEvent {
   eventId: string;
   eventName: string;
@@ -125,6 +137,35 @@ async function fetchSrEvent(eventId: string): Promise<SrEvent | null> {
     return null;
   }
 }
+
+async function fetchSrMarketsFallback(eventId: string): Promise<SrEvent["markets"] | null> {
+  try {
+    const res = await fetch(
+      `${BACKEND}/sportsbook/market?event_id=${encodeURIComponent(eventId)}`,
+      { cache: "no-store" },
+    );
+    if (!res.ok) return null;
+    const body = await res.json();
+    const data = body?.data ?? body;
+    if (!data) return null;
+    return {
+      matchOdds: data.matchOdds ?? data.match_odds ?? [],
+      bookmakers: data.bookmakers ?? [],
+      fancyMarkets: data.fancyMarkets ?? data.fancy ?? [],
+      premiumMarkets: data.premiumMarkets ?? data.premium ?? [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+const hasAnyMarkets = (markets?: SrEvent["markets"]) =>
+  !!markets &&
+  ((markets.matchOdds?.length ?? 0) +
+    (markets.bookmakers?.length ?? 0) +
+    (markets.fancyMarkets?.length ?? 0) +
+    (markets.premiumMarkets?.length ?? 0) >
+    0);
 
 /* ─────────────────────────────────────────────
    Odds button (single back price)
@@ -368,19 +409,21 @@ function GridCell({
 /* ─────────────────────────────────────────────
    Market accordion
    ───────────────────────────────────────────── */
+interface MarketAccordionProps {
+  market: SrMarket;
+  liveMarket?: LiveMarket;
+  onBet: BetFn;
+  isCompleted?: boolean;
+  pending: (marketId: string, selectionId: string) => boolean;
+}
+
 function MarketAccordion({
   market,
   liveMarket,
   onBet,
   isCompleted,
   pending,
-}: {
-  market: SrMarket;
-  liveMarket?: { suspended?: boolean; runners?: Map<string, { backOdds?: number; backSize?: number; layOdds?: number; laySize?: number }> };
-  onBet: BetFn;
-  isCompleted?: boolean;
-  pending: (marketId: string, selectionId: string) => boolean;
-}) {
+}: MarketAccordionProps) {
   const [open, setOpen] = useState(true);
 
   const isSuspended = isCompleted || market.status !== "Active" || liveMarket?.suspended;
@@ -507,7 +550,7 @@ export default function MatchDetailPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] =
     useState<"matchOdds" | "bookmakers" | "fancy" | "premium">("matchOdds");
-  const [liveMarkets, setLiveMarkets] = useState<Map<string, any>>(new Map());
+  const [liveMarkets, setLiveMarkets] = useState<Map<string, LiveMarket>>(new Map());
 
   const [showTracker, setShowTracker] = useState(false);
   const [scoreUrl, setScoreUrl] = useState<string | null>(null);
@@ -523,28 +566,44 @@ export default function MatchDetailPage() {
   useEffect(() => {
     if (!matchId) return;
     let cancelled = false;
+
     const load = async () => {
-      const data = isSR
-        ? await fetchSrEvent(matchId)
-        : ((await sportsApi.getMatchDetails(matchId).catch(() => null)) as unknown as SrEvent | null);
+      let data: SrEvent | null = null;
+      if (isSR) {
+        data = await fetchSrEvent(matchId);
+        if (data && !hasAnyMarkets(data.markets)) {
+          const markets = await fetchSrMarketsFallback(matchId);
+          if (markets) data = { ...data, markets };
+        }
+      } else {
+        data = (await sportsApi
+          .getMatchDetails(matchId)
+          .catch(() => null)) as unknown as SrEvent | null;
+      }
       if (cancelled) return;
       setEvent(data);
       setLoading(false);
     };
     load();
 
-    // Polling fallback every 8s while page is open
-    const t = setInterval(async () => {
-      if (cancelled) return;
-      const data = isSR ? await fetchSrEvent(matchId) : null;
-      if (data && !cancelled) setEvent((prev) => prev ?? data);
-    }, 8_000);
+    return () => {
+      cancelled = true;
+    };
+  }, [matchId, isSR]);
 
+  /* ── Polling fallback (only when socket is offline) ── */
+  useEffect(() => {
+    if (!matchId || !isSR || isConnected) return;
+    let cancelled = false;
+    const t = setInterval(async () => {
+      const data = await fetchSrEvent(matchId);
+      if (data && !cancelled) setEvent(data);
+    }, 20_000);
     return () => {
       cancelled = true;
       clearInterval(t);
     };
-  }, [matchId, isSR]);
+  }, [matchId, isSR, isConnected]);
 
   /* ── Socket: join / leave match room ── */
   useEffect(() => {
@@ -577,10 +636,10 @@ export default function MatchDetailPage() {
         data.messageType === "bm_odds";
 
       if (data.messageType === "market_status" && data.id) {
-        setLiveMarkets((prev) => {
+        setLiveMarkets((prev: Map<string, LiveMarket>) => {
           const next = new Map(prev);
           const mid = String(data.id);
-          const ex = next.get(mid) || { runners: new Map(), suspended: false };
+          const ex: LiveMarket = next.get(mid) || { runners: new Map(), suspended: false };
           next.set(mid, { ...ex, suspended: data.ms === 4 });
           return next;
         });
@@ -589,9 +648,9 @@ export default function MatchDetailPage() {
 
       if (!oddsMsg || !Array.isArray(data.data)) return;
 
-      setLiveMarkets((prev) => {
+      setLiveMarkets((prev: Map<string, LiveMarket>) => {
         const next = new Map(prev);
-        const getM = (mid: string) => {
+        const getM = (mid: string): LiveMarket => {
           if (!next.has(mid)) next.set(mid, { runners: new Map(), suspended: false });
           return next.get(mid)!;
         };
@@ -605,7 +664,7 @@ export default function MatchDetailPage() {
             u.rt.forEach((r: any) => {
               const rid = String(r.ri ?? r.runnerId ?? r.id ?? "");
               if (!rid) return;
-              const ex = m.runners.get(rid) || {};
+              const ex: LiveRunnerOdds = m.runners.get(rid) || {};
               if (r.ib) m.runners.set(rid, { ...ex, backOdds: r.rt, backSize: r.bv });
               else m.runners.set(rid, { ...ex, layOdds: r.rt, laySize: r.bv });
             });
@@ -616,7 +675,7 @@ export default function MatchDetailPage() {
               if (!rid) return;
               const back = r.backPrices?.[0]?.price;
               const lay = r.layPrices?.[0]?.price;
-              const ex = m.runners.get(rid) || {};
+              const ex: LiveRunnerOdds = m.runners.get(rid) || {};
               m.runners.set(rid, {
                 ...ex,
                 ...(back != null ? { backOdds: back, backSize: r.backPrices?.[0]?.size } : {}),
