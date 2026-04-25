@@ -117,7 +117,7 @@ export default function ContestJoinPage() {
 
   if (authLoading || !user || loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center text-white/40 text-sm">
+      <div className="min-h-[60vh] flex items-center justify-center text-[var(--ink-faint)] text-sm">
         Loading...
       </div>
     );
@@ -125,18 +125,14 @@ export default function ContestJoinPage() {
 
   if (!contest) {
     return (
-      <FantasyShell
-        title="Contest"
-        backHref={`/fantasy/match/${id}`}
-        hideSubNav
-      >
-        <div className="bg-white/[0.03] rounded-2xl border border-white/[0.06] p-8 text-center">
-          <p className="text-white font-black mb-2 tracking-tight">
+      <FantasyShell title="Contest" backHref={`/fantasy/match/${id}`} hideSubNav>
+        <div className="rounded-[16px] border border-[var(--line-default)] bg-[var(--bg-surface)] p-8 text-center">
+          <p className="font-display text-[var(--ink)] font-extrabold mb-2 tracking-tight">
             Contest not found
           </p>
           <button
             onClick={() => router.back()}
-            className="text-amber-400 hover:text-amber-300 font-black text-sm"
+            className="text-[var(--gold-bright)] hover:text-[var(--gold)] font-bold text-sm uppercase tracking-[0.08em]"
           >
             ← Go back
           </button>
@@ -156,41 +152,38 @@ export default function ContestJoinPage() {
     >
       <div className="pb-[120px]">
         {/* Contest summary card */}
-        <div className="bg-white/[0.03] rounded-2xl border border-white/[0.06] p-4 mb-4">
+        <div className="rounded-[18px] border border-[var(--line-gold)] bg-[var(--gold-soft)] p-4 mb-4 grain">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-[9px] font-black uppercase tracking-widest text-white/50">
-                Prize Pool
-              </p>
-              <p className="text-2xl font-black text-amber-400 tracking-tight">
+              <p className="t-eyebrow">Prize Pool</p>
+              <p className="num font-display text-[var(--gold-bright)] font-extrabold text-2xl tracking-tight">
                 ₹{contest.totalPrize.toLocaleString("en-IN")}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-[9px] font-black uppercase tracking-widest text-white/50">
-                Entry
-              </p>
-              <p className="text-2xl font-black text-white tracking-tight">
+              <p className="t-eyebrow">Entry</p>
+              <p className="num font-display text-[var(--ink)] font-extrabold text-2xl tracking-tight">
                 {contest.entryFee === 0 ? "FREE" : `₹${contest.entryFee}`}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 mt-3 text-[10px] font-black text-white/70 flex-wrap">
-            <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md">
-              <Trophy size={10} /> 1st ₹
-              {(
-                contest.prizeBreakdown[0]?.prize || contest.totalPrize
-              ).toLocaleString("en-IN")}
+          <div className="flex items-center gap-1.5 mt-3 text-[10px] font-bold flex-wrap">
+            <span className="inline-flex items-center gap-1 bg-[var(--gold-soft)] text-[var(--gold-bright)] border border-[var(--line-gold)] px-2 py-0.5 rounded-md">
+              <Trophy size={10} /> 1st{" "}
+              <span className="num">
+                ₹{(contest.prizeBreakdown[0]?.prize || contest.totalPrize).toLocaleString("en-IN")}
+              </span>
             </span>
-            <span className="inline-flex items-center gap-1 bg-white/[0.04] text-white/70 border border-white/[0.06] px-2 py-0.5 rounded-md">
-              <Users size={10} /> {contest.maxSpots - contest.filledSpots} spots
-              left
+            <span className="inline-flex items-center gap-1 bg-[var(--bg-surface)] text-[var(--ink-dim)] border border-[var(--line-default)] px-2 py-0.5 rounded-md">
+              <Users size={10} />{" "}
+              <span className="num">{contest.maxSpots - contest.filledSpots}</span>{" "}
+              spots left
             </span>
           </div>
         </div>
 
         {/* Stepper */}
-        <div className="flex items-center justify-between mb-3 text-[10px] font-black uppercase tracking-widest">
+        <div className="flex items-center justify-between mb-3 text-[10px] font-bold uppercase tracking-[0.08em]">
           {[
             { n: 1, label: "Contest", done: true, active: false },
             { n: 2, label: "Team", done: false, active: true },
@@ -200,12 +193,12 @@ export default function ContestJoinPage() {
             <div key={s.n} className="flex-1 flex items-center">
               <div className="flex items-center gap-1.5">
                 <span
-                  className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
+                  className={`num w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
                     s.done
-                      ? "bg-emerald-500/20 border border-emerald-500/30 text-emerald-400"
+                      ? "bg-[var(--emerald-soft)] border border-[var(--emerald)]/25 text-[var(--emerald)]"
                       : s.active
-                        ? "bg-amber-500 text-[#1a1208]"
-                        : "bg-white/[0.04] border border-white/[0.06] text-white/50"
+                        ? "bg-[var(--gold)] text-[var(--bg-base)]"
+                        : "bg-[var(--bg-elevated)] border border-[var(--line-default)] text-[var(--ink-faint)]"
                   }`}
                 >
                   {s.done ? <Check size={10} strokeWidth={3} /> : s.n}
@@ -213,17 +206,17 @@ export default function ContestJoinPage() {
                 <span
                   className={`${
                     s.active
-                      ? "text-white"
+                      ? "text-[var(--ink)]"
                       : s.done
-                        ? "text-emerald-400"
-                        : "text-white/50"
+                        ? "text-[var(--emerald)]"
+                        : "text-[var(--ink-faint)]"
                   }`}
                 >
                   {s.label}
                 </span>
               </div>
               {i < 3 && (
-                <div className="flex-1 h-[2px] mx-1.5 bg-white/[0.06] rounded-full" />
+                <div className="flex-1 h-[2px] mx-1.5 bg-[var(--ink-ghost)] rounded-full" />
               )}
             </div>
           ))}
@@ -233,27 +226,27 @@ export default function ContestJoinPage() {
         {teams.length === 0 ? (
           <button
             onClick={goCreate}
-            className="w-full bg-white/[0.03] rounded-2xl border-2 border-dashed border-amber-500/40 hover:border-amber-500 p-8 text-center transition-all"
+            className="w-full bg-[var(--bg-surface)] rounded-[16px] border-2 border-dashed border-[var(--line-gold)] hover:border-[var(--gold)] p-8 text-center transition-all"
           >
-            <div className="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-2">
-              <Plus size={24} className="text-amber-400" strokeWidth={2.5} />
+            <div className="w-14 h-14 rounded-full bg-[var(--gold-soft)] border border-[var(--line-gold)] flex items-center justify-center mx-auto mb-2">
+              <Plus size={24} className="text-[var(--gold-bright)]" strokeWidth={2.5} />
             </div>
-            <p className="text-white font-black text-sm tracking-tight">
+            <p className="font-display text-[var(--ink)] font-extrabold text-sm tracking-tight">
               Create your first team
             </p>
-            <p className="text-white/50 text-xs mt-0.5">
+            <p className="text-[var(--ink-faint)] text-xs mt-0.5">
               Pick 11 players, then choose Captain &amp; Vice Captain
             </p>
           </button>
         ) : (
           <>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-white font-black text-xs uppercase tracking-widest">
-                My Teams ({teams.length})
+              <p className="t-eyebrow">
+                My Teams (<span className="num">{teams.length}</span>)
               </p>
               <button
                 onClick={goCreate}
-                className="inline-flex items-center gap-1 text-white/70 hover:text-white text-[11px] font-black uppercase tracking-wide"
+                className="inline-flex items-center gap-1 text-[var(--ink-dim)] hover:text-[var(--ink)] text-[11px] font-bold uppercase tracking-[0.08em] min-h-[36px] px-2"
               >
                 <Plus size={12} strokeWidth={3} /> Create New
               </button>
@@ -275,75 +268,73 @@ export default function ContestJoinPage() {
                       setSelectedTeamId(t._id);
                     }}
                     disabled={isJoined}
-                    className={`w-full text-left rounded-2xl border-2 overflow-hidden transition-all ${
+                    className={`w-full text-left rounded-[16px] border-2 overflow-hidden transition-all ${
                       isJoined
-                        ? "opacity-60 bg-white/[0.03] border-white/[0.06]"
+                        ? "opacity-60 bg-[var(--bg-surface)] border-[var(--line-default)]"
                         : isSelected
-                          ? "bg-amber-500/10 border-amber-500/30"
-                          : "bg-white/[0.03] border-white/[0.06] hover:border-white/[0.12]"
+                          ? "bg-[var(--gold-soft)] border-[var(--line-gold)]"
+                          : "bg-[var(--bg-surface)] border-[var(--line-default)] hover:border-[var(--line-strong)]"
                     }`}
                   >
-                    <div className="flex items-center justify-between px-4 py-2.5 bg-white/[0.04] border-b border-white/[0.06]">
+                    <div className="flex items-center justify-between px-4 py-2.5 bg-[var(--bg-elevated)] border-b border-[var(--line)]">
                       <div className="flex items-center gap-2">
                         <span
                           className={`w-5 h-5 rounded-full flex items-center justify-center border-2 ${
                             isSelected
-                              ? "bg-amber-500 border-amber-500"
-                              : "bg-white/[0.04] border-white/[0.12]"
+                              ? "bg-[var(--gold)] border-[var(--gold)]"
+                              : "bg-[var(--bg-elevated)] border-[var(--line-strong)]"
                           }`}
                         >
                           {isSelected && (
                             <Check
                               size={12}
-                              className="text-[#1a1208]"
+                              className="text-[var(--bg-base)]"
                               strokeWidth={3}
                             />
                           )}
                         </span>
-                        <span className="text-white font-black text-sm tracking-tight">
+                        <span className="font-display text-[var(--ink)] font-extrabold text-sm tracking-tight">
                           {t.teamName}
                         </span>
                       </div>
                       {isJoined ? (
-                        <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded-md uppercase tracking-wider">
-                          Joined
-                        </span>
+                        <span className="chip chip-emerald !text-[9px]">Joined</span>
                       ) : (
-                        <span className="text-[9px] font-black text-amber-300 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-md tracking-wider uppercase">
-                          {t.players.length} players
+                        <span className="chip chip-gold !text-[9px]">
+                          <span className="num">{t.players.length}</span> players
                         </span>
                       )}
                     </div>
                     <div className="px-4 py-3">
                       <div className="grid grid-cols-2 gap-2 mb-2">
-                        <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg px-2 py-1.5">
-                          <Crown size={11} className="text-amber-400" />
+                        <div className="flex items-center gap-1.5 bg-[var(--gold-soft)] border border-[var(--line-gold)] rounded-[10px] px-2 py-1.5">
+                          <Crown size={11} className="text-[var(--gold-bright)]" />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1">
-                              <p className="text-[8px] font-black uppercase text-amber-300 tracking-widest leading-none">
+                              <p className="t-eyebrow !text-[8px] !text-[var(--gold-bright)] leading-none">
                                 Captain
                               </p>
-                              <span className="text-[8px] font-black bg-amber-500 text-[#1a1208] px-1 py-[1px] rounded tracking-wide leading-none">
+                              <span className="num text-[8px] font-extrabold bg-[var(--gold)] text-[var(--bg-base)] px-1 py-[1px] rounded tracking-wide leading-none">
                                 2x
                               </span>
                             </div>
-                            <p className="text-white font-black text-[11px] truncate tracking-tight mt-0.5">
+                            <p className="font-display text-[var(--ink)] font-extrabold text-[11px] truncate tracking-tight mt-0.5">
                               {captain?.name || "—"}
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.06] rounded-lg px-2 py-1.5">
-                          <Star size={11} className="text-amber-300" />
+                        <div className="flex items-center gap-1.5 bg-[var(--ice-soft)] border border-[var(--ice)]/25 rounded-[10px] px-2 py-1.5">
+                          <Star size={11} className="text-[var(--ice)]" />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1">
-                              <p className="text-[8px] font-black uppercase text-amber-300 tracking-widest leading-none">
+                              <p className="t-eyebrow !text-[8px] !text-[var(--ice)] leading-none">
                                 Vice Captain
                               </p>
-                              <span className="text-[8px] font-black bg-amber-500/60 text-[#1a1208] px-1 py-[1px] rounded tracking-wide leading-none">
+                              <span className="num text-[8px] font-extrabold bg-[var(--ice)] text-[var(--bg-base)] px-1 py-[1px] rounded tracking-wide leading-none">
                                 1.5x
                               </span>
                             </div>
-                            <p className="text-white font-black text-[11px] truncate tracking-tight mt-0.5">
+                            <p className="font-display text-[var(--ink)] font-extrabold text-[11px] truncate tracking-tight mt-0.5">
                               {viceCaptain?.name || "—"}
                             </p>
                           </div>
@@ -352,14 +343,11 @@ export default function ContestJoinPage() {
                       <div className="flex items-center gap-3 text-[10px]">
                         <RoleCount label="WK" count={roleCounts.keeper || 0} />
                         <RoleCount label="BAT" count={roleCounts.batsman || 0} />
-                        <RoleCount
-                          label="AR"
-                          count={roleCounts.allrounder || 0}
-                        />
+                        <RoleCount label="AR" count={roleCounts.allrounder || 0} />
                         <RoleCount label="BOWL" count={roleCounts.bowler || 0} />
                         <ChevronRight
                           size={14}
-                          className="ml-auto text-white/25"
+                          className="ml-auto text-[var(--ink-whisper)]"
                         />
                       </div>
                     </div>
@@ -370,35 +358,35 @@ export default function ContestJoinPage() {
           </>
         )}
 
-        {err && (
-          <p className="text-red-400 font-black text-sm mt-3">{err}</p>
-        )}
+        {err && <p className="text-[var(--crimson)] font-bold text-sm mt-3">{err}</p>}
       </div>
 
       {/* Sticky action bar */}
-      <div className="fixed bottom-[64px] md:bottom-0 left-0 right-0 z-40 bg-[#06080c]/95 backdrop-blur-md border-t border-white/[0.06]">
+      <div className="fixed bottom-[64px] md:bottom-0 left-0 right-0 z-40 glass border-t border-[var(--line-default)]">
         <div className="max-w-5xl mx-auto px-4 md:px-6 py-3 flex items-center gap-3">
           {selected ? (
             <>
               <div className="flex-1 min-w-0">
-                <p className="text-[9px] font-black uppercase text-white/50 tracking-widest">
-                  Selected
-                </p>
-                <p className="text-white font-black text-sm truncate tracking-tight">
+                <p className="t-eyebrow !text-[9px]">Selected</p>
+                <p className="font-display text-[var(--ink)] font-extrabold text-sm truncate tracking-tight">
                   {selected.teamName}
                 </p>
               </div>
               <button
                 onClick={handleJoin}
                 disabled={joining}
-                className="bg-gradient-to-r from-amber-500 to-orange-600 text-[#1a1208] disabled:bg-white/[0.04] disabled:text-white/30 disabled:bg-none font-black text-[13px] px-5 py-3 rounded-lg hover:brightness-110 transition-all flex items-center gap-1.5 tracking-wide uppercase"
+                className="btn btn-gold sweep min-h-[48px] px-5 text-[12px] uppercase tracking-[0.08em] disabled:opacity-50"
               >
                 {joining ? (
                   <Loader2 size={14} className="animate-spin" />
                 ) : (
                   <>
                     Join ·{" "}
-                    {contest.entryFee === 0 ? "FREE" : `₹${contest.entryFee}`}
+                    {contest.entryFee === 0 ? (
+                      "FREE"
+                    ) : (
+                      <span className="num">₹{contest.entryFee}</span>
+                    )}
                     <ChevronRight size={15} strokeWidth={3} />
                   </>
                 )}
@@ -407,7 +395,7 @@ export default function ContestJoinPage() {
           ) : (
             <button
               onClick={goCreate}
-              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-600 text-[#1a1208] font-black text-[13px] px-6 py-3.5 rounded-lg hover:brightness-110 transition-all tracking-wide uppercase"
+              className="w-full btn btn-gold sweep min-h-[48px] text-[12px] uppercase tracking-[0.08em]"
             >
               <Plus size={16} strokeWidth={3} />
               {teams.length === 0
@@ -424,10 +412,12 @@ export default function ContestJoinPage() {
 function RoleCount({ label, count }: { label: string; count: number }) {
   return (
     <div className="flex items-center gap-1">
-      <span className="text-white/25 font-black text-[9px] tracking-wide">
+      <span className="text-[var(--ink-whisper)] font-bold text-[9px] tracking-wide">
         {label}
       </span>
-      <span className="text-white font-black text-[11px]">{count}</span>
+      <span className="num text-[var(--ink)] font-extrabold text-[11px]">
+        {count}
+      </span>
     </div>
   );
 }

@@ -199,23 +199,21 @@ export default function TeamPreviewCreatePage() {
 
   if (authLoading || !user || draft.length === 0) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center text-white/40 text-sm">
+      <div className="min-h-[60vh] flex items-center justify-center text-[var(--ink-faint)] text-sm">
         Loading...
       </div>
     );
   }
 
-  const teamAColor = teamA?.color || "#f59e0b";
-  const teamBColor = teamB?.color || "#1a1f3a";
+  const teamAColor = teamA?.color || "var(--gold)";
+  const teamBColor = teamB?.color || "var(--ice)";
   const creditsOver = totals.creditsUsed > 100;
 
   return (
     <FantasyShell
       title="Team Preview"
       subtitle={
-        contestId
-          ? "Step 4 of 4 - Review & join contest"
-          : "Review and save your team"
+        contestId ? "Step 4 of 4 - Review & join contest" : "Review and save your team"
       }
       backHref={
         contestId
@@ -227,7 +225,7 @@ export default function TeamPreviewCreatePage() {
       <div className="pb-[120px] md:pb-[100px]">
         {contestId && (
           <div className="mb-3">
-            <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+            <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-[0.08em]">
               {STEPS.map((s, i) => {
                 const active = s.n === 4;
                 const done = s.n < 4;
@@ -235,12 +233,12 @@ export default function TeamPreviewCreatePage() {
                   <div key={s.n} className="flex-1 flex items-center">
                     <div className="flex items-center gap-1.5">
                       <span
-                        className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
+                        className={`num w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
                           done
-                            ? "bg-emerald-500 text-[#06080c]"
+                            ? "bg-[var(--emerald)] text-[var(--bg-base)]"
                             : active
-                              ? "bg-amber-500 text-[#1a1208]"
-                              : "bg-white/[0.06] text-white/50"
+                              ? "bg-[var(--gold)] text-[var(--bg-base)]"
+                              : "bg-[var(--bg-elevated)] text-[var(--ink-faint)]"
                         }`}
                       >
                         {done ? <Check size={10} strokeWidth={3} /> : s.n}
@@ -248,17 +246,17 @@ export default function TeamPreviewCreatePage() {
                       <span
                         className={
                           active
-                            ? "text-white"
+                            ? "text-[var(--ink)]"
                             : done
-                              ? "text-white/70"
-                              : "text-white/50"
+                              ? "text-[var(--ink-dim)]"
+                              : "text-[var(--ink-faint)]"
                         }
                       >
                         {s.label}
                       </span>
                     </div>
                     {i < STEPS.length - 1 && (
-                      <div className="flex-1 h-[2px] mx-1.5 bg-white/[0.06] rounded-full" />
+                      <div className="flex-1 h-[2px] mx-1.5 bg-[var(--ink-ghost)] rounded-full" />
                     )}
                   </div>
                 );
@@ -269,10 +267,12 @@ export default function TeamPreviewCreatePage() {
 
         {/* Team split strip */}
         {teamA && teamB && (
-          <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 mb-3">
-            <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-white/70 mb-2">
+          <div className="rounded-[16px] border border-[var(--line-default)] bg-[var(--bg-surface)] p-3 mb-3">
+            <div className="flex items-center justify-between t-eyebrow !text-[10px] mb-2">
               <span>Team split</span>
-              <span className="text-white/50">{draft.length} players</span>
+              <span className="!text-[var(--ink-faint)]">
+                <span className="num">{draft.length}</span> players
+              </span>
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -281,15 +281,15 @@ export default function TeamPreviewCreatePage() {
                   style={{ background: teamAColor }}
                 />
                 <div>
-                  <p className="text-white font-black text-sm tracking-tight">
+                  <p className="font-display text-[var(--ink)] font-extrabold text-sm tracking-tight">
                     {teamA.short}
                   </p>
-                  <p className="text-white/50 text-[10px] font-bold">
+                  <p className="num text-[var(--ink-faint)] text-[10px] font-bold">
                     {totals.teamACount} players
                   </p>
                 </div>
               </div>
-              <div className="flex-1 h-3 bg-white/[0.06] rounded-full overflow-hidden flex">
+              <div className="flex-1 h-3 bg-[var(--ink-ghost)] rounded-full overflow-hidden flex">
                 <div
                   className="h-full transition-all"
                   style={{
@@ -307,10 +307,10 @@ export default function TeamPreviewCreatePage() {
               </div>
               <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
                 <div className="text-right">
-                  <p className="text-white font-black text-sm tracking-tight">
+                  <p className="font-display text-[var(--ink)] font-extrabold text-sm tracking-tight">
                     {teamB.short}
                   </p>
-                  <p className="text-white/50 text-[10px] font-bold">
+                  <p className="num text-[var(--ink-faint)] text-[10px] font-bold">
                     {totals.teamBCount} players
                   </p>
                 </div>
@@ -333,19 +333,21 @@ export default function TeamPreviewCreatePage() {
         </div>
 
         {/* Credits used */}
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3 mb-3">
-          <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-widest mb-2">
-            <span className="text-white/70">Credits Used</span>
-            <span className={creditsOver ? "text-red-400" : "text-white/50"}>
+        <div className="rounded-[16px] border border-[var(--line-default)] bg-[var(--bg-surface)] p-3 mb-3">
+          <div className="flex items-center justify-between t-eyebrow !text-[10px] mb-2">
+            <span>Credits Used</span>
+            <span
+              className={`num ${
+                creditsOver ? "!text-[var(--crimson)]" : "!text-[var(--ink-faint)]"
+              }`}
+            >
               {totals.creditsUsed.toFixed(1)} / 100
             </span>
           </div>
-          <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
+          <div className="h-2 bg-[var(--ink-ghost)] rounded-full overflow-hidden">
             <div
-              className={`h-full bg-gradient-to-r transition-all ${
-                creditsOver
-                  ? "from-red-500 to-red-400"
-                  : "from-emerald-500 to-emerald-400"
+              className={`h-full transition-all ${
+                creditsOver ? "bg-[var(--crimson)]" : "bg-[var(--emerald)]"
               }`}
               style={{
                 width: `${Math.min((totals.creditsUsed / 100) * 100, 100)}%`,
@@ -362,28 +364,24 @@ export default function TeamPreviewCreatePage() {
             return (
               <div
                 key={r}
-                className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-2 py-2 text-center"
+                className="rounded-[12px] border border-[var(--line-default)] bg-[var(--bg-surface)] px-2 py-2 text-center"
               >
-                <p className="text-[9px] font-black uppercase tracking-widest text-white/50">
-                  {ROLE_LABEL[r]}
-                </p>
-                <p className="text-white font-black text-lg tracking-tight">
+                <p className="t-eyebrow !text-[9px]">{ROLE_LABEL[r]}</p>
+                <p className="num font-display text-[var(--ink)] font-extrabold text-lg tracking-tight">
                   {count}
                 </p>
-                <div className="h-1 bg-white/[0.06] rounded-full overflow-hidden mt-1">
+                <div className="h-1 bg-[var(--ink-ghost)] rounded-full overflow-hidden mt-1">
                   <div
-                    className="h-full bg-amber-500 transition-all"
+                    className="h-full bg-[var(--gold)] transition-all"
                     style={{ width: `${pct}%` }}
                   />
                 </div>
               </div>
             );
           })}
-          <div className="bg-amber-500/15 border border-amber-400/30 rounded-xl px-2 py-2 text-center">
-            <p className="text-[9px] font-black uppercase tracking-widest text-amber-300">
-              XI
-            </p>
-            <p className="text-amber-200 font-black text-lg tracking-tight">
+          <div className="rounded-[12px] border border-[var(--line-gold)] bg-[var(--gold-soft)] px-2 py-2 text-center">
+            <p className="t-eyebrow !text-[9px] !text-[var(--gold-bright)]">XI</p>
+            <p className="num font-display text-[var(--gold-bright)] font-extrabold text-lg tracking-tight">
               {totals.formation}
             </p>
           </div>
@@ -391,37 +389,33 @@ export default function TeamPreviewCreatePage() {
 
         {/* Captain + Vice captain cards */}
         <div className="grid grid-cols-2 gap-2 mb-3">
-          <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3">
+          <div className="rounded-[14px] border border-[var(--line-gold)] bg-[var(--gold-soft)] p-3">
             <div className="flex items-center gap-1.5 mb-1">
-              <Crown size={14} className="text-amber-400" />
-              <p className="text-[9px] font-black uppercase tracking-widest text-amber-400">
-                Captain
-              </p>
-              <span className="ml-auto text-[9px] font-black bg-amber-500 text-[#1a1208] px-1.5 py-[1px] rounded tracking-wide">
+              <Crown size={14} className="text-[var(--gold-bright)]" />
+              <p className="t-eyebrow !text-[9px] !text-[var(--gold-bright)]">Captain</p>
+              <span className="num ml-auto text-[9px] font-extrabold bg-[var(--gold)] text-[var(--bg-base)] px-1.5 py-[1px] rounded tracking-wide">
                 2x
               </span>
             </div>
-            <p className="text-white font-black text-sm truncate tracking-tight">
+            <p className="font-display text-[var(--ink)] font-extrabold text-sm truncate tracking-tight">
               {captain?.name || "-"}
             </p>
-            <p className="text-white/50 text-[10px] font-bold capitalize mt-0.5">
+            <p className="text-[var(--ink-faint)] text-[10px] font-bold capitalize mt-0.5">
               {captain?.role} - {captain?.teamName}
             </p>
           </div>
-          <div className="bg-white/[0.03] border border-white/[0.06] rounded-2xl p-3">
+          <div className="rounded-[14px] border border-[var(--ice)]/25 bg-[var(--ice-soft)] p-3">
             <div className="flex items-center gap-1.5 mb-1">
-              <Star size={14} className="text-cyan-400" />
-              <p className="text-[9px] font-black uppercase tracking-widest text-cyan-400">
-                Vice Captain
-              </p>
-              <span className="ml-auto text-[9px] font-black bg-cyan-400 text-[#06080c] px-1.5 py-[1px] rounded tracking-wide">
+              <Star size={14} className="text-[var(--ice)]" />
+              <p className="t-eyebrow !text-[9px] !text-[var(--ice)]">Vice Captain</p>
+              <span className="num ml-auto text-[9px] font-extrabold bg-[var(--ice)] text-[var(--bg-base)] px-1.5 py-[1px] rounded tracking-wide">
                 1.5x
               </span>
             </div>
-            <p className="text-white font-black text-sm truncate tracking-tight">
+            <p className="font-display text-[var(--ink)] font-extrabold text-sm truncate tracking-tight">
               {viceCaptain?.name || "-"}
             </p>
-            <p className="text-white/50 text-[10px] font-bold capitalize mt-0.5">
+            <p className="text-[var(--ink-faint)] text-[10px] font-bold capitalize mt-0.5">
               {viceCaptain?.role} - {viceCaptain?.teamName}
             </p>
           </div>
@@ -429,66 +423,70 @@ export default function TeamPreviewCreatePage() {
 
         {/* Contest summary (if joining) */}
         {contest && (
-          <div className="bg-white/[0.03] rounded-2xl border border-white/[0.06] p-4 mb-3">
-            <div className="flex items-center justify-between">
+          <div className="rounded-[16px] border border-[var(--line-default)] bg-[var(--bg-surface)] p-4 mb-3">
+            <div className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <p className="text-[9px] font-black uppercase text-white/50 tracking-widest">
-                  Joining contest
-                </p>
-                <p className="text-white font-black text-sm truncate tracking-tight">
+                <p className="t-eyebrow !text-[9px]">Joining contest</p>
+                <p className="font-display text-[var(--ink)] font-extrabold text-sm truncate tracking-tight">
                   {contest.title}
                 </p>
-                <div className="flex items-center gap-2 mt-1 text-[10px] font-black text-white/70">
-                  <span className="inline-flex items-center gap-1 text-amber-400">
-                    <Trophy size={10} /> Rs
-                    {contest.totalPrize.toLocaleString("en-IN")}
+                <div className="flex items-center gap-2 mt-1 text-[10px] font-bold text-[var(--ink-dim)]">
+                  <span className="inline-flex items-center gap-1 text-[var(--gold-bright)]">
+                    <Trophy size={10} />
+                    <span className="num">
+                      ₹{contest.totalPrize.toLocaleString("en-IN")}
+                    </span>
                   </span>
-                  <span className="text-white/25">-</span>
-                  <span className="inline-flex items-center gap-1 text-white/70">
+                  <span className="text-[var(--ink-whisper)]">·</span>
+                  <span className="inline-flex items-center gap-1 text-[var(--ink-dim)]">
                     <Users size={10} />
-                    {contest.maxSpots - contest.filledSpots} spots left
+                    <span className="num">
+                      {contest.maxSpots - contest.filledSpots}
+                    </span>{" "}
+                    spots left
                   </span>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-[9px] font-black uppercase text-white/50 tracking-widest">
-                  Entry
-                </p>
-                <p className="text-amber-400 font-black text-2xl tracking-tight">
-                  {contest.entryFee === 0 ? "FREE" : `Rs${contest.entryFee}`}
+                <p className="t-eyebrow !text-[9px]">Entry</p>
+                <p className="num font-display text-[var(--gold-bright)] font-extrabold text-2xl tracking-tight">
+                  {contest.entryFee === 0 ? "FREE" : `₹${contest.entryFee}`}
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {err && (
-          <p className="text-red-300 font-black text-sm mb-2">{err}</p>
-        )}
+        {err && <p className="text-[var(--crimson)] font-bold text-sm mb-2">{err}</p>}
       </div>
 
       {/* Sticky CTA */}
-      <div className="fixed bottom-[64px] md:bottom-0 left-0 right-0 z-40 bg-[#0a0c10]/95 backdrop-blur-md border-t border-white/[0.06]">
+      <div className="fixed bottom-[64px] md:bottom-0 left-0 right-0 z-40 glass border-t border-[var(--line-default)]">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
           <div className="flex-1 min-w-0 hidden sm:block">
-            <p className="text-[9px] font-black uppercase text-white/50 tracking-widest">
-              Squad Size
-            </p>
-            <p className="text-white font-black text-sm tracking-tight">
+            <p className="t-eyebrow !text-[9px]">Squad Size</p>
+            <p className="num font-extrabold text-sm tracking-tight text-[var(--ink)]">
               {draft.length} / 11 - {totals.formation}
             </p>
           </div>
           <button
             disabled={submitting || !captainId || !viceCaptainId}
             onClick={handleConfirm}
-            className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-gradient-to-r from-amber-500 to-orange-600 text-[#1a1208] disabled:opacity-50 disabled:cursor-not-allowed font-black text-sm py-3.5 px-6 rounded-xl transition-all uppercase tracking-wide"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 btn btn-gold sweep min-h-[48px] px-6 text-sm uppercase tracking-[0.08em] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? (
               <Loader2 size={16} className="animate-spin" />
             ) : contest ? (
               <>
                 Join Contest
-                {contest.entryFee > 0 ? ` - Rs${contest.entryFee}` : " - FREE"}
+                {contest.entryFee > 0 ? (
+                  <>
+                    {" "}
+                    -<span className="num">₹{contest.entryFee}</span>
+                  </>
+                ) : (
+                  " - FREE"
+                )}
                 <ChevronRight size={16} strokeWidth={3} />
               </>
             ) : (
