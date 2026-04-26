@@ -129,7 +129,5 @@ export class BetfairMarket {
 }
 
 export const BetfairMarketSchema = SchemaFactory.createForClass(BetfairMarket);
-BetfairMarketSchema.index({ marketId: 1 }, { unique: true });
 BetfairMarketSchema.index({ eventId: 1, status: 1 });
 BetfairMarketSchema.index({ sportId: 1, inplay: 1, status: 1 });
-BetfairMarketSchema.index({ competitionId: 1 });

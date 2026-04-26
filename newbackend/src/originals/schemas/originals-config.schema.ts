@@ -38,4 +38,3 @@ export class OriginalsConfig {
 }
 
 export const OriginalsConfigSchema = SchemaFactory.createForClass(OriginalsConfig);
-OriginalsConfigSchema.index({ gameKey: 1 }, { unique: true });

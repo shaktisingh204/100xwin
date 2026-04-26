@@ -25,4 +25,3 @@ export class BetfairSport {
 }
 
 export const BetfairSportSchema = SchemaFactory.createForClass(BetfairSport);
-BetfairSportSchema.index({ sportId: 1 }, { unique: true });

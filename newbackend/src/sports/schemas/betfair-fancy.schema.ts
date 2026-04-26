@@ -60,6 +60,5 @@ export class BetfairFancy {
 }
 
 export const BetfairFancySchema = SchemaFactory.createForClass(BetfairFancy);
-BetfairFancySchema.index({ id: 1 }, { unique: true });
 BetfairFancySchema.index({ eventId: 1, status: 1 });
 BetfairFancySchema.index({ eventId: 1, type: 1 });

@@ -64,4 +64,3 @@ export const EventSchema = SchemaFactory.createForClass(Event);
 
 EventSchema.index({ open_date: 1 });
 EventSchema.index({ match_status: 1, competition_id: 1 });
-EventSchema.index({ event_id: 1 });
