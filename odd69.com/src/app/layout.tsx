@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, DM_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import ClientLayout from "@/components/layout/ClientLayout";
@@ -27,6 +27,16 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "odd69 — Sports Betting & Casino",
   description: "India's fastest-growing betting floor. Live sports, casino, crash games, instant payouts.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  minimumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#0a0b0f",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

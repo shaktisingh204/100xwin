@@ -92,11 +92,32 @@
    BASE
    ══════════════════════════════════════════════════════════════════════════════ */
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Defensive — keep media within its container so a stray fixed-width image
+   can't push the layout past the viewport on mobile */
+img, video, iframe, canvas, svg {
+  max-width: 100%;
+}
 
 html, body {
   background: var(--bg-base);
   color: var(--ink);
+  /* Lock the page to viewport width — no horizontal scroll, no pinch-zoom drift */
+  max-width: 100vw;
+  overflow-x: hidden;
+  /* Disable pinch-zoom on iOS Safari (which ignores user-scalable=no) */
+  touch-action: pan-x pan-y;
+  -ms-touch-action: pan-x pan-y;
+}
+
+html {
+  /* Prevent iOS rubber-band font scaling on orientation change */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
