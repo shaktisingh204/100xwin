@@ -124,9 +124,13 @@ const norm = (s: string | undefined | null) =>
    SR fetch
    ───────────────────────────────────────────── */
 async function fetchSrEvent(eventId: string): Promise<SrEvent | null> {
+  // Goes through this site's own /api/sportradar/event route handler,
+  // which proxies to adxwin's sportradar-proxy server-side. That keeps
+  // the API token off the client bundle and decouples the match page
+  // from whatever version of the local NestJS backend is deployed.
   try {
     const res = await fetch(
-      `${BACKEND}/sports/sportradar/event?eventId=${encodeURIComponent(eventId)}`,
+      `/api/sportradar/event?eventId=${encodeURIComponent(eventId)}`,
       { cache: "no-store" },
     );
     if (!res.ok) return null;
