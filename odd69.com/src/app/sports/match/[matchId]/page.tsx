@@ -112,10 +112,10 @@ const CATEGORY_LABELS: Record<string, string> = {
 // Known categories in priority order; any unknown category falls back to "Other"
 const CATEGORY_ORDER = ['Match', 'Head-to-Head', 'Over', 'Innings', 'Player', 'Other'];
 
-// All odds chips use the same neutral dark style.
-// Selected state switches to the platform's gold theme.
-const ODDS_DEFAULT  = 'bg-white/[0.06] border-white/[0.10] hover:bg-white/[0.10] hover:border-white/[0.18] shadow-[0_0_8px_rgba(255,255,255,0.04)]';
-const ODDS_SELECTED = 'bg-brand-gold/15 border-brand-gold/50 hover:bg-brand-gold/20 shadow-[0_0_12px_rgba(255,184,0,0.2)]';
+// odd69 odds chips — borderless, gold accent on hover/selected,
+// inner glow instead of outline for the unique gold-leaf look.
+const ODDS_DEFAULT  = 'bg-[var(--bg-elevated)] hover:bg-[var(--bg-raised)] shadow-[inset_0_0_0_1px_var(--ink-ghost)] hover:shadow-[inset_0_0_0_1px_var(--gold-line)]';
+const ODDS_SELECTED = 'bg-[var(--gold-soft)] shadow-[inset_0_0_0_1px_var(--gold)] hover:bg-[var(--gold)]/20';
 
 
 function fmtMatchTime(ms: number) {
@@ -245,7 +245,7 @@ function OddsBtn({ runner, market, event, compact = false }: OddsBtnProps) {
       onClick={handleClick}
       className={`flex min-w-0 items-center justify-between gap-1.5 rounded-lg border px-3 py-2 transition-all active:scale-[0.97] disabled:cursor-not-allowed ${
         isPending
-          ? 'bg-brand-gold/10 border-brand-gold/30 opacity-70'
+          ? 'bg-[var(--gold-soft)] border-[var(--gold)]/30 opacity-70'
           : isSelected
           ? ODDS_SELECTED + ' border-[1.5px]'
           : ODDS_DEFAULT + (isSuspended ? ' opacity-40' : '')
@@ -256,16 +256,16 @@ function OddsBtn({ runner, market, event, compact = false }: OddsBtnProps) {
       </span>
       <div className="flex items-center gap-1 shrink-0">
         <span className={`${compact ? "text-[13px]" : "text-[14px]"} font-adx-bold tabular-nums leading-none ${
-          isSuspended ? 'text-white/20' : isPending ? 'text-brand-gold' : isSelected ? 'text-brand-gold' : 'text-white'
+          isSuspended ? 'text-white/20' : isPending ? 'text-[var(--gold)]' : isSelected ? 'text-[var(--gold)]' : 'text-white'
         }`}>
           {isSuspended ? "—" : price!.toFixed(2)}
         </span>
         {isPending && (
-          <span className="w-3 h-3 rounded-full border-2 border-brand-gold/30 border-t-brand-gold animate-spin flex-shrink-0" />
+          <span className="w-3 h-3 rounded-full border-2 border-[var(--gold)]/30 border-t-[var(--gold)] animate-spin flex-shrink-0" />
         )}
-        {!isPending && isSelected && <CheckCircle size={10} className="text-brand-gold flex-shrink-0" />}
+        {!isPending && isSelected && <CheckCircle size={10} className="text-[var(--gold)] flex-shrink-0" />}
         {!isPending && !isSelected && oneClickEnabled && !isSuspended && (
-          <Zap size={9} className="text-brand-gold/40 flex-shrink-0" />
+          <Zap size={9} className="text-[var(--gold)]/40 flex-shrink-0" />
         )}
       </div>
     </button>
@@ -298,10 +298,10 @@ function MarketCard({ market, event, defaultOpen = false, isPinned, onTogglePin,
   const cols = getGridCols(runners.length);
 
   return (
-    <article className="overflow-hidden rounded-xl border border-brand-gold/10 bg-[#1a1714]/90 backdrop-blur-xl transition-all">
+    <article className="overflow-hidden rounded-xl bg-[var(--bg-elevated)] shadow-[0_4px_18px_rgba(0,0,0,0.35),inset_0_1px_0_var(--ink-ghost)] hover:shadow-[0_6px_22px_rgba(0,0,0,0.45),inset_0_1px_0_var(--gold-line)] transition-all">
       <div
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-2.5 text-left transition hover:bg-brand-gold/[0.03] active:opacity-80"
+        className="flex w-full cursor-pointer items-center justify-between gap-2 px-4 py-2.5 text-left transition hover:bg-[var(--gold)]/[0.03] active:opacity-80"
       >
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <h2 className="min-w-0 flex-1 text-[13px] font-adx-bold text-white break-words leading-snug">
@@ -318,7 +318,7 @@ function MarketCard({ market, event, defaultOpen = false, isPinned, onTogglePin,
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onTogglePin(market.marketId); }}
-              className={`flex h-6 w-6 items-center justify-center rounded-md transition ${isPinned ? 'bg-brand-gold/10 text-brand-gold' : 'bg-white/[0.04] text-white/40 hover:bg-white/[0.08] hover:text-white/80'}`}
+              className={`flex h-6 w-6 items-center justify-center rounded-md transition ${isPinned ? 'bg-[var(--gold-soft)] text-[var(--gold)]' : 'bg-white/[0.04] text-white/40 hover:bg-white/[0.08] hover:text-white/80'}`}
             >
               {isPinned ? <PinOff size={11} /> : <Pin size={11} />}
             </button>
@@ -332,7 +332,7 @@ function MarketCard({ market, event, defaultOpen = false, isPinned, onTogglePin,
 
       {open && (
         <>
-          <div className="relative border-t border-brand-gold/10">
+          <div className="relative border-[var(--gold)]/10">
             {/* Suspended overlay */}
             {!isActive && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 backdrop-blur-[1px] rounded-b-xl">
@@ -348,7 +348,7 @@ function MarketCard({ market, event, defaultOpen = false, isPinned, onTogglePin,
           </div>
           </div>
           {market.limits && (
-            <div className="border-t border-white/[0.05] px-4 py-2 flex items-center justify-between text-[10px] text-text-disabled">
+            <div className=" px-4 py-2 flex items-center justify-between text-[10px] text-[var(--ink-faint)]">
               <span>Min: {market.limits.currency} {market.limits.minBetValue?.toLocaleString()}</span>
               <span>Max: {market.limits.currency} {market.limits.maxBetValue?.toLocaleString()}</span>
             </div>
@@ -374,32 +374,34 @@ function MatchHero({
   const { isAuthenticated } = useAuth();
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-brand-gold/15 bg-[#1a1714]/95 backdrop-blur-xl shadow-[0_10px_32px_rgba(0,0,0,0.35)]">
+    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-[var(--bg-elevated)] via-[var(--bg-surface)] to-[var(--bg-base)] shadow-[0_10px_32px_rgba(0,0,0,0.5),inset_0_1px_0_var(--gold-line)]">
+      {/* odd69 signature — gold leaf bar at top */}
+      <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[var(--gold)] to-transparent" />
       {/* Top bar — stacks on mobile */}
-      <div className="border-b border-brand-gold/10 px-3 py-2.5 md:px-4 md:py-3 space-y-2">
+      <div className="px-3 py-2.5 md:px-4 md:py-3 space-y-2 shadow-[inset_0_-1px_0_var(--ink-ghost)]">
         {/* Row 1: Sport icon + competition + refresh */}
         <div className="flex items-center gap-2">
           {/* Back button — desktop only */}
           <button
             type="button"
             onClick={() => router.back()}
-            className="hidden md:flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-bg-elevated border border-white/[0.06] text-text-muted transition hover:bg-bg-hover hover:text-text-primary active:scale-90"
+            className="hidden md:flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[var(--ink-dim)] transition hover:bg-[var(--bg-raised)] hover:text-[var(--ink)] active:scale-90"
           >
             <ArrowLeft size={13} />
           </button>
-          <div className="flex h-6 w-6 md:h-7 md:w-7 shrink-0 items-center justify-center rounded-full bg-brand-gold/15 text-[13px] md:text-[14px]">
+          <div className="flex h-6 w-6 md:h-7 md:w-7 shrink-0 items-center justify-center rounded-full bg-[var(--gold-soft)] text-[13px] md:text-[14px]">
             {sportEmoji}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-[11px] md:text-[12px] font-adx-bold text-text-primary truncate">
-              {event.sportName} <span className="text-text-muted font-medium">· {event.competitionName}</span>
+            <p className="text-[11px] md:text-[12px] font-adx-bold text-[var(--ink)] truncate">
+              {event.sportName} <span className="text-[var(--ink-dim)] font-medium">· {event.competitionName}</span>
             </p>
           </div>
           <button
             type="button"
             onClick={onRefresh}
             disabled={refreshing}
-            className="flex h-6 w-6 md:h-7 md:w-7 shrink-0 items-center justify-center rounded-full bg-bg-elevated text-text-muted transition hover:bg-bg-hover hover:text-text-primary active:scale-90 disabled:opacity-40"
+            className="flex h-6 w-6 md:h-7 md:w-7 shrink-0 items-center justify-center rounded-full bg-[var(--bg-elevated)] text-[var(--ink-dim)] transition hover:bg-[var(--bg-raised)] hover:text-[var(--ink)] active:scale-90 disabled:opacity-40"
           >
             <RefreshCw size={11} className={refreshing ? "animate-spin" : ""} />
           </button>
@@ -414,9 +416,9 @@ function MatchHero({
             </div>
           )}
           {!isInPlay && isLive && (
-            <div className="flex items-center gap-1 rounded-full border border-brand-gold/30 bg-brand-gold/10 px-2 py-0.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-gold" />
-              <span className="text-[10px] font-adx-bold text-brand-gold">LIVE</span>
+            <div className="flex items-center gap-1 rounded-full border border-[var(--gold)]/30 bg-[var(--gold-soft)] px-2 py-0.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--gold)]" />
+              <span className="text-[10px] font-adx-bold text-[var(--gold)]">LIVE</span>
             </div>
           )}
           {connectionStatus === 'connected' && (
@@ -438,51 +440,51 @@ function MatchHero({
             </div>
           )}
           {isClosed && (
-            <div className="flex items-center gap-1 rounded-full bg-bg-elevated px-2 py-0.5">
-              <Shield size={9} className="text-text-disabled" />
-              <span className="text-[10px] text-text-muted">Finished</span>
+            <div className="flex items-center gap-1 rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">
+              <Shield size={9} className="text-[var(--ink-faint)]" />
+              <span className="text-[10px] text-[var(--ink-dim)]">Finished</span>
             </div>
           )}
           {!isLive && !isClosed && (
-            <div className="flex items-center gap-1 rounded-full bg-bg-elevated px-2 py-0.5">
-              <Clock size={9} className="text-text-disabled" />
-              <span className="text-[10px] text-text-muted">{fmtMatchTime(event.openDate)}</span>
+            <div className="flex items-center gap-1 rounded-full bg-[var(--bg-elevated)] px-2 py-0.5">
+              <Clock size={9} className="text-[var(--ink-faint)]" />
+              <span className="text-[10px] text-[var(--ink-dim)]">{fmtMatchTime(event.openDate)}</span>
             </div>
           )}
-          {event.isFavourite && <Star size={11} className="fill-brand-gold text-brand-gold" />}
+          {event.isFavourite && <Star size={11} className="fill-brand-gold text-[var(--gold)]" />}
         </div>
       </div>
 
       {/* Teams vs score — responsive */}
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 py-4 md:gap-4 md:px-5 md:py-5">
         <div className="min-w-0">
-          <p className="text-[14px] font-adx-bold leading-tight text-text-primary md:text-[22px] break-words">{homeName}</p>
-          <p className="mt-0.5 text-[9px] text-text-muted">Home</p>
+          <p className="text-[14px] font-adx-bold leading-tight text-[var(--ink)] md:text-[22px] break-words">{homeName}</p>
+          <p className="mt-0.5 text-[9px] text-[var(--ink-dim)]">Home</p>
         </div>
         <div className="flex flex-col items-center gap-1 shrink-0">
           {isAuthenticated ? (
             isLive || isClosed ? (
-              <div className="flex items-center gap-1.5 md:gap-3 rounded-xl md:rounded-2xl bg-bg-zeero px-3 py-2 md:px-5 md:py-3 shadow-inner">
-                <span className="text-[20px] md:text-[28px] font-adx-bold tabular-nums text-text-primary">{event.homeScore ?? '-'}</span>
-                <span className="text-[14px] md:text-[20px] text-text-disabled">–</span>
-                <span className="text-[20px] md:text-[28px] font-adx-bold tabular-nums text-text-primary">{event.awayScore ?? '-'}</span>
+              <div className="flex items-center gap-1.5 md:gap-3 rounded-xl md:rounded-2xl bg-[var(--bg-elevated)] px-3 py-2 md:px-5 md:py-3 shadow-inner">
+                <span className="text-[20px] md:text-[28px] font-adx-bold tabular-nums text-[var(--ink)]">{event.homeScore ?? '-'}</span>
+                <span className="text-[14px] md:text-[20px] text-[var(--ink-faint)]">–</span>
+                <span className="text-[20px] md:text-[28px] font-adx-bold tabular-nums text-[var(--ink)]">{event.awayScore ?? '-'}</span>
               </div>
             ) : (
-              <span className="rounded-lg md:rounded-xl bg-bg-elevated px-3 py-1.5 md:px-4 md:py-2 text-[12px] md:text-[14px] font-adx-bold text-text-disabled">VS</span>
+              <span className="rounded-lg md:rounded-xl bg-[var(--bg-elevated)] px-3 py-1.5 md:px-4 md:py-2 text-[12px] md:text-[14px] font-adx-bold text-[var(--ink-faint)]">VS</span>
             )
           ) : (
-            <div className="flex items-center gap-1.5 rounded-xl bg-bg-zeero/50 px-2.5 py-2 md:px-4 md:py-3 shadow-inner border border-white/[0.04] backdrop-blur-md">
-              <Lock size={10} className="text-text-muted shrink-0" />
-              <span className="text-[10px] md:text-[12px] font-adx-bold text-text-muted select-none whitespace-nowrap">Login</span>
+            <div className="flex items-center gap-1.5 rounded-xl bg-[var(--bg-elevated)]/50 px-2.5 py-2 md:px-4 md:py-3 shadow-inner /* backdrop-blur-md">
+              <Lock size={10} className="text-[var(--ink-dim)] shrink-0" />
+              <span className="text-[10px] md:text-[12px] font-adx-bold text-[var(--ink-dim)] select-none whitespace-nowrap">Login</span>
             </div>
           )}
-          <span className="text-[8px] md:text-[9px] uppercase tracking-widest text-text-disabled text-center">
+          <span className="text-[8px] md:text-[9px] uppercase tracking-widest text-[var(--ink-faint)] text-center">
             {isClosed ? "Full Time" : isInPlay ? "In Play" : isLive ? "Live" : fmtMatchTime(event.openDate)}
           </span>
         </div>
         <div className="min-w-0 text-right">
-          <p className="text-[14px] font-adx-bold leading-tight text-text-primary md:text-[22px] break-words">{awayName}</p>
-          <p className="mt-0.5 text-[9px] text-text-muted">Away</p>
+          <p className="text-[14px] font-adx-bold leading-tight text-[var(--ink)] md:text-[22px] break-words">{awayName}</p>
+          <p className="mt-0.5 text-[9px] text-[var(--ink-dim)]">Away</p>
         </div>
       </div>
     </div>
@@ -507,14 +509,14 @@ function MarketTabs({
           onClick={() => onChange(key)}
           className={`shrink-0 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[11px] font-adx-bold transition-all active:scale-95 border ${
             active === key
-              ? "bg-brand-gold text-white border-brand-gold"
-              : "bg-white/[0.04] text-text-muted border-white/[0.06] hover:bg-white/[0.08] hover:text-text-primary"
+              ? "bg-[var(--gold)] text-white border-[var(--gold)]"
+              : "bg-white/[0.04] text-[var(--ink-dim)]  hover:bg-white/[0.08] hover:text-[var(--ink)]"
           }`}
         >
           <span>{label}</span>
           {count > 0 && key !== 'All' && (
             <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black leading-none ${
-              active === key ? 'bg-black/20 text-white' : 'bg-white/[0.08] text-text-muted'
+              active === key ? 'bg-black/20 text-white' : 'bg-white/[0.08] text-[var(--ink-dim)]'
             }`}>
               {count}
             </span>
@@ -921,14 +923,14 @@ export default function MatchDetailPage() {
   // chrome. We only render the inner content; otherwise the page nests its
   // own header + sidebar inside odd69's, producing the duplicated chrome.
   const shell = (content: ReactNode) => (
-    <div className="min-h-full bg-bg-base font-[family-name:var(--font-poppins)]">
+    <div className="min-h-full bg-[var(--bg-base)] font-[family-name:var(--font-poppins)]">
       {content}
     </div>
   );
 
   const Spinner = () => (
     <div className="flex min-h-[50vh] items-center justify-center">
-      <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-white/[0.06] border-t-brand-gold" />
+      <div className="h-8 w-8 animate-spin rounded-full border-[3px]  border-t-[var(--gold)]" />
     </div>
   );
 
@@ -939,18 +941,18 @@ export default function MatchDetailPage() {
   // ── No event loaded ────────────────────────────────────────────────────
   if (!srEvent) {
     return shell(
-      <main className="min-h-full bg-bg-base text-text-primary">
+      <main className="min-h-full bg-[var(--bg-base)] text-[var(--ink)]">
         <div className="mx-auto max-w-[900px] px-4 py-6">
           <button type="button" onClick={() => router.back()}
-            className="mb-4 flex items-center gap-2 text-[13px] text-text-muted transition hover:text-text-primary">
+            className="mb-4 flex items-center gap-2 text-[13px] text-[var(--ink-dim)] transition hover:text-[var(--ink)]">
             <ArrowLeft size={16} /> Back
           </button>
-          <div className="rounded-2xl border border-white/[0.06] bg-[#1a1714]/90 backdrop-blur-xl p-6 text-center space-y-2">
-            <Flame size={32} className="mx-auto text-brand-gold" />
-            <h1 className="text-[18px] font-adx-bold text-text-primary">Event not available</h1>
-            <p className="text-[13px] text-text-muted">Match ID: {matchId}</p>
+          <div className="rounded-2xl bg-[var(--bg-elevated)] p-6 text-center space-y-2 shadow-[0_8px_28px_rgba(0,0,0,0.4),inset_0_1px_0_var(--gold-line)]">
+            <Flame size={32} className="mx-auto text-[var(--gold)]" />
+            <h1 className="text-[18px] font-adx-bold text-[var(--ink)]">Event not available</h1>
+            <p className="text-[13px] text-[var(--ink-dim)]">Match ID: {matchId}</p>
             <button type="button" onClick={() => router.back()}
-              className="mt-2 rounded-full bg-bg-elevated px-4 py-2 text-[12px] text-text-muted transition hover:text-text-primary">
+              className="mt-2 rounded-full bg-[var(--bg-elevated)] px-4 py-2 text-[12px] text-[var(--ink-dim)] transition hover:text-[var(--ink)]">
               ← Go back
             </button>
           </div>
@@ -961,7 +963,7 @@ export default function MatchDetailPage() {
 
   // ── Match page render ─────────────────────────────────────────────────────
   return shell(
-      <main className="min-h-full bg-bg-base text-text-primary">
+      <main className="min-h-full bg-[var(--bg-base)] text-[var(--ink)]">
         {/* ── Reconnection banner ─────────────────────────────────── */}
         {hasConnectionLoss && (
           <div className="sticky top-0 z-50 flex items-center justify-center gap-2 bg-amber-500/90 px-4 py-2 text-white text-[12px] font-bold shadow-lg">
@@ -991,18 +993,18 @@ export default function MatchDetailPage() {
               />
 
               {hasConnectionLoss ? (
-                <section className="rounded-2xl border border-amber-500/20 bg-[#1a1714]/90 backdrop-blur-xl p-6 text-center shadow-[0_10px_30px_rgba(0,0,0,0.28)]">
+                <section className="rounded-2xl bg-[var(--bg-elevated)] p-6 text-center shadow-[0_10px_30px_rgba(0,0,0,0.40),inset_0_1px_0_var(--gold-line)]">
                   <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-warning-alpha-08 text-warning-bright">
                     <RefreshCw size={22} />
                   </div>
-                  <h2 className="mt-4 text-[18px] font-adx-bold text-text-primary">Markets hidden while connection recovers</h2>
-                  <p className="mx-auto mt-2 max-w-[540px] text-[13px] leading-6 text-text-muted">
+                  <h2 className="mt-4 text-[18px] font-adx-bold text-[var(--ink)]">Markets hidden while connection recovers</h2>
+                  <p className="mx-auto mt-2 max-w-[540px] text-[13px] leading-6 text-[var(--ink-dim)]">
                     Live market data is temporarily unavailable. Reload the match page to restore the latest odds and market details.
                   </p>
                   <button
                     type="button"
                     onClick={handleConnectionRecoveryReload}
-                    className="mx-auto mt-5 inline-flex items-center gap-2 rounded-full bg-brand-gold px-5 py-2.5 text-[12px] font-adx-bold text-white transition hover:brightness-110 active:scale-[0.98]"
+                    className="mx-auto mt-5 inline-flex items-center gap-2 rounded-full bg-[var(--gold)] px-5 py-2.5 text-[12px] font-adx-bold text-white transition hover:brightness-110 active:scale-[0.98]"
                   >
                     <RefreshCw size={14} />
                     Reload Match
@@ -1012,10 +1014,10 @@ export default function MatchDetailPage() {
                 <>
                   {/* 1x2 quick odds strip */}
                   {primaryMarket && (
-                    <div className="overflow-hidden rounded-2xl border border-brand-gold/15 bg-[#1a1714]/90 backdrop-blur-xl px-4 py-3">
+                    <div className="overflow-hidden rounded-2xl bg-[var(--bg-elevated)] shadow-[0_8px_28px_rgba(0,0,0,0.4),inset_0_1px_0_var(--gold-line)] px-4 py-3">
                       <div className="mb-2.5 flex items-center justify-between">
-                        <p className="text-[10px] uppercase tracking-widest text-text-disabled">{primaryMarketTitle}</p>
-                        <span className="text-[10px] text-text-muted">
+                        <p className="text-[10px] uppercase tracking-widest text-[var(--ink-faint)]">{primaryMarketTitle}</p>
+                        <span className="text-[10px] text-[var(--ink-dim)]">
                           Min: {primaryMarket.limits?.currency} {primaryMarket.limits?.minBetValue?.toLocaleString()}
                         </span>
                       </div>
@@ -1049,12 +1051,12 @@ export default function MatchDetailPage() {
 
                   {/* Count + premium badge */}
                   <div className="flex items-center gap-2 pt-1">
-                    <BarChart3 size={14} className="text-brand-gold" />
-                    <span className="text-[13px] font-adx-bold text-text-primary">
+                    <BarChart3 size={14} className="text-[var(--gold)]" />
+                    <span className="text-[13px] font-adx-bold text-[var(--ink)]">
                       {filteredMarkets.length} {activeTab === "All" ? "Total" : activeTab} Markets
                     </span>
                     {srEvent.premiumEnabled && (
-                      <span className="rounded-full border border-brand-gold/20 bg-brand-gold/10 px-2 py-0.5 text-[9px] font-adx-bold uppercase text-brand-gold">
+                      <span className="rounded-full border border-[var(--gold)]/20 bg-[var(--gold-soft)] px-2 py-0.5 text-[9px] font-adx-bold uppercase text-[var(--gold)]">
                         Premium
                       </span>
                     )}
@@ -1066,12 +1068,12 @@ export default function MatchDetailPage() {
                   </div>
 
                   {/* Markets list controls */}
-                  <div className="flex items-center justify-end pb-1 pt-1 opacity-80 border-t border-white/[0.05] mt-1">
+                  <div className="flex items-center justify-end pb-1 pt-1 opacity-80  mt-1">
                     <div className="flex items-center gap-3">
                       <button
                         type="button"
                         onClick={() => { setForceOpenState(true); setForceOpenKey(Date.now()); }}
-                        className="flex items-center gap-1 text-[11px] text-text-muted transition hover:text-white"
+                        className="flex items-center gap-1 text-[11px] text-[var(--ink-dim)] transition hover:text-white"
                       >
                         <ChevronsDown size={13} /> Expand All
                       </button>
@@ -1079,7 +1081,7 @@ export default function MatchDetailPage() {
                       <button
                         type="button"
                         onClick={() => { setForceOpenState(false); setForceOpenKey(Date.now()); }}
-                        className="flex items-center gap-1 text-[11px] text-text-muted transition hover:text-white"
+                        className="flex items-center gap-1 text-[11px] text-[var(--ink-dim)] transition hover:text-white"
                       >
                         <ChevronsUp size={13} /> Collapse All
                       </button>
@@ -1089,8 +1091,8 @@ export default function MatchDetailPage() {
                   {/* Markets list — 2-column grid on desktop */}
                   <section>
                     {filteredMarkets.length === 0 ? (
-                      <div className="flex min-h-[100px] items-center justify-center rounded-2xl border border-white/[0.06] bg-[#1a1714]/90 backdrop-blur-xl">
-                        <p className="text-[13px] text-text-muted">No markets available</p>
+                      <div className="flex min-h-[100px] items-center justify-center rounded-2xl bg-[var(--bg-elevated)] shadow-[inset_0_1px_0_var(--ink-ghost)]">
+                        <p className="text-[13px] text-[var(--ink-dim)]">No markets available</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 items-start">
