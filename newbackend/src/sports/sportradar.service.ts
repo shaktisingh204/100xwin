@@ -429,6 +429,37 @@ export class SportradarService implements OnModuleInit {
               .set(`sportradar:market:${eventId}`, JSON.stringify(data), 'EX', INPLAY_REDIS_TTL)
               .catch(() => {});
 
+            // Also overwrite sportradar:event:{id} with the rich event so
+            // /sports/sportradar/event (and the match-detail page) gets the
+            // full markets dict — bookmakers, fancyMarkets, premiumMarkets —
+            // not just the matchOdds-only shape that syncAllInplayEvents
+            // wrote from the bulk inplay-events feed. Preserve admin-curated
+            // images / thumbnail from the existing entry.
+            try {
+              const existingRaw = await redis.get(`sportradar:event:${eventId}`);
+              const existing = existingRaw ? JSON.parse(existingRaw) : null;
+              const enriched = {
+                ...data.event,
+                thumbnail: existing?.thumbnail || (data.event as any).thumbnail || '',
+                team1Image: existing?.team1Image || (data.event as any).team1Image || '',
+                team2Image: existing?.team2Image || (data.event as any).team2Image || '',
+              };
+              await redis.set(
+                `sportradar:event:${eventId}`,
+                JSON.stringify(enriched),
+                'EX',
+                INPLAY_REDIS_TTL,
+              );
+              await redis.set(
+                `sportradar:odds:${eventId}`,
+                JSON.stringify(enriched.markets ?? {}),
+                'EX',
+                INPLAY_REDIS_TTL,
+              );
+            } catch {
+              /* swallow — non-fatal cache enrichment */
+            }
+
             // Emit to frontend
             this.emitSportradarOdds(eventId, data.event);
           } catch {
