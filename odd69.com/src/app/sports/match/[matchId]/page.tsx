@@ -10,9 +10,8 @@ import {
   TrendingUp, Shield, Target, BarChart3, Zap, CheckCircle,
   Pin, PinOff, Eye, EyeOff, ChevronsDown, ChevronsUp
 } from "lucide-react";
-import Header from "@/components/layout/Header";
-import LeftSidebar from "@/components/layout/LeftSidebar";
-import RightSidebar from "@/components/layout/RightSidebar";
+// Header / sidebar are provided by odd69's root layout — don't import them
+// or render them here, or you'll get double chrome.
 import MaintenanceState from "@/components/maintenance/MaintenanceState";
 import { useSectionMaintenance } from "@/hooks/useSectionMaintenance";
 import { useBets } from "@/context/BetContext";
@@ -918,17 +917,12 @@ export default function MatchDetailPage() {
   }, []);
 
   // ── Shell ─────────────────────────────────────────────────────────────────
+  // odd69's root layout already provides the header / left sidebar / footer
+  // chrome. We only render the inner content; otherwise the page nests its
+  // own header + sidebar inside odd69's, producing the duplicated chrome.
   const shell = (content: ReactNode) => (
-    <div className="flex h-screen flex-col overflow-hidden bg-bg-base font-[family-name:var(--font-poppins)]">
-      <Header />
-      <div className="mx-auto flex w-full max-w-[1920px] flex-1 overflow-hidden pt-[60px] md:pt-[64px] pb-[80px] md:pb-0">
-        <LeftSidebar
-          selectedSportId={srEvent?.sportId ?? null}
-          onSelectSport={(id) => router.push(id ? `/sports/league/${id}` : "/sports")}
-        />
-        <div className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden bg-bg-base">{content}</div>
-      </div>
-      {/* Floating betslip — handled globally by layout or standard drawer here */}
+    <div className="min-h-full bg-bg-base font-[family-name:var(--font-poppins)]">
+      {content}
     </div>
   );
 
