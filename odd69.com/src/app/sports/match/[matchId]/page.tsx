@@ -554,7 +554,11 @@ function MarketAccordion({
 export default function MatchDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const matchId = params.matchId as string;
+  // Next.js sometimes hands back the param URL-encoded (`sr%3Amatch%3A...`)
+  // depending on how the link was constructed. Decode once so the SR
+  // detection regex and downstream Redis-key lookups all see the canonical
+  // `sr:match:...` form.
+  const matchId = decodeURIComponent((params.matchId as string) ?? "");
   const isSR = isSrMatch(matchId);
 
   const [event, setEvent] = useState<SrEvent | null>(null);
