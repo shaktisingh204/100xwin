@@ -269,15 +269,38 @@ export class SportradarService implements OnModuleInit {
 
   /**
    * Replaces @Cron decorators with plain setInterval loops.
-   * - Sports seed:  every 3.3 min (tripled speed)
-   * - Events sync:  every 1 min (tripled speed)  (guarded by isSyncingEvents)
-   * - Inplay sync:  every 30 s
+   *
+   * Two cadences:
+   *
+   * - Direct mode (writer): tight 222ms tick fans /sports, /inplay, and
+   *   /upcoming syncs in parallel. Each one fetches per-sport data from
+   *   Sportradar's primary+secondary hosts which together give a 600/s
+   *   rate budget — 222ms is well within it.
+   *
+   * - Proxy mode (reader): separate, much slower intervals. The HTTP
+   *   proxy at zeero.bet is fronted by Cloudflare and is NOT a 300/s
+   *   rate-budget endpoint. Hitting it every 222ms (× ~20 endpoints
+   *   per tick) sustains 80-90 req/s and gets 502'd, which starves
+   *   the local Redis mirror of fresh data. These intervals match each
+   *   dataset's actual change rate:
+   *     • /inplay        every  2s  (matches INPLAY_REDIS_TTL)
+   *     • /upcoming      every 30s  (slow-moving)
+   *     • /events/...    every 30s  (per-sport listings barely change)
+   *   Net traffic in proxy mode: ~1 req/s — sustainable, no 502s.
    */
   private startBackgroundLoops(): void {
     setInterval(
       () => this.seedSportsFromApi().catch(() => {}),
       200_000,
     );
+
+    if (this.proxyEnabled) {
+      setInterval(() => this.syncAllInplayEvents().catch(() => {}), 2_000);
+      setInterval(() => this.syncAllUpcomingEvents().catch(() => {}), 30_000);
+      setInterval(() => this.syncAllSportsEvents().catch(() => {}), 30_000);
+      return;
+    }
+
     setInterval(() => {
       if (this.isSyncingEvents) return;
       Promise.allSettled([
@@ -294,7 +317,12 @@ export class SportradarService implements OnModuleInit {
    * Utilises up to MAX_CALLS_PER_SECOND of the 250/s API budget.
    * Only emits socket-data when runner prices actually change.
    */
-  private readonly LIVE_ODDS_TICK_MS = 222;   // 222ms — 1.5x faster odds
+  // Direct mode (writer): 222ms — fits within Sportradar's 300/s budget.
+  // Proxy mode (reader): 1s — one /batch POST/sec is plenty and avoids
+  // piling onto Cloudflare during transient 502 spells.
+  private get LIVE_ODDS_TICK_MS(): number {
+    return this.proxyEnabled ? 1_000 : 222;
+  }
 
   private startLiveOddsLoop(): void {
     if (this.liveOddsLoopHandle) return;
