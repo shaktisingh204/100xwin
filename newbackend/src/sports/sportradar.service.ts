@@ -1581,68 +1581,37 @@ export class SportradarService implements OnModuleInit {
    * Used by match-detail page to get all markets, runners, prices in one call.
    */
   async getEventById(eventId: string): Promise<SportradarEvent | null> {
+    // Resolution order (rewrite — was: redis → scans → mongo → proxy).
+    //
+    //   1. Local Redis  sportradar:event:{id}    — fast hot path
+    //   2. PROXY        /event/:id               — authoritative fallback
+    //   3. Local Mongo  betfair_events           — covers proxy-down case
+    //   4. Local Redis list-cache scans          — last resort, direct mode
+    //
+    // Step 2 is intentionally early: in proxy mode the upstream is the
+    // source of truth, so trust it before falling through to potentially
+    // stale local caches. On hit we seed Redis so subsequent reads hit
+    // step 1. Each step logs at debug so `pm2 logs` shows exactly which
+    // tier resolved or where it failed.
     const redis = this.getRedis();
+    const tag = `[getEventById ${eventId}]`;
 
-    // 1. Direct event cache (written after each successful market fetch)
+    // 1. Local Redis
     try {
       const cached = await redis.get(`sportradar:event:${eventId}`);
       if (cached) {
-        return JSON.parse(cached);
+        console.debug(`${tag} hit redis`);
+        return JSON.parse(cached) as SportradarEvent;
       }
     } catch (_) {}
 
-    // 2. Scan the flat upcoming:all and inplay:all caches (fast, single read each)
-    for (const cacheKey of ['sportradar:upcoming:all', 'sportradar:inplay:all']) {
-      try {
-        const raw = await redis.get(cacheKey);
-        if (raw) {
-          const events: SportradarEvent[] = JSON.parse(raw);
-          const found = events.find((e) => e.eventId === eventId);
-          if (found) return found;
-        }
-      } catch (_) {}
-    }
-
-    // 3. Per-sport caches pipeline scan (handles cold-start when upcoming:all is empty)
-    const sportIds = Object.keys(SORT_ORDER);
-    const pipeline = redis.pipeline();
-    sportIds.forEach((id) => {
-      pipeline.get(`sportradar:upcoming:${id}`);
-      pipeline.get(`sportradar:inplay:${id}`);
-    });
-    try {
-      const results = await pipeline.exec() ?? [];
-      for (let i = 0; i < sportIds.length; i++) {
-        for (const offset of [0, 1]) {  // upcoming then inplay
-          const raw = results[i * 2 + offset]?.[1] as string | null;
-          if (raw) {
-            const events: SportradarEvent[] = JSON.parse(raw);
-            const found = events.find((e) => e.eventId === eventId);
-            if (found) {
-              return found;
-            }
-          }
-        }
-      }
-    } catch (_) {}
-
-    // 4. MongoDB fallback
-    try {
-      const ev = await this.betfairEventModel.findOne({ eventId }).lean() as any;
-      if (ev) return ev;
-    } catch (_) {}
-
-    // 5. Proxy fallback (reader-mode only).
-    // Local mirror may lag by one tick or miss an event that's in
-    // inplay on the primary but not yet in our pipeline cache. Hit the
-    // primary's /event/:id directly so the user never sees "Match Not
-    // Found" for an event the primary has live. Result is also written
-    // into local Redis so subsequent lookups hit cache 1.
+    // 2. Proxy
     if (this.proxyEnabled) {
       try {
         const ev = await this.fetchFromProxy<any>(`/event/${eventId}`);
         if (ev) {
-          this.getRedis()
+          console.log(`${tag} hit proxy — seeding redis`);
+          redis
             .set(
               `sportradar:event:${eventId}`,
               JSON.stringify(ev),
@@ -1650,13 +1619,73 @@ export class SportradarService implements OnModuleInit {
               INPLAY_REDIS_TTL,
             )
             .catch(() => {});
-          return ev;
+          // Also seed sportradar:odds so getOddsByEventId can short-circuit.
+          if (ev.markets) {
+            redis
+              .set(
+                `sportradar:odds:${eventId}`,
+                JSON.stringify(ev.markets),
+                'EX',
+                INPLAY_REDIS_TTL,
+              )
+              .catch(() => {});
+          }
+          return ev as SportradarEvent;
         }
-      } catch (_) {
-        /* swallow — return null below */
+      } catch (e: any) {
+        console.warn(`${tag} proxy failed: ${e?.message ?? e}`);
       }
     }
 
+    // 3. Local Mongo
+    try {
+      const ev = (await this.betfairEventModel
+        .findOne({ eventId })
+        .lean()) as any;
+      if (ev) {
+        console.log(`${tag} hit mongo`);
+        return ev;
+      }
+    } catch (_) {}
+
+    // 4. Local Redis list-cache scans (direct mode last-resort)
+    for (const cacheKey of ['sportradar:upcoming:all', 'sportradar:inplay:all']) {
+      try {
+        const raw = await redis.get(cacheKey);
+        if (raw) {
+          const events: SportradarEvent[] = JSON.parse(raw);
+          const found = events.find((e) => e.eventId === eventId);
+          if (found) {
+            console.log(`${tag} hit ${cacheKey} scan`);
+            return found;
+          }
+        }
+      } catch (_) {}
+    }
+    const sportIds = Object.keys(SORT_ORDER);
+    const pipeline = redis.pipeline();
+    sportIds.forEach((id) => {
+      pipeline.get(`sportradar:upcoming:${id}`);
+      pipeline.get(`sportradar:inplay:${id}`);
+    });
+    try {
+      const results = (await pipeline.exec()) ?? [];
+      for (let i = 0; i < sportIds.length; i++) {
+        for (const offset of [0, 1]) {
+          const raw = results[i * 2 + offset]?.[1] as string | null;
+          if (raw) {
+            const events: SportradarEvent[] = JSON.parse(raw);
+            const found = events.find((e) => e.eventId === eventId);
+            if (found) {
+              console.log(`${tag} hit per-sport scan`);
+              return found;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    console.warn(`${tag} all tiers missed → returning null`);
     return null;
   }
 

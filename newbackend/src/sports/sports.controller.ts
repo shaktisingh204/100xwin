@@ -573,9 +573,15 @@ export class SportsController {
     @Public()
     @Get('sportradar/event')
     async getSportsradarEvent(@Query('eventId') eventId: string) {
-        if (!eventId) return { success: false, data: null, message: 'eventId is required' };
+        if (!eventId) {
+            return { success: false, data: null, message: 'eventId is required' };
+        }
+        console.log(`[/sports/sportradar/event] eventId=${eventId} — resolving`);
         const data = await this.sportradarService.getEventById(eventId);
-        if (!data) return { success: false, data: null, message: 'Event not found in cache' };
+        if (!data) {
+            console.warn(`[/sports/sportradar/event] eventId=${eventId} — not found in any tier (redis, proxy, mongo, scans)`);
+            return { success: false, data: null, message: 'Event not found in cache' };
+        }
         return { success: true, data };
     }
 
