@@ -174,10 +174,8 @@ function CasinoContent() {
         categories={CASINO_RAIL}
       />
 
-      {/* ── Same view on every viewport — centered with max-width on desktop ── */}
-      <div className="mx-auto max-w-[640px] md:max-w-[820px] lg:max-w-[1080px]">
-        <CasinoMobileView onLaunch={handleGameLaunch} />
-      </div>
+      {/* ── Same view on every viewport, full-width ── */}
+      <CasinoMobileView onLaunch={handleGameLaunch} />
     </>
   );
 }
