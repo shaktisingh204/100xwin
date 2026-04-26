@@ -136,7 +136,9 @@ const SPORTS_CACHE_TTL_SECONDS = 180; // 3 minutes TTL to retain data while sync
 const EVENTS_REDIS_TTL   = 180;
 const SPORTS_REDIS_TTL   = 180;
 const UPCOMING_REDIS_TTL = 180;
-const INPLAY_REDIS_TTL   = 2;    // live matches must drop fast if streams fail
+const INPLAY_REDIS_TTL   = 30;   // 30s — survives a full 16-sport sync cycle
+                                 // (was 2s, which expired mid-cycle and made
+                                 // sports flicker in and out of listings)
 const API_CACHE_TTL      = 222;  // 222ms  — per-request Redis read-through TTL
 
 /**
@@ -193,8 +195,13 @@ export class SportradarService implements OnModuleInit {
   private liveSnapshot = new Map<string, string>();
   private liveOddsLoopHandle: ReturnType<typeof setInterval> | null = null;
   private callsThisTick = 0;
-  // Rate budget: 300/s live + 150/s background + ~150/s spare = 600/s self-limit
-  private static readonly MAX_LIVE_CALLS_PER_TICK = 150;  // 150 calls × 2 ticks/s = 300/s peak
+  // Round-robin counter so consecutive apiGet calls alternate hosts.
+  private hostRoundRobin = 0;
+  // Rate budget: 600/s total = 300/s/host × 2 hosts. With round-robin
+  // (one host per call) the live tick uses the full per-host cap:
+  //   222ms tick × 4.5 ticks/s × 130 calls/tick ≈ 585 calls/s
+  //   split evenly = ~292/s on each host (just under 300/host limit)
+  private static readonly MAX_LIVE_CALLS_PER_TICK = 130;
   private static readonly MAX_BG_CALLS_PER_SECOND = 150;
 
   /**
@@ -628,7 +635,10 @@ export class SportradarService implements OnModuleInit {
   // ── Core API helper — dual-host race + 2s Redis cache ────────────────────────
 
   /**
-   * GET from Sportradar: Redis hit (2s TTL) → miss → Promise.race both hosts.
+   * GET from Sportradar: Redis hit (2s TTL) → miss → round-robin one host
+   * (failover to the other on error). Distributing 1-call-per-host instead
+   * of racing both halves outbound HTTP load and lets us actually use the
+   * full 600/s = 300/s × 2 budget instead of doubling traffic per call.
    */
   private async apiGet<T>(
     path: string,
@@ -650,19 +660,29 @@ export class SportradarService implements OnModuleInit {
       } catch { /* fall through */ }
     }
 
-    // 2. Fire both hosts in parallel — whichever responds first wins (Promise.any).
-    //    Promise.any (unlike Promise.race) only resolves on the first FULFILLMENT,
-    //    so a fast rejection from one host never kills the call.
-    const fetchers = this.API_HOSTS.map((host) =>
-      firstValueFrom(
-        this.httpService.get<T>(`${host}${this.API_PATH}/${path}${qs ? '?' + qs : ''}`, {
-          headers: { 'x-betnex-key': this.API_KEY },
-          timeout: 8_000,
-        }),
-      ).then((res) => res.data),
-    );
+    // 2. Pick a host round-robin. Each call goes to ONE host, not both.
+    //    On failure, fall through to the other host so a brief outage on
+    //    one upstream doesn't kill the request.
+    const url = (host: string) =>
+      `${host}${this.API_PATH}/${path}${qs ? '?' + qs : ''}`;
+    const headers = { 'x-betnex-key': this.API_KEY };
 
-    const data = await Promise.any(fetchers);
+    const idx = this.hostRoundRobin++ % this.API_HOSTS.length;
+    const primary = this.API_HOSTS[idx];
+    const secondary = this.API_HOSTS[(idx + 1) % this.API_HOSTS.length];
+
+    let data: T;
+    try {
+      const res = await firstValueFrom(
+        this.httpService.get<T>(url(primary), { headers, timeout: 8_000 }),
+      );
+      data = res.data;
+    } catch {
+      const res = await firstValueFrom(
+        this.httpService.get<T>(url(secondary), { headers, timeout: 8_000 }),
+      );
+      data = res.data;
+    }
 
     // 3. Cache result in Redis (500ms TTL) so the next request is instant
     if (!options?.bypassCache) {
@@ -1153,6 +1173,18 @@ export class SportradarService implements OnModuleInit {
     const redis = this.getRedis();
     const sportIds = Object.keys(SORT_ORDER);
 
+    // Resolve canonical sport names from the catalogue once, so sports
+    // with zero current events still show a real name (not "sr:sport:19").
+    const nameById = new Map<string, string>();
+    try {
+      const cat = await this.betfairSportModel
+        .find({ isActive: true }, { sport_id: 1, sport_name: 1 })
+        .lean();
+      for (const s of cat as any[]) {
+        if (s.sport_id) nameById.set(String(s.sport_id), String(s.sport_name ?? s.sport_id));
+      }
+    } catch (_) {}
+
     // Build pipeline: fetch upcoming+inplay key for every sport
     const pipeline = redis.pipeline();
     sportIds.forEach((id) => {
@@ -1183,21 +1215,32 @@ export class SportradarService implements OnModuleInit {
       totalEvents += total;
       totalLive   += inplayCount;
 
-      // Get sport name from any cached event
-      let sportName = sportId;
-      try {
-        if (upcomingRaw) {
-          const evs = JSON.parse(upcomingRaw) as SportradarEvent[];
-          if (evs[0]?.sportName) sportName = evs[0].sportName;
-        }
-      } catch (_) {}
+      // Sport name resolution order:
+      //   1. Catalogue lookup (works even when current events are zero)
+      //   2. Any cached event's sportName (fallback)
+      //   3. The raw sportId (last resort)
+      let sportName = nameById.get(sportId) ?? sportId;
+      if (sportName === sportId) {
+        try {
+          if (upcomingRaw) {
+            const evs = JSON.parse(upcomingRaw) as SportradarEvent[];
+            if (evs[0]?.sportName) sportName = evs[0].sportName;
+          } else if (inplayRaw) {
+            const evs = JSON.parse(inplayRaw) as SportradarEvent[];
+            if (evs[0]?.sportName) sportName = evs[0].sportName;
+          }
+        } catch (_) {}
+      }
 
       sports.push({ sportId, sportName, upcoming: upcomingCount, inplay: inplayCount, total });
     });
 
-    // Only return sports that have at least one event
+    // Return ALL configured sports (16 from SORT_ORDER), even if their
+    // current event count is zero. The previous filter dropped any sport
+    // with `total === 0`, which made the navigation rail flicker from 16
+    // down to 7 every time matches ended between scheduled fixtures.
     return {
-      sports: sports.filter((s) => s.total > 0),
+      sports,
       totalEvents,
       totalLive,
     };
