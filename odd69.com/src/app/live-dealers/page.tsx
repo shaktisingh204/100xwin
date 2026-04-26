@@ -1,197 +1,196 @@
 "use client";
 
-import React, { useEffect, useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { X } from "lucide-react";
-import GamePlayInterface from "@/components/casino/GamePlayInterface";
-import CasinoMobileView from "@/components/casino/CasinoMobileView";
-import CasinoBrowserModal from "@/components/casino/CasinoBrowserModal";
+import React, { useState, useRef, useEffect, Suspense } from 'react';
 import {
-  House, Layers, Flame, Tickets, Star, Dice5, Rocket, Sparkles, Target, Fish, Drama, CircleDot, Trophy,
-} from "lucide-react";
-import { casinoService } from "@/services/casino";
-import { useAuth } from "@/context/AuthContext";
-import { useWallet } from "@/context/WalletContext";
-import MaintenanceState from "@/components/maintenance/MaintenanceState";
-import { useSectionMaintenance } from "@/hooks/useSectionMaintenance";
-import { getCasinoWalletModeFromSubWallet } from "@/utils/casinoWalletMode";
+    Search, X, PlayCircle, Dice5, Coffee, Gamepad2,
+    Tv, Layers, ChevronRight
+} from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+// Header / LeftSidebar are owned by odd69's root layout — don't render
+// them inside the page or you'll get duplicated chrome.
+import GameGrid from '@/components/casino/GameGrid';
+import GamePlayInterface from '@/components/casino/GamePlayInterface';
+import LiveCasinoMobileView from '@/components/casino/LiveCasinoMobileView';
 
-interface LaunchableGame {
-  id?: string;
-  name?: string;
-  gameName?: string;
-  provider?: string;
-  providerCode?: string;
-  gameCode?: string;
-  url?: string;
-}
+// ─── Live sections ─────────────────────────────────────────────────────────────
+const LIVE_SECTIONS = [
+    { title: 'Popular Live',   icon: <PlayCircle size={15} className="text-red-400"      />, category: 'popular',    sectionKey: 'live'      },
+    { title: 'Live Roulette',  icon: <PlayCircle size={15} className="text-amber-400"    />, category: 'roulette',   sectionKey: 'roulette'  },
+    { title: 'Live Blackjack', icon: <Dice5      size={15} className="text-brand-gold"   />, category: 'blackjack',  sectionKey: 'blackjack' },
+    { title: 'Live Baccarat',  icon: <Coffee     size={15} className="text-violet-400"   />, category: 'baccarat',   sectionKey: 'baccarat'  },
+    { title: 'Game Shows',     icon: <Tv         size={15} className="text-pink-400"     />, category: 'game_shows', sectionKey: 'shows'     },
+    { title: 'Live Poker',     icon: <Gamepad2   size={15} className="text-teal-400"     />, category: 'poker',      sectionKey: 'poker'     },
+];
 
-const CASINO_RAIL = [
-  { key: "all",       label: "Lobby",       Icon: House },
-  { key: "providers", label: "Providers",   Icon: Layers },
-  { key: "popular",   label: "Hot Games",   Icon: Flame },
-  { key: "slots",     label: "Slots",       Icon: Tickets },
-  { key: "live",      label: "Live Casino", Icon: Star },
-  { key: "table",     label: "Table Games", Icon: Dice5 },
-  { key: "crash",     label: "Crash",       Icon: Rocket },
-  { key: "new",       label: "New Games",   Icon: Sparkles },
-  { key: "top-slots", label: "Top Slots",   Icon: Target },
-  { key: "fishing",   label: "Fishing",     Icon: Fish },
-  { key: "blackjack", label: "Blackjack",   Icon: Drama },
-  { key: "roulette",  label: "Roulette",    Icon: CircleDot },
-  { key: "baccarat",  label: "Baccarat",    Icon: Trophy },
+const LIVE_CATS = [
+    { key: 'all',        label: 'All Games'  },
+    { key: 'roulette',   label: 'Roulette'   },
+    { key: 'blackjack',  label: 'Blackjack'  },
+    { key: 'baccarat',   label: 'Baccarat'   },
+    { key: 'game_shows', label: 'Game Shows' },
+    { key: 'poker',      label: 'Poker'      },
 ];
 
 function LiveDealersContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  // /live-dealers is the casino lobby pinned to the Live Casino tab.
-  // URL ?category=... still overrides if explicitly set.
-  const categoryParam = searchParams.get("category") ?? "live";
+    const router = useRouter();
+    const searchParams = useSearchParams();
+    const categoryParam = searchParams.get('category');
 
-  const { user } = useAuth();
-  const { selectedSubWallet } = useWallet();
-  const { blocked, loading: maintenanceLoading, message: maintenanceMessage } = useSectionMaintenance(
-    "casino",
-    "Live dealers are currently under maintenance. Game launches are temporarily unavailable.",
-  );
+    const [activeCat, setActiveCat]       = useState(categoryParam || 'all');
+    const [searchInput, setSearchInput]   = useState('');
+    const [search, setSearch]             = useState('');
+    const [activeGame, setActiveGame]     = useState<{ id: string; name: string; provider: string; url: string } | null>(null);
+    const searchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  const [activeGame, setActiveGame] = useState<{ id: string; name: string; provider: string; url: string } | null>(null);
-  const [launching, setLaunching] = useState(false);
-  const [launchError, setLaunchError] = useState<string | null>(null);
+    // Sync activeCat with URL param
+    useEffect(() => {
+        setActiveCat(categoryParam || 'all');
+    }, [categoryParam]);
 
-  // Browser Modal State
-  const [isBrowserOpen, setIsBrowserOpen] = useState(false);
-  const [browserInitialCat, setBrowserInitialCat] = useState("all");
-  const [browserInitialSearch, setBrowserInitialSearch] = useState("");
+    const handleSearchChange = (val: string) => {
+        setSearchInput(val);
+        clearTimeout(searchTimer.current);
+        searchTimer.current = setTimeout(() => setSearch(val), 350);
+    };
+    const clearSearch = () => { setSearchInput(''); setSearch(''); };
+    const handleCatSelect = (key: string) => {
+        clearSearch();
+        if (key === 'all') {
+            router.push('/live-dealers');
+        } else {
+            router.push(`/live-dealers?category=${key}`);
+        }
+    };
+    const handleGameLaunch = (gameData: any) => setActiveGame(gameData);
 
-  // Auto-open browser modal when URL has a category param
-  useEffect(() => {
-    if (categoryParam && categoryParam !== "all") {
-      setBrowserInitialCat(categoryParam);
-      setBrowserInitialSearch("");
-      setIsBrowserOpen(true);
-    } else if (!categoryParam) {
-      setIsBrowserOpen(false);
-    }
-  }, [categoryParam]);
+    const isSearching = !!search.trim();
+    const showLobby   = !isSearching && activeCat === 'all';
 
-  if (maintenanceLoading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center bg-[var(--bg-base)]">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[var(--gold)]" />
-      </div>
+        <div className="bg-[var(--bg-base)] flex flex-col">
+            {/* ── MOBILE ─────────────────────────────────────────────────── */}
+            <div className="md:hidden">
+                {activeGame ? (
+                    <div className="h-full bg-[var(--bg-base)]">
+                        <GamePlayInterface
+                            game={activeGame}
+                            onClose={() => setActiveGame(null)}
+                            isEmbedded
+                            onLaunch={handleGameLaunch}
+                            key={activeGame.id}
+                        />
+                    </div>
+                ) : (
+                    <LiveCasinoMobileView onLaunch={handleGameLaunch} />
+                )}
+            </div>
+
+            {/* ── DESKTOP ────────────────────────────────────────────────── */}
+            <div className="hidden md:flex flex-1 max-w-[1920px] mx-auto w-full">
+                <main className="flex-1 min-w-0 bg-[var(--bg-base)]">
+                    {activeGame ? (
+                        <div className="h-full bg-[var(--bg-base)]">
+                            <GamePlayInterface
+                                game={activeGame}
+                                onClose={() => setActiveGame(null)}
+                                isEmbedded
+                                onLaunch={handleGameLaunch}
+                                key={activeGame.id}
+                            />
+                        </div>
+                    ) : (
+                        <div className="p-4 md:p-5 space-y-5">
+
+                            {/* ── Search bar (odd69 gold-leaf) ── */}
+                            <div className={`flex items-center gap-3 bg-[var(--bg-elevated)] px-4 py-3 rounded-2xl transition-shadow ${searchInput ? 'shadow-[inset_0_0_0_1px_var(--gold)]' : 'shadow-[inset_0_0_0_1px_var(--ink-ghost)]'}`}>
+                                <Search size={16} className={`flex-shrink-0 transition-colors ${searchInput ? 'text-[var(--gold)]' : 'text-[var(--ink-faint)]'}`} />
+                                <input
+                                    type="text"
+                                    placeholder="Search live games…"
+                                    value={searchInput}
+                                    onChange={e => handleSearchChange(e.target.value)}
+                                    className="flex-1 bg-transparent text-[var(--ink)] text-sm font-semibold outline-none placeholder:text-[var(--ink-faint)]"
+                                />
+                                {searchInput && (
+                                    <button onClick={clearSearch} className="p-1 rounded-lg bg-[var(--bg-raised)] text-[var(--ink-dim)] hover:text-[var(--ink)] transition-colors">
+                                        <X size={13} />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* ── Category pills (odd69 gold accent) ── */}
+                            {!isSearching && (
+                                <div className="flex gap-2 flex-wrap">
+                                    {LIVE_CATS.map(({ key, label }) => {
+                                        const active = activeCat === key;
+                                        return (
+                                            <button
+                                                key={key}
+                                                onClick={() => handleCatSelect(key)}
+                                                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black tracking-wide transition-all ${
+                                                    active
+                                                        ? 'bg-[var(--gold-soft)] text-[var(--gold)] shadow-[inset_0_0_0_1px_var(--gold)]'
+                                                        : 'bg-[var(--bg-elevated)] text-[var(--ink-dim)] hover:text-[var(--ink)] shadow-[inset_0_0_0_1px_var(--ink-ghost)] hover:shadow-[inset_0_0_0_1px_var(--gold-line)]'
+                                                }`}
+                                            >
+                                                {label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            )}
+
+                            {/* ── Content ── */}
+                            {isSearching ? (
+                                <GameGrid
+                                    title={`Results for "${search}"`}
+                                    category="all"
+                                    search={search}
+                                    layout="grid"
+                                    onLaunch={handleGameLaunch}
+                                    type="live"
+                                />
+                            ) : showLobby ? (
+                                <div className="space-y-6">
+                                    {LIVE_SECTIONS.map(section => (
+                                        <GameGrid
+                                            key={section.sectionKey}
+                                            title={section.title}
+                                            icon={section.icon}
+                                            sectionKey={section.sectionKey}
+                                            category={section.category}
+                                            layout="row"
+                                            onViewAll={() => handleCatSelect(section.category)}
+                                            onLaunch={handleGameLaunch}
+                                            type="live"
+                                        />
+                                    ))}
+                                </div>
+                            ) : (
+                                <GameGrid
+                                    title={LIVE_CATS.find(c => c.key === activeCat)?.label || 'Live Games'}
+                                    category={activeCat}
+                                    layout="grid"
+                                    onLaunch={handleGameLaunch}
+                                    type="live"
+                                />
+                            )}
+                        </div>
+                    )}
+                </main>
+            </div>
+        </div>
     );
-  }
-
-  if (blocked) {
-    return (
-      <div className="min-h-[70vh] bg-[var(--bg-base)]">
-        <MaintenanceState title="Live Dealers Maintenance" message={maintenanceMessage} backHref="/" backLabel="Back to Home" />
-      </div>
-    );
-  }
-
-  const toActiveGame = (g: LaunchableGame, url: string) => ({
-    id: g.id || g.gameCode || "",
-    name: g.name || g.gameName || "",
-    provider: g.providerCode || g.provider || "",
-    url,
-  });
-
-  const handleGameLaunch = async (gameData: LaunchableGame) => {
-    if (gameData.url) { setActiveGame(toActiveGame(gameData, gameData.url)); setLaunchError(null); return; }
-    if (!user) { alert("Please login to play"); return; }
-    const providerCode = gameData.providerCode || gameData.provider;
-    const gameId = gameData.gameCode || gameData.id;
-    if (!providerCode || !gameId) { setLaunchError("Game data is incomplete."); return; }
-    setLaunching(true); setLaunchError(null);
-    try {
-      const res = await casinoService.launchGame({
-        username: user.username,
-        provider: providerCode,
-        gameId,
-        isLobby: false,
-        walletMode: getCasinoWalletModeFromSubWallet(selectedSubWallet),
-      });
-      if (res?.url) setActiveGame(toActiveGame(gameData, res.url));
-      else setLaunchError("Could not get game URL.");
-    } catch (error: unknown) {
-      setLaunchError(error instanceof Error ? error.message : "Failed to launch game.");
-    } finally { setLaunching(false); }
-  };
-
-  return (
-    <>
-      {/* Launching overlay */}
-      {launching && (
-        <div className="fixed inset-0 z-[600] bg-black/85 backdrop-blur-md flex flex-col items-center justify-center gap-3">
-          <div className="relative w-14 h-14">
-            <div className="w-14 h-14 rounded-full border-2 border-[var(--gold-line)] border-t-[var(--gold)] animate-spin" />
-            <div className="absolute inset-0 flex items-center justify-center text-xl">🎰</div>
-          </div>
-          <p className="t-eyebrow !text-[11px] text-[var(--ink-dim)] animate-pulse">Launching…</p>
-        </div>
-      )}
-
-      {/* Error overlay */}
-      {launchError && (
-        <div className="fixed inset-0 z-[600] bg-black/85 backdrop-blur-md flex flex-col items-center justify-center gap-4 px-6">
-          <div className="w-14 h-14 rounded-2xl bg-[var(--crimson-soft)] border border-[color:var(--crimson)]/25 flex items-center justify-center text-2xl">⚠️</div>
-          <div className="text-center">
-            <h2 className="font-display text-[16px] font-bold text-[var(--ink)] mb-1">Unable to Launch</h2>
-            <p className="text-[13px] text-[var(--ink-faint)]">{launchError}</p>
-          </div>
-          <button
-            onClick={() => setLaunchError(null)}
-            className="btn btn-ghost h-10 uppercase tracking-[0.06em] text-[11px]"
-          >
-            <X size={14} /> Close
-          </button>
-        </div>
-      )}
-
-      {/* Game overlay */}
-      {activeGame && (
-        <div className="fixed inset-0 z-[500] bg-[var(--bg-base)] flex flex-col">
-          <GamePlayInterface
-            game={activeGame}
-            onClose={() => setActiveGame(null)}
-            isEmbedded={false}
-            onLaunch={handleGameLaunch}
-            key={activeGame.id}
-          />
-        </div>
-      )}
-
-      <CasinoBrowserModal
-        isOpen={isBrowserOpen}
-        onClose={() => {
-          setIsBrowserOpen(false);
-          router.push("/live-dealers");
-        }}
-        initialCategory={browserInitialCat}
-        initialSearch={browserInitialSearch}
-        onLaunch={handleGameLaunch}
-        categories={CASINO_RAIL}
-      />
-
-      {/* ── Same view on every viewport, full-width ── */}
-      <CasinoMobileView onLaunch={handleGameLaunch} />
-    </>
-  );
 }
 
 export default function LiveDealersPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="min-h-[60vh] bg-[var(--bg-base)] flex items-center justify-center">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[var(--gold)]" />
-        </div>
-      }
-    >
-      <LiveDealersContent />
-    </Suspense>
-  );
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-[var(--bg-base)] flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--gold)]" />
+            </div>
+        }>
+            <LiveDealersContent />
+        </Suspense>
+    );
 }
