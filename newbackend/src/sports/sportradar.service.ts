@@ -1668,12 +1668,80 @@ export class SportradarService implements OnModuleInit {
     }
   }
 
+  // In-memory cache of team-image enrichments fetched from the adxwin
+  // proxy. Sportradar's API doesn't carry team1Image / team2Image /
+  // thumbnail — those are admin-curated on adxwin's Mongo. We pull them
+  // opportunistically when serving a match-detail request and cache for
+  // 5 min so we don't network-hop on every page load.
+  private imgEnrichmentCache = new Map<
+    string,
+    { thumbnail?: string; team1Image?: string; team2Image?: string; expiresAt: number }
+  >();
+
+  private async fetchEventImagesFromProxy(
+    eventId: string,
+  ): Promise<{ thumbnail?: string; team1Image?: string; team2Image?: string } | null> {
+    const cached = this.imgEnrichmentCache.get(eventId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached;
+    }
+    if (!this.PROXY_URL) return null;
+    try {
+      const res = await firstValueFrom(
+        this.httpService.get<{ data?: any }>(
+          `${this.PROXY_URL}/event/${encodeURIComponent(eventId)}`,
+          {
+            headers: { 'x-api-token': this.PROXY_TOKEN },
+            timeout: 4_000,
+          },
+        ),
+      );
+      const ev = res.data?.data ?? null;
+      if (!ev) return null;
+      const imgs = {
+        thumbnail: ev.thumbnail || undefined,
+        team1Image: ev.team1Image || undefined,
+        team2Image: ev.team2Image || undefined,
+        expiresAt: Date.now() + 5 * 60_000,
+      };
+      this.imgEnrichmentCache.set(eventId, imgs);
+      // Keep the in-memory cache bounded.
+      if (this.imgEnrichmentCache.size > 1000) {
+        const oldestKey = this.imgEnrichmentCache.keys().next().value;
+        if (oldestKey) this.imgEnrichmentCache.delete(oldestKey);
+      }
+      return imgs;
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Returns the FULL raw event from Redis for a single eventId.
    * Redis key: sportradar:event:{eventId}
    * Used by match-detail page to get all markets, runners, prices in one call.
+   *
+   * After resolution, if the event lacks team1Image / team2Image / thumbnail
+   * (Sportradar's API doesn't include them — they're admin-curated on
+   * adxwin's Mongo), pull them from adxwin's /sportradar-proxy/event/:id
+   * and merge in. Caches the image triplet in-process for 5 minutes.
    */
   async getEventById(eventId: string): Promise<SportradarEvent | null> {
+    const ev = await this.getEventByIdInternal(eventId);
+    if (!ev) return null;
+    if (ev.team1Image && ev.team2Image && (ev as any).thumbnail) return ev;
+
+    const imgs = await this.fetchEventImagesFromProxy(eventId);
+    if (!imgs) return ev;
+    return {
+      ...ev,
+      thumbnail: (ev as any).thumbnail || imgs.thumbnail,
+      team1Image: ev.team1Image || imgs.team1Image,
+      team2Image: ev.team2Image || imgs.team2Image,
+    } as SportradarEvent;
+  }
+
+  private async getEventByIdInternal(eventId: string): Promise<SportradarEvent | null> {
     // Resolution order (rewrite — was: redis → scans → mongo → proxy).
     //
     //   1. Local Redis  sportradar:event:{id}    — fast hot path

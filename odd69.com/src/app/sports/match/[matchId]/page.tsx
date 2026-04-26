@@ -150,7 +150,40 @@ async function fetchSrEvent(eventId: string): Promise<SrEvent | null> {
   return tryOnce();
 }
 
-async function fetchSrMarketsFallback(eventId: string): Promise<SrEvent["markets"] | null> {
+async function fetchSrMarketsFallback(
+  eventId: string,
+  sportId?: string,
+): Promise<SrEvent["markets"] | null> {
+  // Primary: SR list-market endpoint. Returns the full envelope —
+  // matchOdds, bookmakers, fancyMarkets, premiumMarkets — including
+  // markets only the writer's live-odds tick populates. This is the
+  // endpoint zeero.bet's match page uses, so 100xwin matches the
+  // exact same fill behaviour.
+  try {
+    const sp = sportId ? `&sportId=${encodeURIComponent(sportId)}` : "";
+    const res = await fetch(
+      `${BACKEND}/sports/sportradar/market?eventId=${encodeURIComponent(eventId)}${sp}`,
+      { cache: "no-store" },
+    );
+    if (res.ok) {
+      const body = await res.json();
+      // Two response shapes — { success, event } directly, or wrapped.
+      const event = body?.event ?? body?.data?.event ?? null;
+      const m = event?.markets ?? body?.markets ?? null;
+      if (m && (m.matchOdds || m.bookmakers || m.fancyMarkets || m.premiumMarkets)) {
+        return {
+          matchOdds: m.matchOdds ?? [],
+          bookmakers: m.bookmakers ?? [],
+          fancyMarkets: m.fancyMarkets ?? [],
+          premiumMarkets: m.premiumMarkets ?? [],
+        };
+      }
+    }
+  } catch {
+    /* fall through to legacy */
+  }
+
+  // Legacy Diamond fallback for non-SR matches.
   try {
     const res = await fetch(
       `${BACKEND}/sportsbook/market?event_id=${encodeURIComponent(eventId)}`,
@@ -587,16 +620,38 @@ export default function MatchDetailPage() {
       let data: SrEvent | null = null;
       if (isSR) {
         data = await fetchSrEvent(matchId);
-        // Second window of patience before declaring the match missing.
-        // Mirror lag + Cloudflare blip on a cold key can both miss
-        // simultaneously; a 500ms-delayed second pull catches that.
         if (!data) {
           await new Promise((r) => setTimeout(r, 500));
           data = await fetchSrEvent(matchId);
         }
-        if (data && !hasAnyMarkets(data.markets)) {
-          const markets = await fetchSrMarketsFallback(matchId);
-          if (markets) data = { ...data, markets };
+        // Always pull the full SR list-market envelope on top of the
+        // basic event. The /event endpoint only contains the bulk-
+        // populated `matchOdds`; bookmakers / fancy / premium markets
+        // come from the live-odds tick which writes to a different
+        // Redis key. Hitting /sports/sportradar/market gives us the
+        // complete merged shape — same as the zeero.bet page.
+        if (data) {
+          const markets = await fetchSrMarketsFallback(matchId, data.sportId);
+          if (markets) {
+            data = {
+              ...data,
+              markets: {
+                ...data.markets,
+                matchOdds: markets.matchOdds.length
+                  ? markets.matchOdds
+                  : data.markets?.matchOdds ?? [],
+                bookmakers: markets.bookmakers.length
+                  ? markets.bookmakers
+                  : data.markets?.bookmakers ?? [],
+                fancyMarkets: markets.fancyMarkets.length
+                  ? markets.fancyMarkets
+                  : data.markets?.fancyMarkets ?? [],
+                premiumMarkets: markets.premiumMarkets.length
+                  ? markets.premiumMarkets
+                  : data.markets?.premiumMarkets ?? [],
+              },
+            };
+          }
         }
       } else {
         data = (await sportsApi
@@ -920,7 +975,7 @@ export default function MatchDetailPage() {
             >
               {event.team1Image ? (
                 <img
-                  src={event.team1Image}
+                  src={proxyUrl(event.team1Image) ?? event.team1Image}
                   alt={homeTeam}
                   className="h-full w-full object-contain p-1"
                 />
@@ -1002,7 +1057,7 @@ export default function MatchDetailPage() {
             >
               {event.team2Image ? (
                 <img
-                  src={event.team2Image}
+                  src={proxyUrl(event.team2Image) ?? event.team2Image}
                   alt={awayTeam}
                   className="h-full w-full object-contain p-1"
                 />
