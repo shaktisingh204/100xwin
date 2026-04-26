@@ -1629,10 +1629,35 @@ export class SportradarService implements OnModuleInit {
     // 4. MongoDB fallback
     try {
       const ev = await this.betfairEventModel.findOne({ eventId }).lean() as any;
-      return ev ?? null;
-    } catch (_) {
-      return null;
+      if (ev) return ev;
+    } catch (_) {}
+
+    // 5. Proxy fallback (reader-mode only).
+    // Local mirror may lag by one tick or miss an event that's in
+    // inplay on the primary but not yet in our pipeline cache. Hit the
+    // primary's /event/:id directly so the user never sees "Match Not
+    // Found" for an event the primary has live. Result is also written
+    // into local Redis so subsequent lookups hit cache 1.
+    if (this.proxyEnabled) {
+      try {
+        const ev = await this.fetchFromProxy<any>(`/event/${eventId}`);
+        if (ev) {
+          this.getRedis()
+            .set(
+              `sportradar:event:${eventId}`,
+              JSON.stringify(ev),
+              'EX',
+              INPLAY_REDIS_TTL,
+            )
+            .catch(() => {});
+          return ev;
+        }
+      } catch (_) {
+        /* swallow — return null below */
+      }
     }
+
+    return null;
   }
 
   /**
