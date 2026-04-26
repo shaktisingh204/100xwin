@@ -209,16 +209,55 @@ function CasinoContent() {
       </div>
 
       {/* ── DESKTOP ── */}
-      <div className="hidden md:block">
-        <div className="p-4 md:p-5 space-y-5 max-w-[1600px] mx-auto">
+      <div className="hidden md:block relative">
+        {/* Ambient gold radial behind the page */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-[420px] -z-0"
+          style={{
+            background:
+              "radial-gradient(ellipse 900px 360px at 18% 0%, rgba(245,183,10,0.08) 0%, transparent 65%), radial-gradient(ellipse 700px 320px at 92% 6%, rgba(139,92,255,0.06) 0%, transparent 65%)",
+          }}
+        />
+
+        <div className="relative z-10 p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
           {/* Hero banner — admin-controlled from CMS > Sliders */}
           {selectedCategory === "all" && (
-            <DynamicHeroSlider
-              page="CASINO"
-              className="w-full"
-              onGameLaunch={handleGameLaunch}
-              fallback={<PromoCardSlider onGameLaunch={handleGameLaunch} />}
-            />
+            <div className="relative rounded-[18px] overflow-hidden border border-[var(--gold-line)]">
+              <DynamicHeroSlider
+                page="CASINO"
+                className="w-full"
+                onGameLaunch={handleGameLaunch}
+                fallback={<PromoCardSlider onGameLaunch={handleGameLaunch} />}
+              />
+            </div>
+          )}
+
+          {/* Lobby intro strip — eyebrow + tagline + live status */}
+          {selectedCategory === "all" && (
+            <div className="flex items-end justify-between gap-4 flex-wrap">
+              <div className="rail-gold">
+                <span className="t-eyebrow">The Floor</span>
+                <h1 className="font-display font-extrabold text-[var(--ink)] text-[26px] md:text-[32px] tracking-[-0.025em] leading-none mt-1">
+                  Casino <span className="text-gold-grad">Lobby</span>
+                </h1>
+                <p className="text-[12.5px] text-[var(--ink-dim)] mt-2 max-w-md">
+                  Slots, live tables, crash rails — every tile audited, every payout instant.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="chip chip-emerald">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--emerald)] animate-live-dot" />
+                  Live
+                </span>
+                <span className="chip chip-gold">
+                  <Sparkles size={10} /> 1,200+ Games
+                </span>
+                <span className="chip">
+                  <Layers size={10} /> 32 Studios
+                </span>
+              </div>
+            </div>
           )}
 
           {/* Search bar — opens browser modal */}
@@ -226,29 +265,43 @@ function CasinoContent() {
             type="button"
             onClick={handleSearchClick}
             aria-label="Search games"
-            className="relative w-full text-left group"
+            className="relative w-full text-left group block"
           >
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--ink-faint)]" size={18} />
-            <div className="h-11 w-full rounded-xl border border-[var(--line-default)] bg-white/[0.03] py-2.5 pl-11 pr-4 text-sm font-medium text-[var(--ink-faint)] flex items-center transition-all group-hover:border-[var(--gold-line)] group-hover:bg-white/[0.04]">
-              Search games...
+            <Search
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] group-hover:text-[var(--gold)] transition-colors"
+              size={18}
+            />
+            <div className="h-12 w-full rounded-[14px] border border-[var(--line-default)] bg-[var(--bg-surface)] pl-12 pr-20 text-[13.5px] font-medium text-[var(--ink-faint)] flex items-center transition-all group-hover:border-[var(--gold-line)] group-hover:bg-[var(--bg-elevated)] group-hover:shadow-[0_0_0_4px_var(--gold-soft)]">
+              Search 1,200+ games — slot, provider, or table…
             </div>
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono uppercase tracking-[0.18em] text-[var(--ink-whisper)] border border-[var(--line-default)] rounded-md px-1.5 py-0.5 bg-[var(--bg-elevated)]">
+              ⌘K
+            </span>
           </button>
 
-          {/* Category rail */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+          {/* Category rail — chips with circular icon badges */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar -mx-1 px-1">
             {CASINO_RAIL.map(({ key, label, Icon }) => {
               const active = selectedCategory === key;
               return (
                 <button
                   key={key}
                   onClick={() => handleCategoryClick(key)}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3.5 py-2 text-[11px] font-semibold transition-all border ${
+                  className={`flex shrink-0 items-center gap-2 rounded-[12px] pl-1.5 pr-3.5 py-1.5 text-[12px] font-semibold transition-all border ${
                     active
-                      ? "bg-[var(--gold-soft)] border-[var(--gold-line)] text-[var(--gold-bright)]"
-                      : "bg-white/[0.03] border-[var(--line-default)] text-[var(--ink-faint)] hover:text-[var(--ink-dim)] hover:border-[var(--line-strong)] hover:bg-white/[0.05]"
+                      ? "bg-[var(--gold-soft)] border-[var(--gold-line)] text-[var(--gold-bright)] shadow-[0_0_18px_var(--gold-halo)]"
+                      : "bg-[var(--bg-surface)] border-[var(--line-default)] text-[var(--ink-dim)] hover:text-[var(--ink)] hover:border-[var(--line-strong)] hover:bg-[var(--bg-elevated)]"
                   }`}
                 >
-                  <Icon size={13} className={active ? "text-[var(--gold-bright)]" : "text-[var(--ink-faint)]"} />
+                  <span
+                    className={`grid place-items-center w-7 h-7 rounded-[9px] transition-colors ${
+                      active
+                        ? "bg-gold-grad text-[#120c00]"
+                        : "bg-[var(--bg-elevated)] text-[var(--ink-faint)] group-hover:text-[var(--ink-dim)]"
+                    }`}
+                  >
+                    <Icon size={14} />
+                  </span>
                   {label}
                 </button>
               );
@@ -256,14 +309,14 @@ function CasinoContent() {
             <button
               onClick={handleSearchClick}
               aria-label="Browse all"
-              className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/[0.03] border border-[var(--line-default)] text-[var(--ink-faint)] hover:text-[var(--ink)] hover:border-[var(--line-strong)] transition-all"
+              className="ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] bg-[var(--bg-surface)] border border-[var(--line-default)] text-[var(--ink-faint)] hover:text-[var(--ink)] hover:border-[var(--gold-line)] transition-all"
             >
-              <ChevronRight size={15} />
+              <ChevronRight size={16} />
             </button>
           </div>
 
-          {/* Section rows */}
-          <div className="space-y-6">
+          {/* Section rows — gold rail accent on titles via the GameGrid component */}
+          <div className="space-y-7 md:space-y-8">
             {sectionConfigs.map((section) => (
               <GameGrid
                 key={section.category}
