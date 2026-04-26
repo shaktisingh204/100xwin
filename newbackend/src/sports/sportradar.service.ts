@@ -329,12 +329,10 @@ export class SportradarService implements OnModuleInit {
    * Utilises up to MAX_CALLS_PER_SECOND of the 250/s API budget.
    * Only emits socket-data when runner prices actually change.
    */
-  // Direct mode (writer): 222ms — fits within Sportradar's 300/s budget.
-  // Proxy mode (reader): 1s — one /batch POST/sec is plenty and avoids
-  // piling onto Cloudflare during transient 502 spells.
-  private get LIVE_ODDS_TICK_MS(): number {
-    return this.proxyEnabled ? 1_000 : 222;
-  }
+  // Both modes tick at 222ms to match zeero.bet's odds refresh cadence.
+  // Proxy mode collapses N per-event reads into one /batch POST per tick,
+  // so the cost upstream is constant — no Cloudflare strain.
+  private readonly LIVE_ODDS_TICK_MS = 222;
 
   private startLiveOddsLoop(): void {
     if (this.liveOddsLoopHandle) return;
@@ -506,10 +504,19 @@ export class SportradarService implements OnModuleInit {
   private emitSportradarOdds(eventId: string, rawEvent?: any): void {
     if (!this.gateway?.server && !this.sportsGateway?.server) return;
 
-    const matchOdds: any[] = rawEvent?.markets?.matchOdds ?? [];
+    const m0 = rawEvent?.markets ?? {};
+    const allMarkets: any[] = [
+      ...(m0.matchOdds ?? []),
+      ...(m0.bookmakers ?? []),
+      ...(m0.fancyMarkets ?? []),
+      ...(m0.premiumMarkets ?? []),
+    ];
 
-    // Build socket-compatible market array
-    const markets = matchOdds.map((m) => ({
+    // Build socket-compatible market array. Frontend keys live updates by
+    // `bmi`/`mid`, so include every market type — without this, only the
+    // Match Odds tab refreshed live and bookmakers/fancy/premium stayed
+    // frozen at the snapshot served on initial page load.
+    const markets = allMarkets.map((m) => ({
       bmi: `${eventId}:${m.marketId}`,
       mid: `${eventId}:${m.marketId}`,
       eid: eventId,
@@ -517,7 +524,6 @@ export class SportradarService implements OnModuleInit {
       mtype: m.marketType,
       ms: m.status === 'Active' ? 1 : 4,  // 4 = suspended
       rt: (m.runners ?? []).flatMap((r: any) => [
-        // Back runners
         ...(r.backPrices ?? []).map((p: any) => ({
           ri: r.runnerId,
           ib: true,
@@ -525,7 +531,6 @@ export class SportradarService implements OnModuleInit {
           bv: p.size,
           nat: r.runnerName,
         })),
-        // Lay runners
         ...(r.layPrices ?? []).map((p: any) => ({
           ri: r.runnerId,
           ib: false,

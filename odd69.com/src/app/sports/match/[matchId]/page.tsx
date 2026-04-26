@@ -665,19 +665,10 @@ export default function MatchDetailPage() {
     };
   }, [matchId, isSR]);
 
-  /* ── Polling fallback (only when socket is offline) ── */
-  useEffect(() => {
-    if (!matchId || !isSR || isConnected) return;
-    let cancelled = false;
-    const t = setInterval(async () => {
-      const data = await fetchSrEvent(matchId);
-      if (data && !cancelled) setEvent(data);
-    }, 20_000);
-    return () => {
-      cancelled = true;
-      clearInterval(t);
-    };
-  }, [matchId, isSR, isConnected]);
+  // Polling fallback removed. Live updates flow purely through the
+  // Socket.IO `sportradar_odds` channel — every market type (matchOdds,
+  // bookmakers, fancyMarkets, premiumMarkets) is included in the emit
+  // and merged into the live overlay via the socket handler below.
 
   /* ── Socket: join / leave match room ── */
   useEffect(() => {
