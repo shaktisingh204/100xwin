@@ -633,22 +633,18 @@ export default function MatchDetailPage() {
         if (data) {
           const markets = await fetchSrMarketsFallback(matchId, data.sportId);
           if (markets) {
+            const mo = markets.matchOdds ?? [];
+            const bm = markets.bookmakers ?? [];
+            const fm = markets.fancyMarkets ?? [];
+            const pm = markets.premiumMarkets ?? [];
             data = {
               ...data,
               markets: {
                 ...data.markets,
-                matchOdds: markets.matchOdds.length
-                  ? markets.matchOdds
-                  : data.markets?.matchOdds ?? [],
-                bookmakers: markets.bookmakers.length
-                  ? markets.bookmakers
-                  : data.markets?.bookmakers ?? [],
-                fancyMarkets: markets.fancyMarkets.length
-                  ? markets.fancyMarkets
-                  : data.markets?.fancyMarkets ?? [],
-                premiumMarkets: markets.premiumMarkets.length
-                  ? markets.premiumMarkets
-                  : data.markets?.premiumMarkets ?? [],
+                matchOdds: mo.length ? mo : data.markets?.matchOdds ?? [],
+                bookmakers: bm.length ? bm : data.markets?.bookmakers ?? [],
+                fancyMarkets: fm.length ? fm : data.markets?.fancyMarkets ?? [],
+                premiumMarkets: pm.length ? pm : data.markets?.premiumMarkets ?? [],
               },
             };
           }
