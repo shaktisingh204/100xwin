@@ -124,18 +124,30 @@ const norm = (s: string | undefined | null) =>
    SR fetch
    ───────────────────────────────────────────── */
 async function fetchSrEvent(eventId: string): Promise<SrEvent | null> {
-  try {
-    const res = await fetch(
-      `${BACKEND}/sports/sportradar/event?eventId=${encodeURIComponent(eventId)}`,
-      { cache: "no-store" },
-    );
-    if (!res.ok) return null;
-    const body = await res.json();
-    if (!body?.success || !body?.data) return null;
-    return body.data as SrEvent;
-  } catch {
-    return null;
-  }
+  // Retry once on transient failure. The backend's getEventById has its
+  // own retry on the proxy step, but if Cloudflare 502s twice in a row
+  // the first call here returns null. A 200ms-spaced second attempt
+  // avoids the user-visible "Match Not Found" flash for a match that
+  // does exist upstream.
+  const tryOnce = async (): Promise<SrEvent | null> => {
+    try {
+      const res = await fetch(
+        `${BACKEND}/sports/sportradar/event?eventId=${encodeURIComponent(eventId)}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) return null;
+      const body = await res.json();
+      if (!body?.success || !body?.data) return null;
+      return body.data as SrEvent;
+    } catch {
+      return null;
+    }
+  };
+
+  const first = await tryOnce();
+  if (first) return first;
+  await new Promise((r) => setTimeout(r, 200));
+  return tryOnce();
 }
 
 async function fetchSrMarketsFallback(eventId: string): Promise<SrEvent["markets"] | null> {
@@ -571,6 +583,13 @@ export default function MatchDetailPage() {
       let data: SrEvent | null = null;
       if (isSR) {
         data = await fetchSrEvent(matchId);
+        // Second window of patience before declaring the match missing.
+        // Mirror lag + Cloudflare blip on a cold key can both miss
+        // simultaneously; a 500ms-delayed second pull catches that.
+        if (!data) {
+          await new Promise((r) => setTimeout(r, 500));
+          data = await fetchSrEvent(matchId);
+        }
         if (data && !hasAnyMarkets(data.markets)) {
           const markets = await fetchSrMarketsFallback(matchId);
           if (markets) data = { ...data, markets };
