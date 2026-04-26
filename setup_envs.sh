@@ -31,7 +31,7 @@ CLICKHOUSE_PASSWORD=""
 CLICKHOUSE_DB="default"
 
 # Turnkey / Diamond Sports API
-SPORTS_BASE_URL="https://zeero.bet"
+SPORTS_BASE_URL="https://odd69.com"
 SPORTS_API_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
 SPORTS_FEED_URLS=""
 DIAMOND_API_URL="https://diamond-sports-api-d247-sky-exchange-betfair.p.rapidapi.com"

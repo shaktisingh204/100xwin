@@ -34,7 +34,7 @@ export class Payment5Service {
         return this.configService.get<string>('PAYMENT5_SECRET_KEY') || '';
     }
     private get redirectUrl(): string {
-        return this.configService.get<string>('PAYMENT5_REDIRECT_URL') || 'https://zeero.bet/profile/transactions';
+        return this.configService.get<string>('PAYMENT5_REDIRECT_URL') || 'https://odd69.com/profile/transactions';
     }
 
     private assertConfig() {

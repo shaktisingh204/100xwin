@@ -285,7 +285,7 @@ export class SportradarService implements OnModuleInit {
    *   rate budget — 222ms is well within it.
    *
    * - Proxy mode (reader): separate, much slower intervals. The HTTP
-   *   proxy at zeero.bet is fronted by Cloudflare and is NOT a 300/s
+   *   proxy at odd69.com is fronted by Cloudflare and is NOT a 300/s
    *   rate-budget endpoint. Hitting it every 222ms (× ~20 endpoints
    *   per tick) sustains 80-90 req/s and gets 502'd, which starves
    *   the local Redis mirror of fresh data. These intervals match each
@@ -329,7 +329,7 @@ export class SportradarService implements OnModuleInit {
    * Utilises up to MAX_CALLS_PER_SECOND of the 250/s API budget.
    * Only emits socket-data when runner prices actually change.
    */
-  // Both modes tick at 222ms to match zeero.bet's odds refresh cadence.
+  // Both modes tick at 222ms to match odd69.com's odds refresh cadence.
   // Proxy mode collapses N per-event reads into one /batch POST per tick,
   // so the cost upstream is constant — no Cloudflare strain.
   private readonly LIVE_ODDS_TICK_MS = 222;

@@ -42,8 +42,8 @@ type FooterSettings = {
 };
 
 const DEFAULT_FOOTER_SETTINGS: FooterSettings = {
-  businessEmail: "business@zeero.bet",
-  partnersEmail: "partners@zeero.bet",
+  businessEmail: "business@odd69.com",
+  partnersEmail: "partners@odd69.com",
   socials: {
     whatsapp:  { url: "", imageUrl: "" },
     telegram:  { url: "", imageUrl: "" },

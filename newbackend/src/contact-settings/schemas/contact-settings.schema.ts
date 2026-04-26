@@ -20,7 +20,7 @@ export class ContactSettings {
     @Prop({ default: '' })
     telegramLink: string; // e.g. 'https://t.me/ZeeroSupport'
 
-    @Prop({ default: 'support@zeero.bet' })
+    @Prop({ default: 'support@odd69.com' })
     emailAddress: string;
 
     @Prop({ default: true })

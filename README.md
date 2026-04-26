@@ -1,6 +1,6 @@
 # 🎰 ADXWin — Full-Stack Online Gaming Platform
 
-> **Brands:** `zeero.bet` · `kuberexchange.com`
+> **Brands:** `odd69.com` · `kuberexchange.com`
 >
 > A production-grade, multi-brand online betting & casino platform built as a monorepo. Includes a NestJS API backend, two Next.js frontends (user-facing website + admin panel), a Rust real-time sports data syncer, and a PHP payment bridge.
 
@@ -119,13 +119,13 @@ PORT=9828
 
 ### `newwebsite/.env`
 ```env
-NEXT_PUBLIC_API_URL=https://zeero.bet/api
-NEXT_PUBLIC_WS_URL=wss://zeero.bet
+NEXT_PUBLIC_API_URL=https://odd69.com/api
+NEXT_PUBLIC_WS_URL=wss://odd69.com
 ```
 
 ### `newadmin/.env`
 ```env
-NEXT_PUBLIC_API_URL=https://zeero.bet/api
+NEXT_PUBLIC_API_URL=https://odd69.com/api
 ```
 
 ---
@@ -193,15 +193,15 @@ cargo build --release
 
 All REST endpoints are prefixed with `/api`.
 
-**Base URL (production):** `https://zeero.bet/api`
+**Base URL (production):** `https://odd69.com/api`
 
 ### CORS Allowed Origins
 ```
 http://localhost:3000
 http://localhost:3010
 http://localhost:9827
-https://zeero.bet
-https://admin.zeero.bet
+https://odd69.com
+https://admin.odd69.com
 https://www.kuberexchange.com
 https://admin.kuberexchange.com
 ```
@@ -331,7 +331,7 @@ https://admin.kuberexchange.com
   2. Frontend redirects to PHP bridge on anyleson.com
   3. User completes Razorpay UPI payment
   4. PHP bridge signs callback with HMAC-SHA256 using `webhook_secret`
-  5. Callback POSTs to `https://zeero.bet/api/payment0/callback`
+  5. Callback POSTs to `https://odd69.com/api/payment0/callback`
   6. Backend verifies signature → credits user balance
 - **Files:** `anyleson-pay-php/index.php`, `callback.php`, `config.php`
 
@@ -565,8 +565,8 @@ Test files follow the pattern `*.spec.ts` and live alongside source files in `sr
 
 | Brand | Domain |
 |-------|--------|
-| Zeero Bet | https://zeero.bet |
-| Zeero Admin | https://admin.zeero.bet |
+| Zeero Bet | https://odd69.com |
+| Zeero Admin | https://admin.odd69.com |
 | Kuber Exchange | https://www.kuberexchange.com |
 | Kuber Admin | https://admin.kuberexchange.com |
 

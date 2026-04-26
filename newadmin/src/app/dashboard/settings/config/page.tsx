@@ -17,8 +17,8 @@ type FooterSettings = {
 };
 
 const DEFAULT_FOOTER_SETTINGS: FooterSettings = {
-    businessEmail: 'business@zeero.bet',
-    partnersEmail: 'partners@zeero.bet',
+    businessEmail: 'business@odd69.com',
+    partnersEmail: 'partners@odd69.com',
     socials: {
         whatsapp:  { url: '', imageUrl: '' },
         telegram:  { url: '', imageUrl: '' },
@@ -1307,7 +1307,7 @@ export default function SystemConfigPage() {
                                 value={siteMeta.canonicalUrl}
                                 onChange={e => setSiteMeta(prev => ({ ...prev, canonicalUrl: e.target.value }))}
                                 className="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white focus:border-emerald-500 outline-none placeholder-slate-600 font-mono text-sm"
-                                placeholder="https://zeero.bet"
+                                placeholder="https://odd69.com"
                             />
                             <p className="text-[10px] text-slate-600 mt-1">The preferred URL for search engines. Prevents duplicate content issues.</p>
                         </div>
@@ -1977,7 +1977,7 @@ export default function SystemConfigPage() {
                             type="email"
                             value={footerSettings.businessEmail}
                             onChange={e => setFooterSettings(prev => ({ ...prev, businessEmail: e.target.value }))}
-                            placeholder="business@zeero.bet"
+                            placeholder="business@odd69.com"
                             className="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white focus:border-amber-500 outline-none placeholder-slate-600"
                         />
                     </div>
@@ -1991,7 +1991,7 @@ export default function SystemConfigPage() {
                             type="email"
                             value={footerSettings.partnersEmail}
                             onChange={e => setFooterSettings(prev => ({ ...prev, partnersEmail: e.target.value }))}
-                            placeholder="partners@zeero.bet"
+                            placeholder="partners@odd69.com"
                             className="w-full bg-slate-900 border border-slate-700 rounded p-2.5 text-white focus:border-amber-500 outline-none placeholder-slate-600"
                         />
                     </div>

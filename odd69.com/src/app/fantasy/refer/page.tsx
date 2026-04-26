@@ -50,7 +50,7 @@ export default function ReferEarnPage() {
         await navigator.share({
           title: "Zeero Fantasy",
           text: `Join me on Zeero Fantasy! Use code ${code} for ₹100 bonus.`,
-          url: "https://zeero.bet/fantasy",
+          url: "https://odd69.com/fantasy",
         });
         return;
       } catch { /* fall through */ }

@@ -30,7 +30,7 @@ import {
 } from "@/lib/sportsLobbyData";
 import { Lock } from "lucide-react";
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "https://zeero.bet/api").replace(/\/$/, "");
+const API_BASE = (process.env.NEXT_PUBLIC_API_URL || "https://odd69.com/api").replace(/\/$/, "");
 
 // ─── Sportradar Types ─────────────────────────────────────────────────────────
 interface SrRunner {

@@ -612,7 +612,7 @@ model EmailOtp {
 
 model ChatwootConfig {
   id              Int       @id @default(autoincrement())
-  instanceUrl     String    // e.g. https://chat.zeero.bet
+  instanceUrl     String    // e.g. https://chat.odd69.com
   apiToken        String    // Chatwoot user/admin API access token
   accountId       Int       // Chatwoot account ID
   agentBotToken   String?   // Agent bot access token

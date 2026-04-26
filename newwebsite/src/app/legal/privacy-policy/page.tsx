@@ -85,7 +85,7 @@ const SECTIONS = [
     {
         title: '10. Contact Us',
         content: [
-            'For privacy-related enquiries or to exercise your data rights, please contact us through our Support page or email our Data Protection Officer at privacy@zeero.bet.',
+            'For privacy-related enquiries or to exercise your data rights, please contact us through our Support page or email our Data Protection Officer at privacy@odd69.com.',
         ]
     },
 ];
