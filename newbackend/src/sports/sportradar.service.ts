@@ -295,9 +295,14 @@ export class SportradarService implements OnModuleInit {
     );
 
     if (this.proxyEnabled) {
+      // /inplay + /upcoming already cover every active event with markets,
+      // so the heavy per-sport `/events/sr:sport:N` listing is mostly
+      // redundant in proxy mode. Run it at 5 min cadence as a backstop
+      // for cold-start / sport pages, not every 30s — the burst was
+      // triggering Cloudflare 502s.
       setInterval(() => this.syncAllInplayEvents().catch(() => {}), 2_000);
       setInterval(() => this.syncAllUpcomingEvents().catch(() => {}), 30_000);
-      setInterval(() => this.syncAllSportsEvents().catch(() => {}), 30_000);
+      setInterval(() => this.syncAllSportsEvents().catch(() => {}), 300_000);
       return;
     }
 
@@ -1522,14 +1527,31 @@ export class SportradarService implements OnModuleInit {
     this.isSyncingEvents = true;
 
     try {
-      // Use SORT_ORDER keys — always sr:sport:X format
       const activeSportIds = Object.keys(SORT_ORDER);
+      let results: any[];
 
-      const fetchers = activeSportIds.map((sportId) => () => this.syncEventsForSport(sportId));
-      const parallelResults = await this.throttledParallel(fetchers);
-      const results = parallelResults.map(r => 
-        r.status === 'fulfilled' ? r.value : { sportId: 'unknown', eventCount: 0, marketCount: 0, error: 'Failed' }
-      );
+      if (this.proxyEnabled) {
+        // Serialize in proxy mode — 18 concurrent calls to a Cloudflare-
+        // fronted endpoint trigger 502 storms. One at a time, ~200ms gap
+        // between, takes ~5s total which is fine because this only runs
+        // every 5 min as a backstop.
+        results = [];
+        for (const sportId of activeSportIds) {
+          if (Date.now() < this.proxyBackoffUntil) break;
+          try {
+            results.push(await this.syncEventsForSport(sportId));
+          } catch {
+            results.push({ sportId, eventCount: 0, marketCount: 0, error: 'Failed' });
+          }
+          await new Promise((r) => setTimeout(r, 200));
+        }
+      } else {
+        const fetchers = activeSportIds.map((sportId) => () => this.syncEventsForSport(sportId));
+        const parallelResults = await this.throttledParallel(fetchers);
+        results = parallelResults.map(r =>
+          r.status === 'fulfilled' ? r.value : { sportId: 'unknown', eventCount: 0, marketCount: 0, error: 'Failed' }
+        );
+      }
 
       const total = results.reduce((sum, r) => sum + r.eventCount, 0);
       const totalMarkets = results.reduce((sum, r) => sum + r.marketCount, 0);
@@ -1633,48 +1655,66 @@ export class SportradarService implements OnModuleInit {
       }
     } catch (_) {}
 
-    // 2. Proxy
+    // 2. Proxy — retry once on transient failure. Cloudflare returns
+    //    502 occasionally on cold-region hits; the second call almost
+    //    always succeeds.
     if (this.proxyEnabled) {
-      try {
-        const ev = await this.fetchFromProxy<any>(`/event/${eventId}`);
-        if (ev) {
-          console.log(`${tag} hit proxy — seeding redis`);
-          redis
-            .set(
-              `sportradar:event:${eventId}`,
-              JSON.stringify(ev),
-              'EX',
-              INPLAY_REDIS_TTL,
-            )
-            .catch(() => {});
-          // Also seed sportradar:odds so getOddsByEventId can short-circuit.
-          if (ev.markets) {
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const ev = await this.fetchFromProxy<any>(`/event/${eventId}`);
+          if (ev) {
+            console.log(`${tag} hit proxy (attempt ${attempt}) — seeding redis`);
             redis
               .set(
-                `sportradar:odds:${eventId}`,
-                JSON.stringify(ev.markets),
+                `sportradar:event:${eventId}`,
+                JSON.stringify(ev),
                 'EX',
                 INPLAY_REDIS_TTL,
               )
               .catch(() => {});
+            if (ev.markets) {
+              redis
+                .set(
+                  `sportradar:odds:${eventId}`,
+                  JSON.stringify(ev.markets),
+                  'EX',
+                  INPLAY_REDIS_TTL,
+                )
+                .catch(() => {});
+            }
+            return ev as SportradarEvent;
           }
-          return ev as SportradarEvent;
+          // null = upstream truly doesn't have it (404). Don't retry.
+          break;
+        } catch (e: any) {
+          const msg = e?.message ?? e;
+          if (attempt === 1) {
+            console.warn(`${tag} proxy attempt 1 failed: ${msg} — retrying`);
+            await new Promise((r) => setTimeout(r, 200));
+          } else {
+            console.warn(`${tag} proxy attempt 2 failed: ${msg}`);
+          }
         }
-      } catch (e: any) {
-        console.warn(`${tag} proxy failed: ${e?.message ?? e}`);
       }
     }
 
-    // 3. Local Mongo
-    try {
-      const ev = (await this.betfairEventModel
-        .findOne({ eventId })
-        .lean()) as any;
-      if (ev) {
-        console.log(`${tag} hit mongo`);
-        return ev;
-      }
-    } catch (_) {}
+    // 3. Local Mongo — but NOT in proxy mode. The mirror loop only
+    //    writes to Redis; Mongo entries are leftovers from a previous
+    //    direct-mode run and have stale or missing `markets`. Returning
+    //    them gives the frontend a half-baked event that renders as
+    //    "Match Not Found". Skip entirely so the proxy retry above is
+    //    the authoritative path.
+    if (!this.proxyEnabled) {
+      try {
+        const ev = (await this.betfairEventModel
+          .findOne({ eventId })
+          .lean()) as any;
+        if (ev) {
+          console.log(`${tag} hit mongo`);
+          return ev;
+        }
+      } catch (_) {}
+    }
 
     // 4. Local Redis list-cache scans (direct mode last-resort)
     for (const cacheKey of ['sportradar:upcoming:all', 'sportradar:inplay:all']) {
