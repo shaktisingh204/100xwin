@@ -175,6 +175,9 @@ export class SportradarService implements OnModuleInit {
 
   // Throttled logs for proxy-mode syncs — one line per minute per tag
   private proxyLogTimestamps = new Map<string, number>();
+  // Pause upstream calls until this timestamp after a network error / ETIMEDOUT
+  // so the 222ms tick loop does not immediately re-fire a wave of requests.
+  private proxyBackoffUntil = 0;
   private logProxySync(tag: string, count: number): void {
     const now = Date.now();
     const last = this.proxyLogTimestamps.get(tag) ?? 0;
@@ -303,6 +306,8 @@ export class SportradarService implements OnModuleInit {
   }
 
   private async liveOddsTick(): Promise<void> {
+    if (Date.now() < this.proxyBackoffUntil) return;
+
     const redis = this.getRedis();
 
     let liveEvents: any[] = [];
@@ -312,6 +317,43 @@ export class SportradarService implements OnModuleInit {
     } catch { return; }
 
     if (liveEvents.length === 0) return;
+
+    // ── Proxy mode: collapse N per-event /market/:id calls into one /batch
+    // POST per page of events. The primary's `sportradar:event:<id>` key is
+    // populated for every synced event (180s TTL), unlike `sportradar:market:`
+    // which is only warm while a user is actively viewing the match.
+    if (this.proxyEnabled) {
+      const batches = this.chunkArray(liveEvents, 200);
+      const responses = await Promise.all(
+        batches.map((batch) =>
+          this.fetchBatchFromProxy(batch.map((ev: any) => `sportradar:event:${ev.eventId}`)),
+        ),
+      );
+
+      const merged: Record<string, any> = {};
+      for (const r of responses) Object.assign(merged, r);
+
+      for (const ev of liveEvents) {
+        const eventId = ev.eventId;
+        if (!eventId) continue;
+        const evt = merged[`sportradar:event:${eventId}`];
+        if (!evt) continue; // null = not warm; skip silently
+
+        const newHash = this.buildLiveEventHash(evt);
+        const prevHash = this.liveSnapshot.get(eventId);
+        if (newHash === prevHash) continue;
+        this.liveSnapshot.set(eventId, newHash);
+
+        // Wrap in the {success, event} envelope downstream code expects.
+        const wrapped = { success: true, event: evt };
+        redis
+          .set(`sportradar:market:${eventId}`, JSON.stringify(wrapped), 'EX', INPLAY_REDIS_TTL)
+          .catch(() => {});
+
+        this.emitSportradarOdds(eventId, evt);
+      }
+      return;
+    }
 
     // Reset per-tick counter
     this.callsThisTick = 0;
@@ -496,25 +538,57 @@ export class SportradarService implements OnModuleInit {
       return (res.data?.data ?? null) as T | null;
     } catch (e: any) {
       const status = e?.response?.status;
-      if (status === 404) {
-        // Throttle — cold sports would spam every sync tick otherwise
-        const tag = `404:${path}`;
-        const now = Date.now();
-        const last = this.proxyLogTimestamps.get(tag) ?? 0;
-        if (now - last >= 60_000) {
-          this.proxyLogTimestamps.set(tag, now);
-          console.warn(`[sportradar-proxy] 404 not warm: ${path}`);
-        }
-        return null;
+      // 404 = key not warm yet on the primary. This is the steady-state
+      // normal for cold sports / not-yet-synced events — drop it.
+      if (status === 404) return null;
+      const code = e?.code ?? '';
+      const isNetwork = !status || code === 'ETIMEDOUT' || code === 'ECONNABORTED' || code === 'ECONNRESET';
+      if (isNetwork || status >= 500) {
+        // Pause subsequent calls so the 222ms tick loop doesn't pile on.
+        this.proxyBackoffUntil = Date.now() + 5_000;
       }
       const body = e?.response?.data;
       const bodyPreview =
         typeof body === 'string' ? body.slice(0, 200) : body ? JSON.stringify(body).slice(0, 200) : '';
-      console.error(
-        `[sportradar-proxy] ERROR ${path} — status=${status ?? 'no-response'} ` +
-          `code=${e?.code ?? ''} msg=${e?.message ?? ''} body=${bodyPreview}`,
+      console.warn(
+        `[sportradar-proxy] WARN ${url} — status=${status ?? 'no-response'} ` +
+          `code=${code} msg=${e?.message ?? ''} body=${bodyPreview}`,
       );
       throw e;
+    }
+  }
+
+  /**
+   * POST /api/sportradar-proxy/batch — MGET up to 200 sportradar:* keys in
+   * a single round-trip. Used by the live-odds mirror loop to replace
+   * N per-event /market/:id calls with one batched read.
+   *
+   * Response: { data: { "<key>": <parsed-value-or-null>, ... } }
+   * On error: returns {} (and sets proxyBackoffUntil for network failures).
+   */
+  private async fetchBatchFromProxy(keys: string[]): Promise<Record<string, any>> {
+    if (keys.length === 0) return {};
+    const url = `${this.PROXY_URL}/batch`;
+    try {
+      const res = await firstValueFrom(
+        this.httpService.post<{ data: Record<string, any> }>(url, { keys }, {
+          headers: { 'x-api-token': this.PROXY_TOKEN },
+          timeout: 8_000,
+        }),
+      );
+      return res.data?.data ?? {};
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const code = e?.code ?? '';
+      const isNetwork = !status || code === 'ETIMEDOUT' || code === 'ECONNABORTED' || code === 'ECONNRESET';
+      if (isNetwork || status >= 500) {
+        this.proxyBackoffUntil = Date.now() + 5_000;
+      }
+      console.warn(
+        `[sportradar-proxy] WARN POST /batch (${keys.length} keys) — ` +
+          `status=${status ?? 'no-response'} code=${code} msg=${e?.message ?? ''}`,
+      );
+      return {};
     }
   }
 
