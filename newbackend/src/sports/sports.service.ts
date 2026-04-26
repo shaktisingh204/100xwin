@@ -729,8 +729,11 @@ export class SportsService implements OnModuleInit {
     return { message: 'Match status tracking from API disabled' };
   }
 
-  public async ensureMarketImported(matchId: string) {
-    this.logger.log(`Market import disabled for ${matchId}`);
+  public async ensureMarketImported(_matchId: string) {
+    // No-op. All odds/market sync is owned by sports-sync-rust + the
+    // sportradar-proxy mirror loop; this stub exists only because socket
+    // `join-match` and a few HTTP routes still call it. Don't log — it
+    // fires on every viewer join and floods logs.
   }
 
   // Mapping helper
