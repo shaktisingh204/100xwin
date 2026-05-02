@@ -110,9 +110,17 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
     const [password, setPassword] = useState('');
     const [otpCode, setOtpCode] = useState('');
 
-    // Optional Country Code specifically for phone detection if users want to pick
-    const [showCountryCode, setShowCountryCode] = useState(false);
-    const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES.find(c => c.iso === 'IN')!);
+    // Country selector — always visible so users can declare their country
+    // regardless of whether they sign in by phone, email, or username.
+    // For phone-based identifiers the dial code is auto-prepended.
+    const [selectedCountry, setSelectedCountry] = useState<Country>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('odd69_country_iso');
+            const match = saved ? COUNTRIES.find(c => c.iso === saved) : null;
+            if (match) return match;
+        }
+        return COUNTRIES.find(c => c.iso === 'IN')!;
+    });
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -178,10 +186,14 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
     const handleIdentifierChange = (val: string) => {
         setIdentifier(val);
         clearErrors();
-        if (/^\d+$/.test(val)) {
-            setShowCountryCode(true);
-        } else {
-            setShowCountryCode(false);
+    };
+
+    const isPhoneIdentifier = /^\d+$/.test(identifier.trim());
+
+    const handleCountryChange = (country: Country) => {
+        setSelectedCountry(country);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('odd69_country_iso', country.iso);
         }
     };
 
@@ -209,7 +221,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
 
     const getResolvedIdentifier = () => {
         const raw = identifier.trim();
-        if (showCountryCode && /^\d+$/.test(raw)) {
+        if (/^\d+$/.test(raw)) {
             return `${selectedCountry.code.replace(/-/g, '')}${raw}`;
         }
         return raw;
@@ -368,40 +380,52 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
                 <div className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden min-h-0 px-6 pb-2 sm:px-8">
                     <form onSubmit={handleLogin} className="flex flex-col gap-3 pt-4" noValidate>
 
+                        {/* Country selector — always visible */}
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-[11.5px] font-medium text-[var(--ink-dim)] ml-0.5">
+                                Country
+                            </label>
+                            <div className="h-12 sm:h-11 [&>div]:w-full [&>div>button]:w-full [&>div>button]:h-12 [&>div>button]:sm:h-11 [&>div>button]:justify-between">
+                                <CountryCodeSelector
+                                    value={selectedCountry}
+                                    onChange={handleCountryChange}
+                                />
+                            </div>
+                            <p className="text-[10.5px] text-[var(--ink-faint)] ml-0.5">
+                                {isPhoneIdentifier
+                                    ? `Dial code ${selectedCountry.code} will be added to your phone number`
+                                    : `Region: ${selectedCountry.name}`}
+                            </p>
+                        </div>
+
                         {/* Identifier */}
                         <div className="flex flex-col gap-1.5">
                             <label htmlFor="login-identifier" className="text-[11.5px] font-medium text-[var(--ink-dim)] ml-0.5">
                                 Email, phone, or username
                             </label>
-                            <div className="flex gap-2 h-12 sm:h-11">
-                                {showCountryCode && (
-                                    <div className="flex-shrink-0 h-12 sm:h-11">
-                                        <CountryCodeSelector
-                                            value={selectedCountry}
-                                            onChange={setSelectedCountry}
-                                        />
-                                    </div>
+                            <div className="relative h-12 sm:h-11">
+                                {isPhoneIdentifier ? (
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] font-bold text-[var(--gold-bright)] pointer-events-none num">
+                                        {selectedCountry.code}
+                                    </span>
+                                ) : (
+                                    <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
                                 )}
-                                <div className="relative flex-1 h-12 sm:h-11">
-                                    {!showCountryCode && (
-                                        <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--ink-faint)] pointer-events-none" />
-                                    )}
-                                    <input
-                                        id="login-identifier"
-                                        type="text"
-                                        inputMode={/^\d+$/.test(identifier) ? "tel" : "text"}
-                                        placeholder="Email / Phone / Username"
-                                        autoComplete="username"
-                                        className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] ${showCountryCode ? 'px-3.5' : 'pl-9 pr-3.5'} text-[15px] sm:text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
-                                            fieldErrors.identifier
-                                                ? 'border-[var(--crimson)]'
-                                                : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
-                                        }`}
-                                        value={identifier}
-                                        onChange={e => handleIdentifierChange(e.target.value)}
-                                        disabled={loginMode === 'otp' && otpStep === 'verify'}
-                                    />
-                                </div>
+                                <input
+                                    id="login-identifier"
+                                    type="text"
+                                    inputMode={isPhoneIdentifier ? "tel" : "text"}
+                                    placeholder="Email / Phone / Username"
+                                    autoComplete="username"
+                                    className={`w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border rounded-[10px] ${isPhoneIdentifier ? 'pl-14 pr-3.5' : 'pl-9 pr-3.5'} text-[15px] sm:text-[13.5px] text-[var(--ink)] placeholder:text-[var(--ink-whisper)] focus:outline-none transition-colors ${
+                                        fieldErrors.identifier
+                                            ? 'border-[var(--crimson)]'
+                                            : 'border-[var(--line-default)] focus:border-[var(--line-gold)]'
+                                    }`}
+                                    value={identifier}
+                                    onChange={e => handleIdentifierChange(e.target.value)}
+                                    disabled={loginMode === 'otp' && otpStep === 'verify'}
+                                />
                             </div>
                             {fieldErrors.identifier && (
                                 <p className="text-[var(--crimson)] text-[11.5px] flex items-center gap-1 ml-1">

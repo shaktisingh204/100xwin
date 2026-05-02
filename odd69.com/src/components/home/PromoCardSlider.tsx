@@ -14,8 +14,21 @@ interface PromoCardSliderProps {
 }
 
 export default function PromoCardSlider({ onGameLaunch }: PromoCardSliderProps) {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const { openLogin } = useModal();
+
+    const resolveUsername = (): string | null => {
+        if (user?.username) return user.username;
+        if (typeof window === 'undefined') return null;
+        try {
+            const stored = localStorage.getItem('auth_user');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed?.username) return parsed.username;
+            }
+        } catch {}
+        return null;
+    };
     const { selectedSubWallet } = useWallet();
     const [promoCards, setPromoCards] = useState<PromoCard[]>([]);
     const [loading, setLoading] = useState(true);
@@ -73,7 +86,11 @@ export default function PromoCardSlider({ onGameLaunch }: PromoCardSliderProps) 
 
         e.preventDefault();
 
-        if (!user) {
+        if (authLoading) return;
+
+        const username = resolveUsername();
+        const hasToken = typeof window !== 'undefined' && !!localStorage.getItem('token');
+        if (!username && !hasToken) {
             openLogin();
             return;
         }
@@ -85,7 +102,7 @@ export default function PromoCardSlider({ onGameLaunch }: PromoCardSliderProps) 
         setLaunchingId(card._id || null);
         try {
             const res: any = await casinoService.launchGame({
-                username: user.username,
+                username: username ?? undefined,
                 provider,
                 gameId: gameCode,
                 isLobby: false,

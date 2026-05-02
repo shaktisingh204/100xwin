@@ -101,7 +101,7 @@ export default function HomeGameList({ title, games, icon, viewAllHref, isLoadin
     const scrollRef = useRef<HTMLDivElement>(null);
     const [localGames, setLocalGames] = React.useState<any[]>(games);
     const [activeGame, setActiveGame] = useState<{ id: string; name: string; provider: string; url: string } | null>(null);
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const { openLogin } = useModal();
     const { selectedSubWallet } = useWallet();
 
@@ -117,8 +117,27 @@ export default function HomeGameList({ title, games, icon, viewAllHref, isLoadin
         }
     };
 
+    const resolveUsername = (): string | null => {
+        if (user?.username) return user.username;
+        if (typeof window === 'undefined') return null;
+        try {
+            const stored = localStorage.getItem('auth_user');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed?.username) return parsed.username;
+            }
+        } catch {}
+        return null;
+    };
+
     const handlePlay = async (game: any) => {
-        if (!user) {
+        // Wait for auth to hydrate before deciding — prevents login modal flashing
+        // for already-authenticated users on the first render.
+        if (authLoading) return;
+
+        const username = resolveUsername();
+        const hasToken = typeof window !== 'undefined' && !!localStorage.getItem('token');
+        if (!username && !hasToken) {
             openLogin();
             return;
         }
@@ -126,7 +145,7 @@ export default function HomeGameList({ title, games, icon, viewAllHref, isLoadin
             const gameId = game.gameCode || game.id || game.gameId;
             const provider = game.providerCode || game.provider || '';
             const res: any = await casinoService.launchGame({
-                username: user.username,
+                username: username ?? undefined,
                 provider,
                 gameId,
                 walletMode: (selectedSubWallet as any) ?? undefined,
