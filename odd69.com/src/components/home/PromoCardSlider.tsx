@@ -8,6 +8,7 @@ import { casinoService } from '@/services/casino';
 import { useAuth } from '@/context/AuthContext';
 import { useModal } from '@/context/ModalContext';
 import { useWallet } from '@/context/WalletContext';
+import { getCasinoWalletModeFromSubWallet } from '@/utils/casinoWalletMode';
 
 interface PromoCardSliderProps {
     onGameLaunch?: (game: { id: string; name: string; provider: string; url: string }) => void;
@@ -106,8 +107,8 @@ export default function PromoCardSlider({ onGameLaunch }: PromoCardSliderProps) 
                 provider,
                 gameId: gameCode,
                 isLobby: false,
-                walletMode: (selectedSubWallet as any) ?? undefined,
-            } as any);
+                walletMode: getCasinoWalletModeFromSubWallet(selectedSubWallet),
+            });
             if (res?.url) {
                 onGameLaunch?.({ id: gameCode, name: gameName, provider, url: res.url });
             }

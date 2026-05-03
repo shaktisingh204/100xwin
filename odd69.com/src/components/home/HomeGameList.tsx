@@ -6,6 +6,7 @@ import { casinoService } from '@/services/casino';
 import { useAuth } from '@/context/AuthContext';
 import { useModal } from '@/context/ModalContext';
 import { useWallet } from '@/context/WalletContext';
+import { getCasinoWalletModeFromSubWallet } from '@/utils/casinoWalletMode';
 import GamePlayInterface from '@/components/casino/GamePlayInterface';
 
 // ─── Skeleton row (inline) ───────────────────────────────────────────────────
@@ -148,8 +149,8 @@ export default function HomeGameList({ title, games, icon, viewAllHref, isLoadin
                 username: username ?? undefined,
                 provider,
                 gameId,
-                walletMode: (selectedSubWallet as any) ?? undefined,
-            } as any);
+                walletMode: getCasinoWalletModeFromSubWallet(selectedSubWallet),
+            });
             const url = res?.url || res?.launch_url || res?.gameUrl || '';
             if (url) {
                 setActiveGame({ id: gameId, name: game.name || game.gameName, provider, url });

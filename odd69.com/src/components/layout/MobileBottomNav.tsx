@@ -2,20 +2,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Gamepad2, Trophy, Gift, User, Users } from "lucide-react";
+import { Home, Gamepad2, Trophy, Gift, User, Receipt } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useModal } from "@/context/ModalContext";
+import { useBets } from "@/context/BetContext";
 
 export default function MobileBottomNav() {
   const pathname = usePathname();
   const { isAuthenticated } = useAuth();
   const { openLogin } = useModal();
+  const { toggleBetslip, isBetslipOpen, bets } = useBets();
 
-  const items = [
+  type Item =
+    | { label: string; href: string; icon: typeof Home; authRequired?: boolean; betslip?: false }
+    | { label: string; betslip: true; icon: typeof Home };
+
+  const items: Item[] = [
     { label: "Home",    href: "/",                                  icon: Home },
     { label: "Casino",  href: "/casino",                            icon: Gamepad2 },
     { label: "Sports",  href: "/sports",                            icon: Trophy },
-    { label: "Fantasy", href: "/fantasy",                           icon: Users },
+    { label: "Bets",    betslip: true,                              icon: Receipt },
     { label: "Promos",  href: "/promotions",                        icon: Gift },
     { label: "Profile", href: isAuthenticated ? "/profile" : "#",   icon: User, authRequired: true },
   ];
@@ -38,32 +44,68 @@ export default function MobileBottomNav() {
 
         {items.map((item) => {
           const Icon = item.icon;
-          const active = item.href === "/" ? pathname === "/" : pathname?.startsWith(item.href);
-          const handleClick = (e: React.MouseEvent) => {
-            if (item.authRequired && !isAuthenticated) { e.preventDefault(); openLogin(); }
-          };
-          return (
-            <Link
-              key={item.label}
-              href={item.href}
-              onClick={handleClick}
-              aria-label={item.label}
-              className={`relative flex flex-col items-center justify-center gap-0.5 px-1 py-2 min-h-[54px] rounded-[12px] flex-1 transition-all ${
-                active
-                  ? "text-[var(--gold-bright)]"
-                  : "text-[var(--ink-dim)]"
-              }`}
-            >
+          const isBetslip = 'betslip' in item && item.betslip === true;
+          const active = isBetslip
+            ? isBetslipOpen
+            : ('href' in item ? (item.href === "/" ? pathname === "/" : pathname?.startsWith(item.href)) : false);
+
+          const inner = (
+            <>
               {active && (
                 <span className="absolute inset-0 rounded-[12px] bg-gradient-to-b from-[var(--gold-soft)] to-transparent border border-[var(--line-gold)]" />
               )}
-              <Icon size={19} strokeWidth={active ? 2.4 : 2} className="relative" />
-              <span className={`relative text-[9.5px] font-semibold tracking-wide leading-none mt-0.5 ${active ? "" : ""}`}>
+              <span className="relative">
+                <Icon size={19} strokeWidth={active ? 2.4 : 2} />
+                {isBetslip && bets.length > 0 && (
+                  <span className="absolute -top-1.5 -right-2.5 h-[15px] min-w-[15px] px-1 rounded-full text-[8.5px] font-bold flex items-center justify-center leading-none bg-gradient-to-br from-[var(--gold-bright)] to-[var(--gold)] text-[var(--bg-base)] num shadow-[var(--gold-halo)]">
+                    {bets.length}
+                  </span>
+                )}
+              </span>
+              <span className="relative text-[9.5px] font-semibold tracking-wide leading-none mt-0.5">
                 {item.label}
               </span>
               {active && (
                 <span className="absolute -bottom-1 h-[3px] w-5 rounded-full bg-gold-grad shadow-[0_0_8px_var(--gold-halo)]" />
               )}
+            </>
+          );
+
+          const baseCls = `relative flex flex-col items-center justify-center gap-0.5 px-1 py-2 min-h-[54px] rounded-[12px] flex-1 transition-all ${
+            active ? "text-[var(--gold-bright)]" : "text-[var(--ink-dim)]"
+          }`;
+
+          if (isBetslip) {
+            return (
+              <button
+                key={item.label}
+                type="button"
+                onClick={toggleBetslip}
+                aria-label={item.label}
+                aria-pressed={isBetslipOpen}
+                className={baseCls}
+              >
+                {inner}
+              </button>
+            );
+          }
+
+          const handleClick = (e: React.MouseEvent) => {
+            if ('authRequired' in item && item.authRequired && !isAuthenticated) {
+              e.preventDefault();
+              openLogin();
+            }
+          };
+
+          return (
+            <Link
+              key={item.label}
+              href={(item as { href: string }).href}
+              onClick={handleClick}
+              aria-label={item.label}
+              className={baseCls}
+            >
+              {inner}
             </Link>
           );
         })}

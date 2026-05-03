@@ -13,6 +13,7 @@ import Header from "./Header";
 import Sidebar from "./Sidebar";
 import Footer from "./Footer";
 import MobileBottomNav from "./MobileBottomNav";
+import RightSidebar from "./RightSidebar";
 import AuthModal from "@/components/auth/AuthModal";
 import DepositModal from "@/components/deposit/DepositModal";
 import ManualDepositModal from "@/components/deposit/ManualDepositModal";
@@ -52,6 +53,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                       <main className="flex-1">{children}</main>
                       <Footer />
                     </div>
+                    {/* Floating bet slip — desktop drawer + mobile bottom sheet */}
+                    <RightSidebar />
                   </div>
                   <MobileBottomNav />
                 </div>

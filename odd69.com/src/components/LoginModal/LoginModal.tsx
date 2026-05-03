@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { X, Eye, EyeOff, AlertCircle, Mail, Lock, Loader2, ShieldCheck } from "lucide-react";
+import { X, Eye, EyeOff, AlertCircle, Mail, Lock, Loader2, ShieldCheck, Globe, ChevronDown, Search } from "lucide-react";
 import api from "@/services/api";
 import toast from "react-hot-toast";
 import { useAuth } from "@/context/AuthContext";
-import CountryCodeSelector, { Country, COUNTRIES } from "@/components/shared/CountryCodeSelector";
+import { Country, COUNTRIES } from "@/components/shared/CountryCodeSelector";
+import { COUNTRY_CURRENCY_MAP, ALL_COUNTRIES } from "@/utils/countryCurrency";
 
 interface LoginModalProps {
     onClose?: () => void;
@@ -125,6 +126,9 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
+    const [showCountryDropdown, setShowCountryDropdown] = useState(false);
+    const [countrySearch, setCountrySearch] = useState('');
+    const countryDropdownRef = useRef<HTMLDivElement>(null);
     const [resendCooldown, setResendCooldown] = useState(0);
     const [otpExpiresIn, setOtpExpiresIn] = useState(0);
     const cooldownRef = useRef<NodeJS.Timeout | null>(null);
@@ -196,6 +200,37 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
             localStorage.setItem('odd69_country_iso', country.iso);
         }
     };
+
+    const handleCountrySelect = (iso: string) => {
+        const match = COUNTRIES.find(c => c.iso === iso);
+        if (match) handleCountryChange(match);
+        setShowCountryDropdown(false);
+        setCountrySearch('');
+    };
+
+    const filteredCountries = useMemo(() => {
+        const q = countrySearch.trim().toLowerCase();
+        if (!q) return ALL_COUNTRIES;
+        return ALL_COUNTRIES.filter(c =>
+            c.name.toLowerCase().includes(q) ||
+            c.iso.toLowerCase().includes(q) ||
+            c.currency.toLowerCase().includes(q)
+        );
+    }, [countrySearch]);
+
+    useEffect(() => {
+        if (!showCountryDropdown) return;
+        const onDoc = (e: MouseEvent) => {
+            if (!countryDropdownRef.current) return;
+            if (!countryDropdownRef.current.contains(e.target as Node)) {
+                setShowCountryDropdown(false);
+            }
+        };
+        document.addEventListener('mousedown', onDoc);
+        return () => document.removeEventListener('mousedown', onDoc);
+    }, [showCountryDropdown]);
+
+    const selectedCountryInfo = COUNTRY_CURRENCY_MAP[selectedCountry.iso];
 
     const validateForm = () => {
         const errs: { [key: string]: string } = {};
@@ -380,21 +415,76 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onRegisterClick }) => 
                 <div className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden min-h-0 px-6 pb-2 sm:px-8">
                     <form onSubmit={handleLogin} className="flex flex-col gap-3 pt-4" noValidate>
 
-                        {/* Country selector — always visible */}
+                        {/* Country selector — rich dropdown with flag, name, currency, dial code */}
                         <div className="flex flex-col gap-1.5">
                             <label className="text-[11.5px] font-medium text-[var(--ink-dim)] ml-0.5">
                                 Country
                             </label>
-                            <div className="h-12 sm:h-11 [&>div]:w-full [&>div>button]:w-full [&>div>button]:h-12 [&>div>button]:sm:h-11 [&>div>button]:justify-between">
-                                <CountryCodeSelector
-                                    value={selectedCountry}
-                                    onChange={handleCountryChange}
-                                />
+                            <div ref={countryDropdownRef} className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => { setShowCountryDropdown(v => !v); setCountrySearch(''); }}
+                                    className="w-full h-12 sm:h-11 bg-[var(--bg-inlay)] border border-[var(--line-default)] hover:border-[var(--line-gold)] rounded-[10px] px-3.5 flex items-center gap-3 text-left transition-colors"
+                                    aria-haspopup="listbox"
+                                    aria-expanded={showCountryDropdown}
+                                >
+                                    <Globe size={15} className="text-[var(--ink-faint)] shrink-0" />
+                                    <span className="text-base leading-none">{selectedCountryInfo?.flag ?? selectedCountry.flag}</span>
+                                    <span className="flex-1 font-semibold text-[var(--ink)] text-[13px] truncate">
+                                        {selectedCountryInfo?.name ?? selectedCountry.name}
+                                    </span>
+                                    <span className="text-[11px] text-[var(--gold-bright)] num shrink-0">{selectedCountry.code}</span>
+                                    {selectedCountryInfo?.currency && (
+                                        <span className="text-[11px] text-[var(--ink-faint)] num shrink-0">{selectedCountryInfo.currency}</span>
+                                    )}
+                                    <ChevronDown size={13} className={`text-[var(--ink-faint)] transition-transform shrink-0 ${showCountryDropdown ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {showCountryDropdown && (
+                                    <div
+                                        role="listbox"
+                                        className="absolute top-[calc(100%+4px)] left-0 right-0 z-50 bg-[var(--bg-elevated)] border border-[var(--line-strong)] rounded-[12px] shadow-[var(--shadow-lift)] overflow-hidden"
+                                    >
+                                        <div className="flex items-center gap-2 px-3 py-2.5 border-b border-[var(--line-default)]">
+                                            <Search size={13} className="text-[var(--ink-faint)] shrink-0" />
+                                            <input
+                                                type="text"
+                                                autoFocus
+                                                placeholder="Search country, ISO or currency…"
+                                                className="flex-1 bg-transparent text-[var(--ink)] text-[13px] outline-none placeholder:text-[var(--ink-whisper)]"
+                                                value={countrySearch}
+                                                onChange={(e) => setCountrySearch(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="max-h-[220px] overflow-y-auto">
+                                            {filteredCountries.length === 0 ? (
+                                                <div className="px-4 py-3 text-[var(--ink-faint)] text-[13px] text-center">No results</div>
+                                            ) : filteredCountries.map((c) => {
+                                                const dial = COUNTRIES.find(co => co.iso === c.iso)?.code;
+                                                return (
+                                                    <button
+                                                        key={c.iso}
+                                                        type="button"
+                                                        onClick={() => handleCountrySelect(c.iso)}
+                                                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-[13px] text-left transition-colors hover:bg-[var(--bg-inlay)] ${
+                                                            selectedCountry.iso === c.iso ? 'bg-[var(--gold-soft)] text-[var(--gold-bright)]' : 'text-[var(--ink)]'
+                                                        }`}
+                                                    >
+                                                        <span className="text-base leading-none">{c.flag}</span>
+                                                        <span className="flex-1 truncate">{c.name}</span>
+                                                        {dial && <span className="text-[var(--gold-bright)]/80 num text-[11px] shrink-0">{dial}</span>}
+                                                        <span className="text-[var(--ink-faint)] num text-[11px] shrink-0">{c.currency}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                             <p className="text-[10.5px] text-[var(--ink-faint)] ml-0.5">
                                 {isPhoneIdentifier
                                     ? `Dial code ${selectedCountry.code} will be added to your phone number`
-                                    : `Region: ${selectedCountry.name}`}
+                                    : `Region: ${selectedCountryInfo?.name ?? selectedCountry.name}`}
                             </p>
                         </div>
 
