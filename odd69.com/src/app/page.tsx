@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   Flame, Star, Zap, Trophy, ArrowRight, Gift, Shield, Lock,
   Headphones, ChevronRight, Gamepad2, Sparkles, TrendingUp,
@@ -15,6 +14,9 @@ import { casinoService } from "@/services/casino";
 import api from "@/services/api";
 import { useAuth } from "@/context/AuthContext";
 import { useModal } from "@/context/ModalContext";
+import { useWallet } from "@/context/WalletContext";
+import { getCasinoWalletModeFromSubWallet } from "@/utils/casinoWalletMode";
+import GamePlayInterface from "@/components/casino/GamePlayInterface";
 
 /* ═════════════════════════════════════════════════════════════════════════════
    GAME CARD
@@ -698,9 +700,9 @@ function TelegramCTA() {
    MAIN HOME PAGE
    ═════════════════════════════════════════════════════════════════════════════ */
 export default function Home() {
-  const router = useRouter();
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { user, isAuthenticated, loading: authLoading } = useAuth();
   const { openLogin } = useModal();
+  const { selectedSubWallet } = useWallet();
   const [slotGames, setSlotGames]     = useState<any[]>([]);
   const [liveGames, setLiveGames]     = useState<any[]>([]);
   const [newGames, setNewGames]       = useState<any[]>([]);
@@ -708,18 +710,48 @@ export default function Home() {
   const [crashGames, setCrashGames]   = useState<any[]>([]);
   const [gamesLoading, setGamesLoading] = useState(true);
   const [promos, setPromos]           = useState<any[]>([]);
+  const [activeGame, setActiveGame] = useState<{ id: string; name: string; provider: string; url: string } | null>(null);
 
-  const handlePlayGame = (game: any) => {
+  const resolveUsername = (): string | undefined => {
+    if (user?.username) return user.username;
+    if (typeof window === "undefined") return undefined;
+    try {
+      const stored = localStorage.getItem("auth_user");
+      if (stored) return JSON.parse(stored)?.username;
+    } catch {}
+    return undefined;
+  };
+
+  const handlePlayGame = async (game: any) => {
     if (authLoading) return;
+    const username = resolveUsername();
     const hasToken = typeof window !== "undefined" && !!localStorage.getItem("token");
-    if (!isAuthenticated && !hasToken) { openLogin(); return; }
-    const provider = game.providerCode || game.provider || "";
-    const gameCode = game.gameCode || game.gameId || game.casinoGameId || game.id || "";
-    if (provider && gameCode) {
-      router.push(`/casino/game/${encodeURIComponent(provider)}/${encodeURIComponent(gameCode)}`);
-    } else if (game.id) {
-      router.push(`/casino/play/${game.id}`);
+    if (!username && !hasToken && !isAuthenticated) {
+      openLogin();
+      return;
     }
+    try {
+      const gameId = game.gameCode || game.gameId || game.casinoGameId || game.id || "";
+      const provider = game.providerCode || game.provider || "";
+      const res: any = await casinoService.launchGame({
+        username,
+        provider,
+        gameId,
+        walletMode: getCasinoWalletModeFromSubWallet(selectedSubWallet),
+      });
+      const url = res?.url || res?.launch_url || res?.gameUrl || "";
+      if (url) {
+        setActiveGame({ id: gameId, name: game.name || game.gameName || "Casino Game", provider, url });
+        document.body.style.overflow = "hidden";
+      }
+    } catch (err) {
+      console.error("Failed to launch game", err);
+    }
+  };
+
+  const handleCloseGame = () => {
+    setActiveGame(null);
+    document.body.style.overflow = "";
   };
 
   useEffect(() => {
@@ -749,6 +781,17 @@ export default function Home() {
 
   return (
     <div className="max-w-[1680px] mx-auto space-y-10 md:space-y-12 pb-24 md:pb-14 pt-1">
+      {activeGame && (
+        <div className="fixed inset-0 z-[300] bg-[var(--bg-base)] flex flex-col">
+          <GamePlayInterface
+            game={activeGame}
+            onClose={handleCloseGame}
+            isEmbedded={false}
+            onLaunch={setActiveGame}
+            key={activeGame.id}
+          />
+        </div>
+      )}
       <HeroSlider promos={promos} />
       <LiveStats />
       <CategoryStrip />

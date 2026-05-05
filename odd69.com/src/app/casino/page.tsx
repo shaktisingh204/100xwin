@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { casinoService } from "@/services/casino";
 import { useAuth } from "@/context/AuthContext";
+import { useModal } from "@/context/ModalContext";
 import { useWallet } from "@/context/WalletContext";
 import MaintenanceState from "@/components/maintenance/MaintenanceState";
 import { useSectionMaintenance } from "@/hooks/useSectionMaintenance";
@@ -47,7 +48,8 @@ function CasinoContent() {
   const searchParams = useSearchParams();
   const categoryParam = searchParams.get("category");
 
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { openLogin } = useModal();
   const { selectedSubWallet } = useWallet();
   const { blocked, loading: maintenanceLoading, message: maintenanceMessage } = useSectionMaintenance(
     "casino",
@@ -97,16 +99,29 @@ function CasinoContent() {
     url,
   });
 
+  const resolveUsername = (): string | undefined => {
+    if (user?.username) return user.username;
+    if (typeof window === "undefined") return undefined;
+    try {
+      const stored = localStorage.getItem("auth_user");
+      if (stored) return JSON.parse(stored)?.username;
+    } catch {}
+    return undefined;
+  };
+
   const handleGameLaunch = async (gameData: LaunchableGame) => {
     if (gameData.url) { setActiveGame(toActiveGame(gameData, gameData.url)); setLaunchError(null); return; }
-    if (!user) { alert("Please login to play"); return; }
+    if (authLoading) return;
+    const username = resolveUsername();
+    const hasToken = typeof window !== "undefined" && !!localStorage.getItem("token");
+    if (!username || !hasToken) { openLogin(); return; }
     const providerCode = gameData.providerCode || gameData.provider;
     const gameId = gameData.gameCode || gameData.id;
     if (!providerCode || !gameId) { setLaunchError("Game data is incomplete."); return; }
     setLaunching(true); setLaunchError(null);
     try {
       const res = await casinoService.launchGame({
-        username: user.username,
+        username,
         provider: providerCode,
         gameId,
         isLobby: false,

@@ -146,6 +146,7 @@ export default function CasinoGamePage() {
         game={activeGame}
         onClose={() => router.push("/casino")}
         isEmbedded={true}
+        onLaunch={setActiveGame}
         key={activeGame.id}
       />
     );
