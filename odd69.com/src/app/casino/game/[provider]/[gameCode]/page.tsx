@@ -5,6 +5,9 @@ import { useParams, useSearchParams, useRouter } from "next/navigation";
 import GamePlayInterface from "@/components/casino/GamePlayInterface";
 import { casinoService } from "@/services/casino";
 import { useModal } from "@/context/ModalContext";
+import { useAuth } from "@/context/AuthContext";
+import { useWallet } from "@/context/WalletContext";
+import { getCasinoWalletModeFromSubWallet } from "@/utils/casinoWalletMode";
 import { BiErrorAlt } from "react-icons/bi";
 import { IoGameController } from "react-icons/io5";
 
@@ -19,6 +22,8 @@ export default function CasinoGamePage() {
   const isLobby = searchParams.get("isLobby") === "true";
 
   const { openLogin } = useModal();
+  const { user, loading: authLoading } = useAuth();
+  const { selectedSubWallet } = useWallet();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +32,8 @@ export default function CasinoGamePage() {
   } | null>(null);
 
   useEffect(() => {
+    if (authLoading) return;
+
     const launch = async () => {
       if (!gameId || !provider) {
         setError("Missing game parameters");
@@ -34,10 +41,14 @@ export default function CasinoGamePage() {
         return;
       }
       try {
-        const token = localStorage.getItem("token");
-        const userString = localStorage.getItem("user");
-        const user = userString ? JSON.parse(userString) : null;
-        const username = user?.username;
+        const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+        let username: string | undefined = user?.username;
+        if (!username && typeof window !== "undefined") {
+          try {
+            const stored = localStorage.getItem("auth_user");
+            if (stored) username = JSON.parse(stored)?.username;
+          } catch {}
+        }
 
         if (!username || !token) {
           setLoading(false);
@@ -47,7 +58,11 @@ export default function CasinoGamePage() {
         }
 
         const res = await casinoService.launchGame({
-          username, provider, gameId, isLobby,
+          username,
+          provider,
+          gameId,
+          isLobby,
+          walletMode: getCasinoWalletModeFromSubWallet(selectedSubWallet),
         });
 
         if (res?.url) {
@@ -73,7 +88,7 @@ export default function CasinoGamePage() {
     };
     launch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameId, provider, isLobby, gameName]);
+  }, [gameId, provider, isLobby, gameName, authLoading]);
 
   if (loading) {
     return (

@@ -699,7 +699,7 @@ function TelegramCTA() {
    ═════════════════════════════════════════════════════════════════════════════ */
 export default function Home() {
   const router = useRouter();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const { openLogin } = useModal();
   const [slotGames, setSlotGames]     = useState<any[]>([]);
   const [liveGames, setLiveGames]     = useState<any[]>([]);
@@ -710,7 +710,9 @@ export default function Home() {
   const [promos, setPromos]           = useState<any[]>([]);
 
   const handlePlayGame = (game: any) => {
-    if (!isAuthenticated) { openLogin(); return; }
+    if (authLoading) return;
+    const hasToken = typeof window !== "undefined" && !!localStorage.getItem("token");
+    if (!isAuthenticated && !hasToken) { openLogin(); return; }
     const provider = game.providerCode || game.provider || "";
     const gameCode = game.gameCode || game.gameId || game.casinoGameId || game.id || "";
     if (provider && gameCode) {
